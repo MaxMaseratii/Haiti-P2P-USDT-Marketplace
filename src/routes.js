@@ -19,7 +19,7 @@ import { bad, forbidden, notFound } from './errors.js';
 import * as users from './services/users.js';
 import * as wallet from './services/wallet.js';
 import * as ads from './services/ads.js';
-import * as receivers from './services/receivers.js';
+import * as links from './services/links.js';
 import * as orders from './services/orders.js';
 import * as disputes from './services/disputes.js';
 import { addBlock } from './services/screening.js';
@@ -38,7 +38,7 @@ api.get('/config', (_req, res) => res.json({
   network: config.escrowNetwork,
   // Official logo files, if you add them to public/img/pay/ (moncash.png, natcash.png, bank.png). Otherwise the name is shown.
   pay_logos: payLogos(),
-  receiver_fee: config.receiverFeeUsdt,
+  link_fee: config.linkFeeUsdt,
   networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
@@ -99,17 +99,13 @@ api.get('/avatar/:id', wrap(async (req, res) => {
   res.set('Content-Type', a.avatar_mime).set('Cache-Control', 'public, max-age=300').send(a.avatar);
 }));
 
-// Family receiver confirms the money arrived: opened from an SMS link, no login.
-api.get('/receive/:token', wrap(async (req) => receivers.view(req.params.token)));
-api.post('/receive/:token', wrap(async (req) => receivers.answer(req.params.token, req.body?.received === true)));
-
 // Everything below needs login.
 api.use(auth);
 
 api.get('/me', wrap(async (req) => ({
   user: users.publicUser(req.user),
   wallet: await wallet.balances({ query: q }, req.user.id),
-  payment_methods: await users.myPaymentMethods(req.user.id),
+  payment_methods: [...(await users.myPaymentMethods(req.user.id)).filter((p) => !p.is_receiver), ...(await links.linkedAccounts(req.user.id))],
 })));
 api.get('/me/wallet-link-message', wrap(async (req) => ({ message: evm.linkMessage(req.user.id) })));
 api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.user, req.body?.wallet_addr, req.body?.signature); return { ok: true }; }));
@@ -118,9 +114,12 @@ api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.us
 api.get('/kyc/me', wrap(async (req) => users.kycState(req.user)));
 api.post('/kyc/file/:kind', wrap(async (req) => users.addKycFile(req.user, String(req.params.kind).toUpperCase(), req.body)));
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
-api.get('/receivers', wrap(async (req) => receivers.list(req.user)));
-api.post('/receivers', wrap(async (req) => receivers.add(req.user, req.body || {})));
-api.post('/receivers/:id/remove', wrap(async (req) => receivers.remove(req.user, req.params.id)));
+api.get('/links', wrap(async (req) => links.list(req.user)));
+api.post('/links', wrap(async (req) => links.invite(req.user, req.body || {})));
+api.post('/links/:id/accept', wrap(async (req) => links.accept(req.user, req.params.id, req.body || {})));
+api.post('/links/:id/end', wrap(async (req) => links.end(req.user, req.params.id)));
+api.get('/links/to-check', wrap(async (req) => links.toCheck(req.user)));
+api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, req.params.orderId, req.body?.received === true)));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));

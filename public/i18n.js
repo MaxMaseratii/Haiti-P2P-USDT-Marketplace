@@ -13,6 +13,7 @@ window.I18N = {
     'Buyer says paid. Seller must check': 'L\'acheteur dit avoir payé. Le vendeur doit vérifier',
     'In dispute. A staff agent decides': 'En litige. Un agent décide', 'Sending USDT': 'Envoi des USDT', 'Done': 'Terminé',
     'Returning USDT': 'Retour des USDT', 'Refunded to seller': 'Remboursé au vendeur', 'Cancelled': 'Annulé',
+    'Home': 'Accueil', 'Orders': 'Commandes', 'Linked accounts': 'Comptes liés', 'Safety': 'Sécurité',
   },
   ht: {
     'Market': 'Mache', 'Buy USDT': 'Achte USDT', 'Sell USDT': 'Vann USDT', 'My ads': 'Piblisite mwen', 'My orders': 'Kòmand mwen',
@@ -26,5 +27,7 @@ window.I18N = {
     'Buyer says paid. Seller must check': 'Achtè a di li peye. Vandè a dwe verifye',
     'In dispute. A staff agent decides': 'Gen diskisyon. Yon ajan ekip la deside', 'Sending USDT': 'N ap voye USDT la', 'Done': 'Fini',
     'Returning USDT': 'N ap retounen USDT la', 'Refunded to seller': 'Retounen bay vandè a', 'Cancelled': 'Anile',
+    'Home': 'Akèy', 'Orders': 'Kòmand', 'Linked accounts': 'Kont konekte', 'Safety': 'Sekirite',
+    'Locking the USDT': 'N ap kadnase USDT a', 'Sending USDT': 'N ap dekadnase USDT a',
   },
 };

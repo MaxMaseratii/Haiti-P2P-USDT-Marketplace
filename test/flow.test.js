@@ -503,36 +503,41 @@ test('sign up from any country, but not from fully sanctioned ones', async () =>
   assert.equal((await call('POST', '/auth/signup', { phone: '+5093700', full_name: 'Short Number', code: '000000' })).status, 400);
 });
 
-test('family receiver: buyer pays the family, family confirms by SMS link, extra receivers cost a fee', async () => {
-  // a sender abroad, ID checked, with USDT
-  await signup('dia', '+13055550199', 'Rose Diaspora'); await kyc('dia');
+test('linked accounts: the other person registers, passes ID, accepts; they confirm the money; the trader pays a monthly fee', async () => {
+  await signup('trd', '+13055550199', 'Rose Trader'); await kyc('trd');
   await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+13055550199'),'USDT',500)
                     ON CONFLICT (user_id, asset) DO UPDATE SET available = wallet_balances.available + 500`);
-  assert.equal((await call('POST', '/receivers', { full_name: 'Mama Rose', phone: '+15555550000', type: 'MONCASH', account_ref: '37881122' }, tk('dia'))).status, 400);
-  const r1 = await ok('POST', '/receivers', { full_name: 'Mama Rose', phone: '+50937881122', type: 'MONCASH', account_ref: '37881122' }, tk('dia'));
-  assert.equal(r1.paid_until, null); // first one is free
-  const before = Number((await pool.query(`SELECT available FROM wallet_balances WHERE user_id=$1 AND asset='USDT'`, [r1.user_id])).rows[0].available);
-  const r2 = await ok('POST', '/receivers', { full_name: 'Papa Jean', phone: '+50937881133', type: 'BANK', account_ref: '1002003004', bank_name: 'Unibank' }, tk('dia'));
-  assert.ok(r2.paid_until);
-  const after = Number((await pool.query(`SELECT available FROM wallet_balances WHERE user_id=$1 AND asset='USDT'`, [r1.user_id])).rows[0].available);
-  assert.equal(before - after, 2);
-  // a buyer in Haiti posts a BUY ad; the sender sells into it, paid to Mama Rose
+  // nobody with this phone yet
+  assert.equal((await call('POST', '/links', { phone: '+50937881122' }, tk('trd'))).status, 404);
+  // the person signs up but has no ID check yet
+  await signup('mem', '+50937881122', 'Mama Rose');
+  assert.equal((await call('POST', '/links', { phone: '+50937881122' }, tk('trd'))).status, 409);
+  await kyc('mem');
+  const pm = await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Mama Rose', account_ref: '37881122' }, tk('mem'));
+  const l = await ok('POST', '/links', { phone: '+509 3788 1122' }, tk('trd'));
+  assert.equal((await call('POST', '/links', { phone: '+50937881122' }, tk('trd'))).status, 409); // asked twice
+  // only the member can accept, with their own verified account
+  assert.equal((await call('POST', `/links/${l.id}/accept`, { payment_method_id: pm.id }, tk('trd'))).status, 404);
+  const bal = async () => Number((await pool.query(`SELECT available FROM wallet_balances WHERE user_id=(SELECT id FROM users WHERE phone='+13055550199') AND asset='USDT'`)).rows[0].available);
+  const b0 = await bal();
+  await ok('POST', `/links/${l.id}/accept`, { payment_method_id: pm.id }, tk('mem'));
+  assert.equal(b0 - (await bal()), 2.5);
+  const me = await ok('GET', '/me', null, tk('trd'));
+  assert.ok(me.payment_methods.some((p) => p.id === pm.id && p.linked));
+  // a buyer ad; the trader sells into it and gets paid into Mama Rose's MonCash
   await signup('hb', '+50937881199', 'Haiti Buyer'); await kyc('hb');
   const bad = await ok('POST', '/ads', { side: 'BUY', pay_types: ['MONCASH'], price_htg: '139', amount: '50', min_order_htg: '500', max_order_htg: '20000' }, tk('hb'));
-  const o = await ok('POST', '/orders', { ad_id: bad.id, amount: '10', payment_method_id: r1.id }, tk('dia'));
+  const o = await ok('POST', '/orders', { ad_id: bad.id, amount: '10', payment_method_id: pm.id }, tk('trd'));
   const v = await ok('GET', '/orders/' + o.id, null, tk('hb'));
   assert.equal(v.payment.account_name, 'Mama Rose'); assert.equal(v.payment.is_receiver, true);
-  const paid = await ok('POST', `/orders/${o.id}/paid`, null, tk('hb'));
-  const t = paid.receiver_test_link.split('/')[1];
-  const view = await ok('GET', '/receive/' + t);
-  assert.equal(view.receiver, 'Mama Rose'); assert.equal(view.open, true);
-  await ok('POST', '/receive/' + t, { received: true });
-  const v2 = await ok('GET', '/orders/' + o.id, null, tk('dia'));
-  assert.equal(v2.order.receiver_said, 'RECEIVED'); assert.equal(v2.order.receiver_token_hash, undefined);
-  await ok('POST', `/orders/${o.id}/confirm`, null, tk('dia'));
-  assert.equal((await call('POST', '/receive/' + t, { received: false })).status, 409);
-  assert.equal((await call('GET', '/receive/not-a-real-token')).status, 404);
-  // a removed receiver cannot be used
-  await ok('POST', `/receivers/${r2.id}/remove`, null, tk('dia'));
-  assert.equal((await call('POST', '/orders', { ad_id: bad.id, amount: '5', payment_method_id: r2.id }, tk('dia'))).status, 400);
+  await ok('POST', `/orders/${o.id}/paid`, null, tk('hb'));
+  const list = await ok('GET', '/links/to-check', null, tk('mem'));
+  assert.equal(list[0].id, o.id);
+  assert.equal((await call('POST', `/links/to-check/${o.id}`, { received: true }, tk('hb'))).status, 404);
+  await ok('POST', `/links/to-check/${o.id}`, { received: true }, tk('mem'));
+  assert.equal((await ok('GET', '/orders/' + o.id, null, tk('trd'))).order.receiver_said, 'RECEIVED');
+  await ok('POST', `/orders/${o.id}/confirm`, null, tk('trd'));
+  // the member ends the link: the trader cannot use the account any more
+  await ok('POST', `/links/${l.id}/end`, null, tk('mem'));
+  assert.equal((await call('POST', '/orders', { ad_id: bad.id, amount: '5', payment_method_id: pm.id }, tk('trd'))).status, 400);
 });

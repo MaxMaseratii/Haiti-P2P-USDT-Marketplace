@@ -31,6 +31,10 @@ for (const sql of [
   'CREATE UNIQUE INDEX IF NOT EXISTS payment_methods_account_uniq ON payment_methods (type, account_ref) WHERE NOT is_receiver',
   'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_token_hash text', 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_said text',
   'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_at timestamptz',
+  `CREATE TABLE IF NOT EXISTS account_links (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL REFERENCES users(id), member_id uuid NOT NULL REFERENCES users(id),
+     payment_method_id uuid, status text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','ENDED')), paid_until timestamptz, created_at timestamptz NOT NULL DEFAULT now(), CHECK (owner_id <> member_id))`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS account_links_open ON account_links (owner_id, member_id) WHERE status <> 'ENDED'",
+  'UPDATE payment_methods SET active=false WHERE is_receiver', // old unregistered family receivers are gone
   "UPDATE ads SET pay_types = ARRAY[pay_type::text] WHERE pay_types IS NULL",
   "UPDATE ads SET pay_methods = ARRAY[payment_method_id] WHERE pay_methods IS NULL AND payment_method_id IS NOT NULL"]) await client.query(sql);
 // Login tokens are signed with TOKEN_SECRET. A missing or weak one would let anyone fake a login,

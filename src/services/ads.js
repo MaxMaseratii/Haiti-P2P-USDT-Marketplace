@@ -1,3 +1,4 @@
+import * as links from './links.js';
 import { tx, q } from '../db.js';
 import { config, isMock } from '../config.js';
 import { escrow } from '../escrow.js';
@@ -32,8 +33,11 @@ export async function createAd(user, b) {
     if (side === 'SELL') {
       if (!isMock() && !user.wallet_addr) throw bad('Link your wallet first (Wallet page).', 'WALLET');
       if (!pmIds.length) throw bad('Pick at least one of your payment accounts.');
-      const pms = (await c.query('SELECT * FROM payment_methods WHERE id = ANY($1::uuid[]) AND user_id=$2', [pmIds, user.id])).rows;
-      if (pms.length !== pmIds.length) throw bad('Pick your own payment accounts.');
+      const usable = await links.usableAccountIds(c, user.id);
+      const unverified = (await c.query('SELECT 1 FROM payment_methods WHERE id = ANY($1::uuid[]) AND user_id=$2 AND NOT verified', [pmIds, user.id])).rowCount;
+      if (unverified) throw forbidden('A payment account is not verified. The name must match your ID.');
+      if (pmIds.some((id) => !usable.includes(id))) throw bad('Pick your own or your linked payment accounts.');
+      const pms = (await c.query('SELECT * FROM payment_methods WHERE id = ANY($1::uuid[])', [pmIds])).rows;
       if (pms.some((p) => !p.verified)) throw forbidden('A payment account is not verified. The name must match your ID.');
       pmIds2 = pmIds; types = [...new Set(pms.map((p) => p.type))];
     }

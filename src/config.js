@@ -24,8 +24,9 @@ export const config = {
   // Websites allowed to call the API from a browser (your admin dashboard on maxmaserati.com).
   // Country phone codes we refuse (full sanctions): Cuba, Iran, North Korea, Syria.
   blockedCountryCodes: str('BLOCKED_COUNTRY_CODES', '53,98,850,963').split(',').map((x) => x.trim()).filter(Boolean),
-  // Family receivers: the first one is free, each extra one costs this much USDT every 30 days.
-  receiverFeeUsdt: str('RECEIVER_FEE_USDT', '2'),
+  // Linked accounts (another registered person's MonCash/NatCash/bank): price per link every 30 days, and how many are free.
+  linkFeeUsdt: str('LINK_FEE_USDT', '2.50'),
+  linkFree: num('LINK_FREE', 0),
   // The public address of the app, used in SMS links. Render fills RENDER_EXTERNAL_URL by itself.
   publicUrl: str('PUBLIC_URL', process.env.RENDER_EXTERNAL_URL || ''),
   adminOrigins: str('ADMIN_ORIGINS', 'https://www.maxmaserati.com,https://maxmaserati.com').split(',').map((x) => x.trim()).filter(Boolean),

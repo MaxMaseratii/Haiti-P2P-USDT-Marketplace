@@ -1,7 +1,7 @@
 'use strict';
 // ---------- tiny helpers ----------
 const $ = (s) => document.querySelector(s);
-let lang = localStorage.getItem('lang') || 'en';
+let lang = (() => { try { return localStorage.getItem('lang'); } catch { return null; } })() || 'ht'; // Kreyòl first: this is for Haiti
 const t = (s) => (window.I18N[lang] && window.I18N[lang][s]) || s;
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -59,25 +59,29 @@ async function route() {
   const ban = $('#banner');
   ban.hidden = cfg.escrow_mode !== 'MOCK';
   ban.textContent = 'TEST MODE: fake money. Nothing here is real USDT or real gourdes.';
-  if (location.hash.startsWith('#receive/')) { renderNav(); return receiveView(app, location.hash.slice(9)); }
   if (!token && location.hash === '#safety') { renderNav(); return safetyView(app); }
   if (!token) { renderNav(); return authView(app); }
   try { const m = await api('GET', '/me'); me = m; } catch { return; }
   renderNav();
-  const [view, arg] = (location.hash.slice(1) || 'market').split('/');
-  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView, family: familyView };
+  const [view, arg] = (location.hash.slice(1) || 'home').split('/');
+  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView, linked: linkedView, home: accountHome };
   try { await (views[view] || marketView)(app, arg); } catch (e) { toast(e.message, true); }
 }
 
 function renderNav() {
   const nav = $('#nav'); nav.replaceChildren();
-  if (!token) return;
-  const cur = (location.hash.slice(1) || 'market').split('/')[0];
-  const items = [['market', 'Market'], ['ads', 'My ads'], ['orders', 'My orders'], ['family', 'Send to family'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
+  document.body.classList.toggle('in', !!token);
+  if (!token) { $('#tabs').replaceChildren(); return; }
+  const cur = (location.hash.slice(1) || 'home').split('/')[0];
+  const items = [['home', 'Home'], ['market', 'Market'], ['ads', 'My ads'], ['orders', 'My orders'], ['linked', 'Linked accounts'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
   if (me && ['AGENT', 'ADMIN'].includes(me.user.role)) items.push(['staff', 'Staff']);
   if (me && me.user.role === 'ADMIN') items.push(['admin', 'Admin']);
   for (const [k, label] of items) nav.append(h('button', { class: cur === k ? 'on' : '', onclick: () => go(k) }, t(label)));
   nav.append(h('button', { onclick: logout }, t('Log out')));
+  // Phone: a bank-app style bar at the bottom with the 5 main places.
+  const tabs = $('#tabs');
+  tabs.replaceChildren(...[['home', '🏠', 'Home'], ['market', '📈', 'Market'], ['orders', '🧾', 'Orders'], ['wallet', '👛', 'Wallet'], ['profile', '👤', 'Profile']]
+    .map(([k, ic, label]) => h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, ic), h('span', {}, t(label)))));
 }
 
 // ---------- auth ----------
@@ -85,7 +89,7 @@ function authView(app) {
   const phone = h('input', { placeholder: '+509 3700 1234  or  +1 305 555 1234', inputmode: 'tel' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
   const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code', inputmode: 'numeric' });
-  const done = (r) => { token = r.token; localStorage.setItem('token', token); go('market'); };
+  const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
   const loginCard = h('div', { class: 'card logincard' },
     h('h2', {}, t('Log in') + ' / ' + t('Sign up')),
     h('label', {}, t('Phone') + ' (with country code)'), phone,
@@ -175,7 +179,7 @@ function safetyView(app) {
   app.append(h('div', { class: 'card narrow2' },
     h('h2', {}, 'How your money stays safe'),
     h('p', { class: 'mute' }, 'Short and simple. This is how every trade works here.'),
-    step(1, 'The seller\'s crypto is locked first', 'Before a buyer pays anything, the USDT is locked in escrow. The seller cannot take it back.'),
+    step(1, 'The seller\'s crypto is locked first', 'Before a buyer pays anything, we lock the seller\'s USDT. The seller cannot take it back.'),
     step(2, 'The buyer pays the seller directly', 'Gourdes go from the buyer to the seller by MonCash, NatCash or bank. We never hold gourdes.'),
     step(3, 'The seller checks, then releases', 'The seller looks at their own account. Only when the money is there, they press release.'),
     step(4, 'Problem? Staff decide', 'If something is wrong, open a dispute. Both sides upload proof. A staff agent decides. Big orders need two agents.'),
@@ -207,7 +211,7 @@ const PAY_NAME = { MONCASH: 'MonCash', NATCASH: 'NatCash', BANK: 'Bank' };
 const payBadge = (p) => h('span', { class: 'paybadge' }, (cfg.pay_logos || {})[p] ? h('img', { src: cfg.pay_logos[p], alt: '' }) : p === 'BANK' ? h('span', { class: 'pbi' }, '🏦') : null, h('b', {}, PAY_NAME[p] || p));
 const payChips = (a) => h('div', { class: 'paychips' }, (a.pay_types || [a.pay_type]).map(payBadge));
 
-const accLabel = (p) => (p.is_receiver ? '👪 Family: ' + p.account_name + ' · ' : '') + `${p.bank_name || PAY_NAME[p.type] || p.type} · ${p.account_ref}` + (p.is_receiver ? '' : ` · ${p.account_name}`);
+const accLabel = (p) => (p.linked ? '🔗 ' + p.account_name + ' (linked) · ' : '') + `${p.bank_name || PAY_NAME[p.type] || p.type} · ${p.account_ref}` + (p.linked ? '' : ` · ${p.account_name}`);
 
 function takeAd(a) {
   const P = Number(a.price_htg);
@@ -266,7 +270,7 @@ function takeAd(a) {
     h('div', { class: 'sumbox' }, h('div', { class: 'mute' }, a.side === 'SELL' ? 'You pay' : 'You receive'), total, other)];
   if (a.side === 'SELL') body.push(h('label', {}, 'How will you pay?'), paySeg);
   if (a.side === 'BUY') {
-    body.push(h('label', {}, 'Where should the buyer send the gourdes?'), h('p', { class: 'mute' }, 'Your own account, or a family member in Haiti (add them in "Send to family").'), mine.length ? pm : null,
+    body.push(h('label', {}, 'Where should the buyer send the gourdes?'), h('p', { class: 'mute' }, 'One of your accounts, or a linked account (see "Linked accounts").'), mine.length ? pm : null,
       mine.length ? h('button', { class: 'linkbtn', onclick: () => addBox.classList.toggle('hidden') }, '+ Add another number or account') : null, addBox);
   }
   body.push(h('button', { class: 'btn big-btn', onclick: act(async () => {
@@ -274,7 +278,7 @@ function takeAd(a) {
     const o = await api('POST', '/orders', { ad_id: a.id, amount: usdtOf().toFixed(2), payment_method_id: a.side === 'BUY' ? pm.value : undefined, pay_type: a.side === 'SELL' ? payWith : undefined });
     go('order/' + o.id);
   }) }, 'Continue'));
-  body.push(h('p', { class: 'mute center' }, '🔒 The USDT is locked in escrow before you pay (' + (cfg.network ? cfg.network.charAt(0) + cfg.network.slice(1).toLowerCase() : 'blockchain') + '). ', h('a', { href: '#safety' }, 'How it works')));
+  body.push(h('p', { class: 'mute center' }, '🔒 We lock the seller\'s USDT before you pay. ', h('a', { href: '#safety' }, 'How it works')));
   $('#app').replaceChildren(h('div', { class: 'card narrow' }, body));
 }
 
@@ -287,7 +291,7 @@ async function adsView(app) {
   const tick = (value, label, sub) => h('label', { class: 'tick' }, h('input', { type: 'checkbox', value, checked: true }), h('span', {}, h('b', {}, label), sub ? h('small', { class: 'mute' }, ' ' + sub) : null));
   // Sell ad: tick every account you accept money in. Buy ad: tick every way you can pay.
   const sellBox = h('div', {}, h('label', {}, 'I accept payment in (tick all you want)'),
-    pms.length ? h('div', { class: 'ticks' }, pms.map((p) => tick(p.id, (p.is_receiver ? '👪 ' : '') + (p.bank_name || PAY_NAME[p.type]), `${p.account_ref} · ${p.account_name}` + (p.is_receiver ? ' (family)' : ''))))
+    pms.length ? h('div', { class: 'ticks' }, pms.map((p) => tick(p.id, (p.linked ? '🔗 ' : '') + (p.bank_name || PAY_NAME[p.type]), `${p.account_ref} · ${p.account_name}` + (p.linked ? ' (linked)' : ''))))
       : h('p', { class: 'mute' }, 'Add a verified MonCash, NatCash or bank account in Profile first.'));
   const buyBox = h('div', { class: 'hidden' }, h('label', {}, 'I can pay with (tick all you want)'),
     h('div', { class: 'ticks' }, ['MONCASH', 'NATCASH', 'BANK'].map((tp) => tick(tp, PAY_NAME[tp]))));
@@ -448,11 +452,11 @@ function openDisputeWindow(v) {
 
 function openReleaseWindow(v) {
   const o = v.order;
-  modal('Release the USDT?', h('div', {},
+  modal('Unlock the crypto?', h('div', {},
     h('p', {}, 'Open your ', h('b', {}, v.payment ? v.payment.type : 'payment'), ' app or bank and look at your account. Only release when you can see the money.'),
     kv([['Amount to receive', money(o.total_htg) + ' HTG'], ['From', v.buyer.full_name], ['Payment note code', o.pay_reference]]),
-    h('p', { class: 'warn-note' }, 'Once released, it cannot be undone. Never release because of a screenshot alone.')),
-  [{ label: 'Not yet' }, { label: 'Yes, I received it. Release.', cls: 'good', run: async () => {
+    h('p', { class: 'warn-note' }, 'Once unlocked, it cannot be undone. Never unlock because of a screenshot alone. Look at your own account.')),
+  [{ label: 'Not yet' }, { label: 'Yes, I received it. Unlock.', cls: 'good', run: async () => {
     await api('POST', `/orders/${o.id}/confirm`, cfg.chain ? await signRelease(o.id) : undefined); route();
   } }]);
 }
@@ -476,10 +480,10 @@ function guide(v) {
   if (buyer && s === 'PAID_CLAIMED') return { tone: 'wait', title: 'Waiting for the seller to confirm', text: 'The seller is checking their account. When they confirm, the USDT comes to you. If they do not answer in time, a dispute opens by itself.', actions: [dispBtn] };
   if (seller && s === 'PAID_CLAIMED' && v.payment && v.payment.is_receiver) return { tone: o.receiver_said === 'RECEIVED' ? 'go' : 'wait',
     title: o.receiver_said === 'RECEIVED' ? `${v.payment.account_name} got the money ✓` : o.receiver_said === 'NOT_RECEIVED' ? `${v.payment.account_name} says it did NOT arrive` : `Waiting for ${v.payment.account_name} to confirm`,
-    text: o.receiver_said === 'RECEIVED' ? 'Your family confirmed by SMS. Release the USDT to finish.' : o.receiver_said === 'NOT_RECEIVED' ? 'Call them to check. If the money never came, open a dispute. Do not release.' : `We sent ${v.payment.account_name} an SMS link. When they press "I received it", you will see it here. You can also call them and release yourself.`,
-    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Release the USDT'), dispBtn] };
+    text: o.receiver_said === 'RECEIVED' ? 'The account owner confirmed in the app. Unlock the crypto to finish.' : o.receiver_said === 'NOT_RECEIVED' ? 'Check with them. If the money never came, open a dispute. Do not unlock.' : `${v.payment.account_name} owns the receiving account. We asked them to check and confirm in the app. You can also check with them and unlock yourself.`,
+    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Unlock the crypto'), dispBtn] };
   if (seller && s === 'PAID_CLAIMED') return { tone: 'go', title: `Did ${money(o.total_htg)} HTG arrive in your account?`, text: `Check your ${v.payment ? v.payment.type : 'payment'} app or bank. Look for the code ${o.pay_reference}. Release only if you see the money.`,
-    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, release the USDT'), dispBtn] };
+    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, I received it. Unlock the crypto'), dispBtn] };
   if (s === 'DISPUTED') return { tone: 'bad', title: 'Dispute open. A staff agent is deciding', text: 'Add your proof below. Keep chatting here, politely. Do not send money outside the app.', actions: [] };
   if (s === 'RELEASING') return { tone: 'wait', title: 'Sending the USDT', text: 'This takes a moment.', actions: [] };
   if (s === 'REFUNDING') return { tone: 'wait', title: 'Returning the USDT to the seller', text: 'This takes a moment.', actions: [] };
@@ -494,8 +498,8 @@ function renderOrder(col, v) {
   const g = guide(v);
   const rate = g.rate && r !== 'STAFF' ? h('div', { class: 'rate' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'star', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks for your rating.'); }) }, '★' + n))) : null;
   const pay = v.payment && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'card ' + (r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? 'payto' : '') },
-    h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : v.payment.is_receiver ? 'Paid to your family' : 'Your receiving account'),
-    v.payment.is_receiver && r === 'BUYER' ? h('p', { class: 'mute' }, `The seller is sending this money to family. Pay ${v.payment.account_name} directly. That is normal here.`) : null,
+    h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : v.payment.is_receiver ? 'Paid into a linked account' : 'Your receiving account'),
+    v.payment.is_receiver && r === 'BUYER' ? h('p', { class: 'mute' }, `This account belongs to ${v.payment.account_name}, a verified user linked to the seller. Pay exactly this account.`) : null,
     kv([v.payment.bank_name ? ['Bank', v.payment.bank_name] : null, [v.payment.type === 'BANK' ? 'Account number' : (PAY_NAME[v.payment.type] || v.payment.type) + ' number', v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
     h('div', { class: 'mute', style: 'margin-top:10px' }, r === 'BUYER' ? 'Write this code in the payment note:' : 'The buyer must write this code in the note:'),
     h('div', { class: 'code' }, o.pay_reference, h('button', { onclick: () => { navigator.clipboard?.writeText(o.pay_reference); toast('Code copied.'); } }, 'Copy'))) : null;
@@ -514,7 +518,7 @@ function renderOrder(col, v) {
       g.steps ? h('ol', { class: 'gsteps' }, g.steps.map((x) => h('li', {}, x))) : h('p', { class: 'gtext' }, g.text),
       rate, h('div', { class: 'gactions' }, g.actions)),
     ['ORDER_CREATED', 'AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED', 'RELEASING'].includes(o.state)
-      ? h('div', { class: 'escrow' }, h('b', {}, '🔒 ' + usd(o.amount) + ' ' + o.asset + ' is held in escrow'), h('span', {}, 'The seller cannot take it back. The buyer cannot touch it until the seller confirms the money, or staff decide.')) : null,
+      ? h('div', { class: 'escrow' }, h('b', {}, '🔒 ' + usd(o.amount) + ' ' + o.asset + ' is locked'), h('span', {}, 'Nobody can touch it until the seller confirms the money arrived, the order is cancelled, or our team decides.')) : null,
     pay, dispute,
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Order details'),
       kv([['Price', money(o.price_htg) + ' HTG per ' + o.asset], ['You ' + (r === 'SELLER' ? 'sell' : 'buy'), usd(o.amount) + ' ' + o.asset], ['Total', money(o.total_htg) + ' HTG'],
@@ -817,60 +821,106 @@ async function idCheckCard() {
   return card;
 }
 
-// ---------- send to family ----------
-async function familyView(app) {
-  const list = await api('GET', '/receivers');
-  const active = list.filter((r) => r.active);
-  const nm = h('input', { placeholder: 'Their full name, as on their account' }), ph = h('input', { inputmode: 'tel', placeholder: '+509 3700 1234' });
-  const type = h('select', {}, ['MONCASH', 'NATCASH', 'BANK'].map((x) => h('option', { value: x }, PAY_NAME[x])));
-  const bank = bankPicker(), bankRow = h('div', { class: 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
-  type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
-  const ref = h('input', { inputmode: 'numeric', placeholder: 'MonCash / NatCash number or bank account' });
-  const fee = cfg.receiver_fee || '2';
+
+// ---------- account home: like a mobile bank app ----------
+const L3 = (o) => o[lang] || o.en;
+async function accountHome(app) {
+  const u = me.user, first = (u.display_name || u.full_name).split(' ')[0];
+  const [orders, sells, buys, check] = await Promise.all([api('GET', '/orders').catch(() => []), api('GET', '/ads?side=SELL').catch(() => []), api('GET', '/ads?side=BUY').catch(() => []), toCheckCard()]);
+  const bestSell = sells.length ? Number(sells[0].price_htg) : null, bestBuy = buys.length ? Number(buys[0].price_htg) : null;
+  const sum = (k) => me.wallet.reduce((a, w) => a + Number(w[k] || 0), 0);
+  const avail = sum('available'), locked = sum('locked'), total = avail + locked;
+  const hide = (() => { try { return localStorage.getItem('hideBal') === '1'; } catch { return false; } })();
+  const mask = (txt) => (hide ? '•••••' : txt);
+  const quick = (ic, label, fn) => h('button', { class: 'qa', onclick: fn }, h('span', { class: 'qi' }, ic), h('span', {}, label));
+  const myTurn = orders.filter((o) => (o.buyer_id === u.id && o.state === 'AWAITING_PAYMENT') || (o.seller_id === u.id && o.state === 'PAID_CLAIMED'));
+  const row = (o) => {
+    const buy = o.buyer_id === u.id;
+    return h('button', { class: 'txrow', onclick: () => go('order/' + o.id) },
+      h('span', { class: 'txi ' + (buy ? 'in' : 'out') }, buy ? '↓' : '↑'),
+      h('span', { class: 'txm' }, h('b', {}, (buy ? L3({ en: 'Bought', fr: 'Achat', ht: 'Achte' }) : L3({ en: 'Sold', fr: 'Vente', ht: 'Vann' })) + ' ' + usd2(o.amount) + ' ' + o.asset),
+        h('small', {}, new Date(o.created_at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + t((STATE_TEXT[o.state] || [o.state])[0]))),
+      h('span', { class: 'txa ' + (buy ? 'in' : 'out') }, (buy ? '−' : '+') + money(o.total_htg, 0) + ' HTG'));
+  };
   app.append(
-    h('div', { class: 'card' }, h('h2', {}, 'Send money to family in Haiti'),
-      h('p', {}, 'Live abroad? Send your family gourdes fast, for less. You sell USDT here, and the buyer pays your family straight into their MonCash, NatCash or bank.'),
+    h('div', { class: 'bank' },
+      h('div', { class: 'hello' }, L3({ en: 'Hello', fr: 'Bonjour', ht: 'Bonjou' }) + ', ' + first + ' 👋'),
+      u.tier < 1 ? h('button', { class: 'kycbar', onclick: () => go('profile') }, h('b', {}, L3({ en: 'Verify your identity', fr: 'Vérifiez votre identité', ht: 'Verifye idantite w' })),
+        h('span', {}, L3({ en: 'Needed before your first swap. Takes 3 minutes. →', fr: 'Nécessaire avant votre premier échange. 3 minutes. →', ht: 'Ou bezwen l anvan premye echanj ou. Li pran 3 minit. →' }))) : null,
+      h('div', { class: 'balcard' },
+        h('div', { class: 'bc-top' }, h('span', {}, L3({ en: 'Total balance', fr: 'Solde total', ht: 'Balans total' })),
+          h('button', { class: 'eye', onclick: () => { try { localStorage.setItem('hideBal', hide ? '0' : '1'); } catch {} route(); } }, hide ? '🙈' : '👁')),
+        h('div', { class: 'bc-amt' }, mask(usd2(total)), h('small', {}, ' USDT')),
+        h('div', { class: 'bc-htg' }, bestBuy ? '≈ ' + mask(money(total * bestBuy, 0)) + ' HTG' : ''),
+        h('div', { class: 'bc-row' },
+          h('div', {}, h('small', {}, L3({ en: 'Available', fr: 'Disponible', ht: 'Disponib' })), h('b', {}, mask(usd2(avail)))),
+          h('div', {}, h('small', {}, '🔒 ' + L3({ en: 'Locked in swaps', fr: 'Verrouillé', ht: 'Kadnase' })), h('b', {}, mask(usd2(locked)))))),
+      h('div', { class: 'qas' },
+        quick('↓', L3({ en: 'Buy', fr: 'Acheter', ht: 'Achte' }), () => { marketSide = 'SELL'; go('market'); }),
+        quick('↑', L3({ en: 'Sell', fr: 'Vendre', ht: 'Vann' }), () => { marketSide = 'BUY'; go('market'); }),
+        quick('＋', L3({ en: 'Deposit', fr: 'Dépôt', ht: 'Depo' }), () => go('wallet')),
+        quick('➜', L3({ en: 'Withdraw', fr: 'Retrait', ht: 'Retire' }), () => go('wallet'))),
+      check,
+      myTurn.length ? h('div', { class: 'card guide go' }, h('h3', { class: 'ct' }, L3({ en: 'Waiting for you', fr: 'En attente de vous', ht: 'Y ap tann ou' })),
+        h('div', { class: 'txlist' }, myTurn.map(row))) : null,
+      h('div', { class: 'prices' },
+        h('div', {}, h('small', {}, L3({ en: 'Best price to buy', fr: 'Meilleur prix d\'achat', ht: 'Pi bon pri pou achte' })), h('b', {}, bestSell ? money(bestSell) : '—'), h('small', {}, 'HTG / USDT')),
+        h('div', {}, h('small', {}, L3({ en: 'Best price to sell', fr: 'Meilleur prix de vente', ht: 'Pi bon pri pou vann' })), h('b', {}, bestBuy ? money(bestBuy) : '—'), h('small', {}, 'HTG / USDT'))),
+      h('div', { class: 'card' }, h('div', { class: 'dhead' }, h('h3', { class: 'ct' }, L3({ en: 'Recent transactions', fr: 'Transactions récentes', ht: 'Dènye tranzaksyon' })),
+        orders.length ? h('button', { class: 'linkbtn', onclick: () => go('orders') }, L3({ en: 'See all', fr: 'Tout voir', ht: 'Wè tout' })) : null),
+        orders.length ? h('div', { class: 'txlist' }, orders.slice(0, 6).map(row)) : h('p', { class: 'mute' }, L3({ en: 'No transactions yet. Tap Buy or Sell to start.', fr: 'Aucune transaction. Touchez Acheter ou Vendre.', ht: 'Poko gen tranzaksyon. Peze Achte oswa Vann pou kòmanse.' })))));
+}
+
+// ---------- linked accounts (another verified person's MonCash/NatCash/bank) ----------
+async function linkedView(app) {
+  const d = await api('GET', '/links');
+  const fee = d.fee, ph = h('input', { inputmode: 'tel', placeholder: '+509 3700 1234' });
+  const own = me.payment_methods.filter((p) => !p.linked && p.verified);
+  const pay = (p) => `${p.bank_name || PAY_NAME[p.type] || ''} ${p.account_ref || ''}`.trim();
+  const endBtn = (l, label) => h('button', { class: 'btn alt sm', onclick: () => modal(label + '?', h('p', {}, 'The account cannot be used for new orders after this.'),
+    [{ label: 'Keep' }, { label, cls: 'danger', run: async () => { await api('POST', `/links/${l.id}/end`); me = await api('GET', '/me'); route(); } }]) }, label);
+  app.append(...[
+    h('div', { class: 'card' }, h('h2', {}, 'Linked accounts'),
+      h('p', {}, 'Receive gourdes into more MonCash, NatCash or bank accounts. For example when one account is full.'),
       h('ol', { class: 'gsteps' },
-        h('li', {}, 'Add your family member below (name, phone, account).'),
-        h('li', {}, 'Go to Market → Sell USDT. Pick a buyer. Choose your family as "where to send the gourdes".'),
-        h('li', {}, 'Your USDT is locked safely. The buyer pays your family.'),
-        h('li', {}, 'Your family gets an SMS. They press "I received it".'),
-        h('li', {}, 'You release the USDT. Done.')),
-      h('p', { class: 'mute' }, `Your first family receiver is free. Each extra one costs ${fee} USDT a month.`)),
-    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My family receivers'),
-      active.length ? h('div', { class: 'accs' }, active.map((r, i) => h('div', { class: 'acc' },
-        h('div', {}, h('b', {}, r.account_name), h('div', { class: 'mute' }, `${r.bank_name || PAY_NAME[r.type]} ${r.account_ref} · SMS to ${r.receiver_phone}`)),
-        h('div', { class: 'gactions', style: 'flex:none' }, h('span', { class: 'pill ' + (r.paid_until ? '' : 'good') }, r.paid_until ? 'paid until ' + new Date(r.paid_until).toLocaleDateString() : 'free'),
-          h('button', { class: 'btn alt sm', onclick: () => modal('Remove ' + r.account_name + '?', h('p', {}, 'You can add them again later.'), [{ label: 'Keep' }, { label: 'Remove', cls: 'danger', run: async () => { await api('POST', `/receivers/${r.id}/remove`); me = await api('GET', '/me'); route(); } }]) }, 'Remove')))))
-        : h('p', { class: 'mute' }, 'Nobody yet.'),
-      h('h3', { class: 'ct', style: 'margin-top:18px' }, active.length ? `Add another (${fee} USDT a month)` : 'Add your first one (free)'),
-      h('label', {}, 'Name'), nm, h('label', {}, 'Their phone in Haiti (they get the SMS)'), ph,
-      h('label', {}, 'How they receive'), type, bankRow, h('label', {}, 'Account number'), ref,
-      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => {
-        await api('POST', '/receivers', { full_name: nm.value, phone: ph.value, type: type.value, account_ref: ref.value, bank_name: type.value === 'BANK' ? bank.value() : undefined });
-        me = await api('GET', '/me'); toast('Added.'); route();
-      }) }, 'Add')));
+        h('li', {}, 'The other person opens their own Haiti P2P account and finishes the ID check.'),
+        h('li', {}, 'You ask them here, with their phone number.'),
+        h('li', {}, 'They accept in their app and choose which of their accounts to share.'),
+        h('li', {}, 'When a buyer pays into that account, the owner confirms in their app that the gourdes arrived.')),
+      h('p', { class: 'mute' }, `Each linked account costs ${fee} USDT a month, taken from your wallet. Your own accounts are free.`)),
+    d.asked.length ? h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'People asking to use your account'),
+      h('div', { class: 'accs' }, d.asked.map((l) => {
+        if (l.status === 'ACTIVE') return h('div', { class: 'acc' }, h('div', {}, h('b', {}, l.owner_name), h('div', { class: 'mute' }, 'Uses your ' + pay(l))), endBtn(l, 'Stop sharing'));
+        const sel = h('select', {}, own.map((p) => h('option', { value: p.id }, accLabel(p))));
+        return h('div', { class: 'acc' }, h('div', {}, h('b', {}, l.owner_name), h('div', { class: 'mute' }, `${l.owner_phone} wants to receive gourdes into one of your accounts. You will confirm each payment.`),
+          own.length ? sel : h('div', { class: 'mute' }, 'Add a verified account in Profile first.')),
+          h('div', { class: 'gactions', style: 'flex:none' },
+            h('button', { class: 'btn good sm', onclick: act(async () => { if (!own.length) throw new Error('Add a verified account in Profile first.'); await api('POST', `/links/${l.id}/accept`, { payment_method_id: sel.value }); route(); }) }, 'Accept'),
+            endBtn(l, 'Refuse')));
+      }))) : null,
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My linked accounts'),
+      d.mine.length ? h('div', { class: 'accs' }, d.mine.map((l) => h('div', { class: 'acc' },
+        h('div', {}, h('b', {}, l.member_name), h('div', { class: 'mute' }, l.status === 'ACTIVE' ? pay(l) + (l.paid_until ? ' · paid until ' + new Date(l.paid_until).toLocaleDateString() : ' · free') : 'Waiting for them to accept')),
+        h('div', { class: 'gactions', style: 'flex:none' }, h('span', { class: 'pill ' + (l.status === 'ACTIVE' ? 'good' : 'warn') }, l.status === 'ACTIVE' ? 'active' : 'waiting'), endBtn(l, l.status === 'ACTIVE' ? 'Remove' : 'Cancel')))))
+        : h('p', { class: 'mute' }, 'None yet.'),
+      h('h3', { class: 'ct', style: 'margin-top:18px' }, 'Ask someone'),
+      h('label', {}, 'Their phone number (they must already have a verified account)'), ph,
+      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => { await api('POST', '/links', { phone: ph.value }); toast('Asked. They will see it in their app.'); route(); }) }, 'Send request'))].filter(Boolean));
 }
 
-// The page a family member opens from the SMS. No account needed.
-async function receiveView(app, t) {
-  let d;
-  try { d = await fetch('/api/receive/' + encodeURIComponent(t)).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; }); }
-  catch (e) { app.append(h('div', { class: 'card narrow' }, h('h2', {}, 'Link not valid'), h('p', { class: 'mute' }, e.message))); return; }
-  const answer = (yes) => act(async () => {
-    const r = await fetch('/api/receive/' + encodeURIComponent(t), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ received: yes }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error); route();
-  });
-  app.append(h('div', { class: 'card narrow' },
-    h('div', { class: 'mute' }, 'Hello ' + d.receiver), h('h2', {}, `${d.sender} sent you ${money(d.amount_htg)} HTG`),
-    kv([['By', d.bank_name || PAY_NAME[d.pay_type]], ['To your account ending', '…' + d.account_end], ['Note code', d.pay_reference]]),
-    d.said ? h('p', { class: 'warn-note' }, d.said === 'RECEIVED' ? '✓ Thank you. You said you received it.' : 'You said it did not arrive yet. If it comes, press "I received it".') : null,
-    d.open ? [h('p', {}, `Open your ${d.bank_name || PAY_NAME[d.pay_type]} and check. Did ${money(d.amount_htg)} HTG arrive?`),
-      h('div', { class: 'gactions' }, h('button', { class: 'btn good', onclick: answer(true) }, 'Yes, I received it'), h('button', { class: 'btn alt', onclick: answer(false) }, 'Not yet'))]
-      : h('p', { class: 'mute' }, 'This payment is closed.'),
-    h('p', { class: 'mute center' }, '🔒 Haiti P2P. Never share your PIN or password with anyone.')));
+// Payments into my account that I must check (when I lent my account to someone).
+async function toCheckCard() {
+  const list = await api('GET', '/links/to-check').catch(() => []);
+  if (!list.length) return null;
+  return h('div', { class: 'card guide go' }, h('h2', {}, 'Check your account'),
+    h('p', { class: 'mute' }, 'Someone you linked your account to is waiting. Look at your account, then answer.'),
+    h('div', { class: 'accs' }, list.map((o) => h('div', { class: 'acc' },
+      h('div', {}, h('b', {}, money(o.total_htg) + ' HTG'), h('div', { class: 'mute' }, `${o.bank_name || PAY_NAME[o.type]} ${o.account_ref} · from ${o.payer} · code ${o.pay_reference} · for ${o.trader}`),
+        o.receiver_said ? h('div', { class: 'mute' }, 'You said: ' + (o.receiver_said === 'RECEIVED' ? 'received ✓' : 'not received')) : null),
+      h('div', { class: 'gactions', style: 'flex:none' },
+        h('button', { class: 'btn good sm', onclick: act(async () => { await api('POST', `/links/to-check/${o.id}`, { received: true }); route(); }) }, 'It arrived'),
+        h('button', { class: 'btn alt sm', onclick: act(async () => { await api('POST', `/links/to-check/${o.id}`, { received: false }); route(); }) }, 'Not yet'))))));
 }
-
 async function profileView(app) {
   const u = me.user;
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
@@ -889,13 +939,18 @@ async function profileView(app) {
     prev.replaceChildren(h('div', { class: 'avatar xl' }, h('img', { src: photo, alt: '' })));
   }));
   const save = act(async () => { await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo }); me = await api('GET', '/me'); toast('Profile saved.'); route(); });
-  const methods = me.payment_methods.filter((p) => !p.is_receiver);
+  const methods = me.payment_methods.filter((p) => !p.linked);
+  const menu = [['ads', '📣', 'My ads'], ['linked', '🔗', 'Linked accounts'], ['safety', '🛡️', 'Safety']];
+  if (['AGENT', 'ADMIN'].includes(u.role)) menu.push(['staff', '🧑‍⚖️', 'Staff']);
+  if (u.role === 'ADMIN') menu.push(['admin', '⚙️', 'Admin']);
   app.append(
+    h('div', { class: 'card menu-m' }, menu.map(([k, ic, label]) => h('button', { class: 'mrow', onclick: () => go(k) }, h('span', {}, ic), h('b', {}, t(label)), h('span', { class: 'mute' }, '›'))),
+      h('button', { class: 'mrow', onclick: logout }, h('span', {}, '🚪'), h('b', {}, t('Log out')), h('span', {}, ''))),
     h('div', { class: 'card' }, h('h2', {}, t('Profile')),
       h('div', { class: 'pfhead' }, prev, h('div', {}, h('b', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, u.display_name ? 'ID name: ' + u.full_name + ' (private)' : u.phone),
         h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + u.tier), u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null)),
       u.tier >= 1 ? h('p', { class: 'mute' }, '✓ ID check done.') : null),
-    u.tier < 1 ? await idCheckCard() : null,
+    ...(u.tier < 1 ? [await idCheckCard()] : []),
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'What other people see'),
       h('p', { class: 'mute' }, 'Add a photo and a public name so buyers and sellers trust you. Your real name stays private if you use a company name.'),
       h('label', {}, 'Photo'), h('div', {}, h('label', { class: 'btn alt sm filebtn' }, file, 'Choose a photo'), h('span', { class: 'mute' }, ' Any picture. We make it small.')),

@@ -48,6 +48,20 @@ CREATE TABLE kyc (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Linked accounts: a user may receive gourdes into another REGISTERED, ID-checked person's MonCash/NatCash/bank
+-- account, only after that person accepts. Each link costs LINK_FEE_USDT every 30 days.
+CREATE TABLE account_links (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id          uuid NOT NULL REFERENCES users(id),   -- the trader who uses the account
+  member_id         uuid NOT NULL REFERENCES users(id),   -- the person who owns the account
+  payment_method_id uuid,                                 -- the member's account, set when they accept
+  status            text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','ENDED')),
+  paid_until        timestamptz,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  CHECK (owner_id <> member_id)
+);
+CREATE UNIQUE INDEX account_links_open ON account_links (owner_id, member_id) WHERE status <> 'ENDED';
+
 -- ID photos and the video. Drafts (kyc_id NULL) until the person presses Send.
 CREATE TABLE kyc_files (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

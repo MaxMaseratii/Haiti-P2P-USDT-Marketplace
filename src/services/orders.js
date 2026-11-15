@@ -1,4 +1,4 @@
-import * as receivers from './receivers.js';
+import * as links from './links.js';
 import crypto from 'node:crypto';
 import { tx, q } from '../db.js';
 import { config, isMock, isMockSms } from '../config.js';
@@ -64,7 +64,8 @@ export async function createOrder(user, { ad_id, amount, payment_method_id, pay_
       if (!pick) throw bad(pay_type ? `This seller does not take ${pay_type}.` : 'This ad has no payment account.');
       pmId = pick.id;
     } else {
-      const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2', [payment_method_id, user.id])).rows[0];
+      const ok = await links.usableAccountIds(c, user.id);
+      const pm = ok.includes(payment_method_id) ? (await c.query('SELECT * FROM payment_methods WHERE id=$1', [payment_method_id])).rows[0] : null;
       if (!pm || !pm.active) throw bad('Pick the payment account where you want to be paid.');
       if (!pm.verified) throw forbidden('That payment account is not verified. The name must match your ID.');
       if (!accepted.includes(pm.type)) throw bad(`This buyer pays by ${accepted.join(', ')}.`);
@@ -184,8 +185,9 @@ export async function markPaid(user, orderId) {
   // Tell the chain, so the app key cannot cancel this order any more. If this fails the app still never
   // cancels a PAID order (the database blocks it). The contract rule is a second lock.
   try { await escrow.claimed(o); } catch (e) { console.error('claim on chain failed', orderId, e.message); }
-  // Paid to a family receiver? Send them an SMS link to confirm.
-  try { const t = await receivers.notifyReceiver(o); if (t && isMockSms()) o.receiver_test_link = '#receive/' + t; } catch (e) { console.error('receiver notify failed', e.message); }
+  // Paid into a linked account? Ask its owner to check and confirm.
+  try { await links.notifyMember(o); } catch (e) { console.error('link notify failed', e.message); }
+  delete o.receiver_token_hash;
   return o;
 }
 
@@ -304,7 +306,7 @@ export async function getOrderView(user, id) {
   const [buyer, seller, pm, events, escrowTxs, dispute] = await Promise.all([
     q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.buyer_id]),
     q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.seller_id]),
-    q('SELECT type, account_name, account_ref, bank_name, is_receiver FROM payment_methods WHERE id=$1', [o.payment_method_id]),
+    q(`SELECT type, account_name, account_ref, bank_name, (user_id <> $2) AS is_receiver FROM payment_methods WHERE id=$1`, [o.payment_method_id, o.seller_id]),
     q('SELECT created_at, from_state, to_state, note, actor_id FROM order_events WHERE order_id=$1 ORDER BY id', [id]),
     q('SELECT kind, status, tx_hash, attempts, created_at, confirmed_at FROM escrow_txs WHERE order_id=$1 ORDER BY created_at', [id]),
     q('SELECT * FROM disputes WHERE order_id=$1', [id]),
@@ -418,7 +420,7 @@ export async function runTimers() {
   for (const { id } of (await q(`SELECT id FROM orders WHERE state='ORDER_CREATED'`)).rows) { await confirmLock(id); }
   // 5. Real chain: read deposits and withdrawals, keep ad reserves equal on chain.
   try { await escrow.tick(); } catch (e) { console.error('chain tick', e.message); }
-  try { Object.assign(done, await receivers.renew()); } catch (e) { console.error('receiver renew', e.message); }
+  try { Object.assign(done, await links.renew()); } catch (e) { console.error('link renew', e.message); }
   return done;
 }
 

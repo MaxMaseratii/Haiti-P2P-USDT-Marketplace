@@ -175,3 +175,11 @@ a{color:var(--brand);font-weight:600}
 .accs{display:flex;flex-direction:column;gap:8px}.acc{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--soft);border-radius:12px;padding:10px 12px}
 .bio{font-size:13px;margin-top:2px}
 .ulist{display:flex;flex-direction:column;gap:8px}.urow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:10px 12px}.urow select{width:auto}
+.payseg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.paychips{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.chip.pay-moncash{background:#fde8e8;color:#b42318}.chip.pay-natcash{background:#fff1db;color:#a15c07}.chip.pay-bank{background:#e4ecfb;color:#1d4ed8}
+@media (prefers-color-scheme:dark){.chip.pay-moncash{background:#3a1717;color:#ff9b9b}.chip.pay-natcash{background:#3a2a12;color:#ffc56b}.chip.pay-bank{background:#16233d;color:#9cb8ff}}
+.ticks{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.tick{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:400}
+.tick input{width:18px;height:18px;margin:0}
+.tick{margin:0}

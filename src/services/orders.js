@@ -32,7 +32,7 @@ async function lockOrder(c, id) {
 }
 
 // ---------- create ----------
-export async function createOrder(user, { ad_id, amount, payment_method_id }) {
+export async function createOrder(user, { ad_id, amount, payment_method_id, pay_type }) {
   if (!/^\d+(\.\d+)?$/.test(String(amount)) || Number(amount) <= 0) throw bad('Amount must be a number above 0.');
   const amt = String(amount);
 
@@ -53,12 +53,20 @@ export async function createOrder(user, { ad_id, amount, payment_method_id }) {
       throw bad(`Order must be between ${ad.min_order_htg} and ${ad.max_order_htg} HTG.`, 'RANGE');
 
     // Payment account the buyer will pay into.
+    const accepted = ad.pay_types || [ad.pay_type];
     let pmId = ad.payment_method_id;
-    if (ad.side === 'BUY') {
+    if (ad.side === 'SELL') {
+      // The buyer picks how to pay (MonCash, NatCash or bank) among the seller's accounts on this ad.
+      const ids = ad.pay_methods || [ad.payment_method_id];
+      const pms = (await c.query('SELECT id, type FROM payment_methods WHERE id = ANY($1::uuid[]) AND verified', [ids])).rows;
+      const pick = pay_type ? pms.find((p) => p.type === pay_type) : pms.find((p) => p.id === ad.payment_method_id) || pms[0];
+      if (!pick) throw bad(pay_type ? `This seller does not take ${pay_type}.` : 'This ad has no payment account.');
+      pmId = pick.id;
+    } else {
       const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2', [payment_method_id, user.id])).rows[0];
       if (!pm) throw bad('Pick the payment account where you want to be paid.');
       if (!pm.verified) throw forbidden('That payment account is not verified. The name must match your ID.');
-      if (pm.type !== ad.pay_type) throw bad(`This ad pays by ${ad.pay_type}.`);
+      if (!accepted.includes(pm.type)) throw bad(`This buyer pays by ${accepted.join(', ')}.`);
       pmId = pm.id;
     }
 

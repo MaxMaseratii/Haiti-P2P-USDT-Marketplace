@@ -430,3 +430,36 @@ test('completion rate: a buyer cancel does not hurt the seller', async () => {
   const ads = await ok('GET', '/public/ads');
   for (const a of ads) if (a.completion_pct != null) { assert.ok(a.completion_pct >= 0 && a.completion_pct <= 100); }
 });
+
+test('one sell ad can take MonCash, NatCash and bank; the buyer picks', async () => {
+  await signup('ms', '+50937000111', 'Multi Seller'); await kyc('ms');
+  const ids = [];
+  for (const [type, ref, bank] of [['MONCASH', '37111001'], ['NATCASH', '37111002'], ['BANK', '37111003', 'Sogebank']])
+    ids.push((await ok('POST', '/payment-methods', { type, account_name: 'Multi Seller', account_ref: ref, bank_name: bank }, tk('ms'))).id);
+  await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+50937000111'),'USDT',500)
+                    ON CONFLICT (user_id, asset) DO UPDATE SET available = wallet_balances.available + 500`);
+  const ad = await ok('POST', '/ads', { side: 'SELL', price_htg: '140', amount: '100', min_order_htg: '500', max_order_htg: '10000', payment_method_ids: ids }, tk('ms'));
+  assert.deepEqual([...ad.pay_types].sort(), ['BANK', 'MONCASH', 'NATCASH']);
+  const listed = await ok('GET', '/public/ads?side=SELL&pay_type=NATCASH');
+  assert.ok(listed.some((a) => a.ad_id === ad.id || a.id === ad.id || a.price_htg === '140.00'));
+  await signup('mb', '+50937000112', 'Multi Buyer'); await kyc('mb');
+  const o = await ok('POST', '/orders', { ad_id: ad.id, amount: '10', pay_type: 'BANK' }, tk('mb'));
+  const v = await ok('GET', '/orders/' + o.id, null, tk('mb'));
+  assert.equal(v.payment.type, 'BANK'); assert.equal(v.payment.bank_name, 'Sogebank');
+});
+
+test('owner dashboard: overview, orders, ads, stop any ad, CORS for maxmaserati.com', async () => {
+  const o = await ok('POST', '/auth/login', { phone: '+50937000777', code: '482913' });
+  const T = o.token;
+  const ov = await ok('GET', '/admin/overview', null, T);
+  assert.ok(ov.users.total > 0); assert.equal(ov.daily.length, 30); assert.equal(ov.server.owner_code_set, true);
+  assert.ok((await ok('GET', '/admin/orders', null, T)).length > 0);
+  const list = await ok('GET', '/admin/ads', null, T);
+  const victim = list.find((a) => a.side === 'SELL');
+  await ok('POST', `/admin/ads/${victim.id}/status`, { status: 'PAUSED' }, T);
+  assert.equal((await call('GET', '/admin/overview', null, tk('mb'))).status, 403);
+  const pre = await fetch(url + '/api/admin/overview', { method: 'OPTIONS', headers: { Origin: 'https://www.maxmaserati.com', 'Access-Control-Request-Method': 'GET' } });
+  assert.equal(pre.status, 204); assert.equal(pre.headers.get('access-control-allow-origin'), 'https://www.maxmaserati.com');
+  const evil = await fetch(url + '/api/config', { headers: { Origin: 'https://evil.example' } });
+  assert.equal(evil.headers.get('access-control-allow-origin'), null);
+});

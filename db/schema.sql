@@ -68,6 +68,8 @@ CREATE TABLE ads (
   max_order_htg   numeric(14,2) NOT NULL,
   pay_type        pay_method_type NOT NULL,
   payment_method_id uuid REFERENCES payment_methods(id),   -- SELL ads: where the seller is paid. BUY ads: null.
+  pay_types       text[],                -- all payment types this ad accepts (MONCASH, NATCASH, BANK)
+  pay_methods     uuid[],                -- SELL ads: all the seller's accounts the buyer may pay into
   fee_rate        numeric(7,5) NOT NULL DEFAULT 0,
   reserved        numeric(18,6) NOT NULL DEFAULT 0 CHECK (reserved >= 0), -- SELL ads: USDT held for this ad
   status          ad_status NOT NULL DEFAULT 'ACTIVE',

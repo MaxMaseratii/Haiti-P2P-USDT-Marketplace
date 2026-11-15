@@ -30,6 +30,16 @@ export function buildApp() {
     if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
   });
+  // Let the admin dashboard on maxmaserati.com call the API. Logins still need the owner code.
+  app.use('/api', (req, res, next) => {
+    const o = req.headers.origin;
+    if (o && config.adminOrigins.includes(o)) {
+      res.set({ 'Access-Control-Allow-Origin': o, Vary: 'Origin', 'Access-Control-Allow-Headers': 'authorization, content-type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Max-Age': '600' });
+      if (req.method === 'OPTIONS') return res.status(204).end();
+    }
+    next();
+  });
   app.use('/api', apiLimit);
   app.use('/api/orders/:id/evidence/upload', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '100kb' }));

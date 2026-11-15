@@ -6,15 +6,15 @@ import * as wallet from './wallet.js';
 // MOCK only. Puts example sellers and buyers in the market so a new visitor sees real-looking ads.
 // These are fake accounts with fake money. Safe to delete. Runs once (when there are no ads).
 const SELL = [
-  ['Jean Baptiste', 'MONCASH', '139.50', 800, 1000, 25000],
-  ['Widlene Joseph', 'NATCASH', '140.20', 450, 500, 15000],
+  ['Jean Baptiste', 'MONCASH,NATCASH,BANK', '139.50', 800, 1000, 25000],
+  ['Widlene Joseph', 'NATCASH,MONCASH', '140.20', 450, 500, 15000],
   ['Pierre Louis', 'BANK', '141.00', 1500, 5000, 150000],
   ['Marie Claire Desir', 'MONCASH', '140.00', 300, 500, 10000],
   ['Stephanie Pierre', 'NATCASH', '141.75', 220, 500, 8000],
   ['Roody Charles', 'MONCASH', '142.50', 120, 500, 5000],
 ];
 const BUY = [
-  ['Nadege Fils', 'MONCASH', '137.80', 400, 1000, 20000],
+  ['Nadege Fils', 'MONCASH,NATCASH', '137.80', 400, 1000, 20000],
   ['Kervens Altidor', 'BANK', '138.40', 900, 5000, 100000],
 ];
 
@@ -29,17 +29,23 @@ export async function seedDemo() {
     await q(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','demo',$2,now())`, [u.id, name]);
     return u;
   };
-  for (const [name, type, price, amount, min, max] of SELL) {
-    const u = await mk(name);
-    const pm = (await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5) RETURNING id`,
-      [u.id, type, name, '3799' + String(n).padStart(4, '0'), type === 'BANK' ? 'Unibank' : null])).rows[0];
+  // one account per payment type the person accepts
+  const accounts = async (u, name, types) => {
+    const ids = [];
+    for (const [i, type] of types.entries()) ids.push((await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5) RETURNING id`,
+      [u.id, type, name, '37' + i + '9' + String(n).padStart(4, '0'), type === 'BANK' ? 'Unibank' : null])).rows[0].id);
+    return ids;
+  };
+  for (const [name, list, price, amount, min, max] of SELL) {
+    const u = await mk(name), types = list.split(',');
+    const ids = await accounts(u, name, types);
     await tx((c) => wallet.credit(c, u.id, 'USDT', String(amount + 10)));
-    await ads.createAd(u, { side: 'SELL', pay_type: type, price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max), payment_method_id: pm.id });
+    await ads.createAd(u, { side: 'SELL', price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max), payment_method_ids: ids });
   }
-  for (const [name, type, price, amount, min, max] of BUY) {
-    const u = await mk(name);
-    await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5)`, [u.id, type, name, '3799' + String(n).padStart(4, '0'), type === 'BANK' ? 'Unibank' : null]);
-    await ads.createAd(u, { side: 'BUY', pay_type: type, price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max) });
+  for (const [name, list, price, amount, min, max] of BUY) {
+    const u = await mk(name), types = list.split(',');
+    await accounts(u, name, types);
+    await ads.createAd(u, { side: 'BUY', pay_types: types, price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max) });
   }
   return true;
 }
@@ -74,6 +80,11 @@ export async function ensureTestAccounts() {
       const has = (await q('SELECT 1 FROM payment_methods WHERE user_id=$1 AND type=$2', [u.id, t2])).rows[0];
       if (!has) await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5) ON CONFLICT DO NOTHING`, [u.id, t2, name, r2, t2 === 'BANK' ? 'Sogebank' : null]);
     }
+    // the test seller's ad takes all 3 payment types, and the test buyer's ad pays with all 3
+    const all = (await q('SELECT id, type FROM payment_methods WHERE user_id=$1 AND verified ORDER BY created_at', [u.id])).rows;
+    const one = new Map(); for (const p of all) if (!one.has(p.type)) one.set(p.type, p.id);
+    if (who === 'seller') await q(`UPDATE ads SET pay_methods=$2::uuid[], pay_types=$3 WHERE user_id=$1 AND side='SELL' AND status='ACTIVE'`, [u.id, [...one.values()], [...one.keys()]]);
+    else await q(`UPDATE ads SET pay_types=$2 WHERE user_id=$1 AND side='BUY' AND status='ACTIVE'`, [u.id, [...one.keys()]]);
     out[who] = u;
   }
   return out;

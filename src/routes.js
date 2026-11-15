@@ -73,7 +73,7 @@ api.post('/auth/login', wrap(async (req) => {
 api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.side === 'BUY' ? 'BUY' : 'SELL' })).map((a) => {
   const [first, ...rest] = String(a.owner_name).trim().split(/\s+/);
   return { side: a.side, asset: a.asset, price_htg: a.price_htg, remaining: a.remaining, min_order_htg: a.min_order_htg,
-    max_order_htg: a.max_order_htg, pay_type: a.pay_type, trades: a.trades, rating: a.rating,
+    max_order_htg: a.max_order_htg, pay_type: a.pay_type, pay_types: a.pay_types || [a.pay_type], trades: a.trades, rating: a.rating,
     id_verified: a.id_verified, has_avatar: a.has_avatar, is_business: a.is_business, id: a.owner_id, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
     owner: a.is_business ? a.owner_name : rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
 })));
@@ -204,5 +204,44 @@ admin.post('/screening-hits/:id/resolve', wrap(async (req) => {
   return { ok: true };
 }));
 admin.get('/reconcile', wrap(async () => (isMock() ? { mock: true } : evm.reconcile())));
+// ---- owner dashboard (maxmaserati.com/admin) ----
+const started = new Date();
+admin.get('/overview', wrap(async () => {
+  const one = async (sql, a = []) => (await q(sql, a)).rows[0];
+  const [u, o, money, wal, ads, disp] = await Promise.all([
+    one(`SELECT COUNT(*) FILTER (WHERE id <> $1)::int total, COUNT(*) FILTER (WHERE tier >= 1 AND id <> $1)::int verified,
+                COUNT(*) FILTER (WHERE created_at > now() - interval '7 days' AND id <> $1)::int new_7d, COUNT(*) FILTER (WHERE banned)::int banned,
+                (SELECT COUNT(*)::int FROM kyc WHERE status='PENDING') kyc_pending FROM users`, [config.platformUserId]),
+    one(`SELECT COUNT(*) FILTER (WHERE state IN ('ORDER_CREATED','AWAITING_PAYMENT','PAID_CLAIMED','DISPUTED','RELEASING','REFUNDING'))::int open,
+                COUNT(*) FILTER (WHERE state='PAID_CLAIMED')::int waiting_release,
+                COUNT(*) FILTER (WHERE state='COMPLETED' AND updated_at > now() - interval '1 day')::int done_24h,
+                COUNT(*) FILTER (WHERE state='COMPLETED' AND updated_at > now() - interval '7 days')::int done_7d,
+                COUNT(*) FILTER (WHERE state='COMPLETED')::int done_all FROM orders`),
+    one(`SELECT COALESCE(SUM(total_htg) FILTER (WHERE updated_at > now() - interval '7 days'),0)::text htg_7d,
+                COALESCE(SUM(amount) FILTER (WHERE updated_at > now() - interval '7 days'),0)::text usd_7d,
+                COALESCE(SUM(total_htg),0)::text htg_all, COALESCE(SUM(amount),0)::text usd_all FROM orders WHERE state='COMPLETED'`),
+    one(`SELECT COALESCE(SUM(locked) FILTER (WHERE user_id <> $1),0)::text locked, COALESCE(SUM(available) FILTER (WHERE user_id <> $1),0)::text available,
+                COALESCE(SUM(available) FILTER (WHERE user_id = $1),0)::text fees FROM wallet_balances`, [config.platformUserId]),
+    one(`SELECT COUNT(*) FILTER (WHERE status='ACTIVE' AND side='SELL')::int sell, COUNT(*) FILTER (WHERE status='ACTIVE' AND side='BUY')::int buy,
+                (SELECT MIN(price_htg)::text FROM ads WHERE status='ACTIVE' AND side='SELL' AND remaining > 0) best_sell,
+                (SELECT MAX(price_htg)::text FROM ads WHERE status='ACTIVE' AND side='BUY' AND remaining > 0) best_buy FROM ads`),
+    one(`SELECT COUNT(*) FILTER (WHERE status='OPEN')::int open, COUNT(*)::int total FROM disputes`)]);
+  const daily = (await q(`SELECT to_char(d, 'YYYY-MM-DD') AS day, COALESCE(SUM(o.total_htg),0)::text AS htg, COUNT(o.id)::int AS n
+      FROM generate_series(current_date - 29, current_date, interval '1 day') d
+      LEFT JOIN orders o ON o.state='COMPLETED' AND o.updated_at::date = d::date GROUP BY d ORDER BY d`)).rows;
+  return { users: u, orders: o, volume: money, wallets: wal, ads, disputes: disp, daily,
+    server: { escrow_mode: config.escrowMode, sms: config.smsProvider, demo: !!(config.demoSeed && isMock()), network: config.escrowNetwork,
+      fee_rate: config.feeRate, commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, started_at: started, owner_code_set: /^\d{6}$/.test(config.adminLoginCode) } };
+}));
+admin.get('/orders', wrap(async (req) => (await q(
+  `SELECT o.id, o.state, o.asset, o.amount::text, o.total_htg::text, o.price_htg::text, o.created_at, o.updated_at, o.pay_reference,
+          COALESCE(b.display_name, b.full_name) buyer, COALESCE(s.display_name, s.full_name) seller, pm.type pay_type
+     FROM orders o JOIN users b ON b.id=o.buyer_id JOIN users s ON s.id=o.seller_id LEFT JOIN payment_methods pm ON pm.id=o.payment_method_id
+    WHERE ($1 = '' OR o.state::text = $1) ORDER BY o.created_at DESC LIMIT 200`, [String(req.query.state || '')])).rows));
+admin.get('/ads', wrap(async () => (await q(
+  `SELECT a.id, a.side, a.asset, a.price_htg::text, a.remaining::text, a.total_amount::text, a.status, a.created_at,
+          COALESCE(a.pay_types, ARRAY[a.pay_type::text]) pay_types, COALESCE(u.display_name, u.full_name) owner, u.phone
+     FROM ads a JOIN users u ON u.id=a.user_id WHERE a.status <> 'CLOSED' ORDER BY a.side, a.price_htg LIMIT 300`)).rows));
+admin.post('/ads/:id/status', wrap(async (req) => ads.setAdStatus(req.user, req.params.id, req.body?.status)));
 admin.post('/run-timers', wrap(async () => orders.runTimers()));
 api.use('/admin', admin);

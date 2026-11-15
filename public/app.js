@@ -124,7 +124,7 @@ async function publicAds(app) {
         h('div', {}, h('strong', {}, a.owner), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, 'Price'), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'), h('div', {}, usd(a.remaining) + ' ' + a.asset),
-        h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`), h('span', { class: 'chip' }, a.pay_type)),
+        h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`), payChips(a)),
       h('button', { class: 'btn sm ' + cls, onclick: need }, verb)))) : h('p', { class: 'mute' }, 'No ads yet.'));
   try {
     const [sell, buy] = await Promise.all([api('GET', '/public/ads?side=SELL'), api('GET', '/public/ads?side=BUY')]);
@@ -149,7 +149,7 @@ async function marketView(app) {
       h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, t('Available') + ' · ' + t('Limits')),
         h('div', {}, usd(a.remaining) + ' ' + a.asset), h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`),
-        h('span', { class: 'chip' }, a.pay_type)),
+        payChips(a)),
       a.owner_id === me.user.id ? h('span', { class: 'mute' }, 'your ad') : h('button', { class: 'btn sm ' + (marketSide === 'SELL' ? 'good' : 'danger'), onclick: () => takeAd(a) }, (marketSide === 'SELL' ? t('Buy USDT') : t('Sell USDT')))))) : h('p', { class: 'mute' }, 'No ads yet.'));
   });
   [asset, pay].forEach((s) => s.addEventListener('change', load));
@@ -206,22 +206,32 @@ function bankPicker() {
   return { el: h('div', {}, sel, other), value: () => (sel.value === 'Other' ? other.value.trim() : sel.value) };
 }
 
+const PAY_NAME = { MONCASH: 'MonCash', NATCASH: 'NatCash', BANK: 'Bank' };
+const payChips = (a) => h('div', { class: 'paychips' }, (a.pay_types || [a.pay_type]).map((p) => h('span', { class: 'chip pay-' + p.toLowerCase() }, PAY_NAME[p] || p)));
+
 function takeAd(a) {
   const minU = Math.ceil(Number(a.min_order_htg) / Number(a.price_htg)), maxU = Math.min(Number(a.remaining), Math.floor(Number(a.max_order_htg) / Number(a.price_htg)));
   const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset, value: cfg.demo ? String(Math.min(minU + 2, maxU)) : '' });
   const total = h('div', { class: 'big' }, '0 HTG');
   const upd = () => { total.textContent = money(Number(amount.value || 0) * Number(a.price_htg)) + ' HTG'; };
   amount.addEventListener('input', upd); upd();
-  const mine = (me.payment_methods || []).filter((p) => p.type === a.pay_type && p.verified);
+  const types = a.pay_types || [a.pay_type];
+  // Buying from a seller: choose how you pay. Selling to a buyer: choose which of your accounts gets paid.
+  let payWith = types[0];
+  const paySeg = h('div', { class: 'seg payseg' }, types.map((tp, i) => h('button', { class: i ? '' : 'on', onclick: (e) => {
+    payWith = tp; paySeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, PAY_NAME[tp] || tp)));
+  const mine = (me.payment_methods || []).filter((p) => types.includes(p.type) && p.verified);
+  const addType = h('select', {}, types.map((tp) => h('option', { value: tp }, PAY_NAME[tp] || tp)));
   const pm = h('select', {}, mine.map((p) => h('option', { value: p.id }, `${p.bank_name ? p.bank_name : p.type} · ${p.account_ref} · ${p.account_name}`)));
-  const nm = h('input', { value: me.user.full_name }), nr = h('input', { inputmode: 'numeric', placeholder: a.pay_type === 'BANK' ? 'Bank account number' : a.pay_type + ' phone number' });
-  const bank = a.pay_type === 'BANK' ? bankPicker() : null;
+  const nm = h('input', { value: me.user.full_name }), nr = h('input', { inputmode: 'numeric', placeholder: 'Phone number or bank account number' });
+  const bank = bankPicker(), bankRow = h('div', { class: addType.value === 'BANK' ? '' : 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
+  addType.addEventListener('change', () => bankRow.classList.toggle('hidden', addType.value !== 'BANK'));
   const addBox = h('div', { class: 'addacc' + (mine.length ? ' hidden' : '') },
-    h('p', { class: 'mute' }, mine.length ? 'Add another ' + a.pay_type + ' account.' : `You have no ${a.pay_type} account yet. Add one. The name must match your ID.`),
-    bank ? [h('label', {}, 'Which bank?'), bank.el] : null,
-    h('label', {}, 'Name on the account'), nm, h('label', {}, a.pay_type === 'BANK' ? 'Account number' : 'Phone number'), nr,
+    h('p', { class: 'mute' }, mine.length ? 'Add another account.' : `You have no ${types.map((x) => PAY_NAME[x]).join(' / ')} account yet. Add one. The name must match your ID.`),
+    h('label', {}, 'Type'), addType, bankRow,
+    h('label', {}, 'Name on the account'), nm, h('label', {}, 'Number'), nr,
     h('button', { class: 'btn alt sm', onclick: act(async () => {
-      const r = await api('POST', '/payment-methods', { type: a.pay_type, account_name: nm.value.trim(), account_ref: nr.value.trim(), bank_name: bank ? bank.value() : undefined });
+      const r = await api('POST', '/payment-methods', { type: addType.value, account_name: nm.value.trim(), account_ref: nr.value.trim(), bank_name: addType.value === 'BANK' ? bank.value() : undefined });
       me = await api('GET', '/me');
       if (!r.verified) { toast('Saved, but the name does not match your ID yet. Staff must approve it.', true); }
       takeAd(a);
@@ -230,15 +240,16 @@ function takeAd(a) {
     h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
     h('div', { class: 'tcard' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
       h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), a.bio ? h('div', { class: 'bio' }, a.bio) : null, repBadges(a))),
-    h('div', { class: 'kv' }, kv([['Available', usd(a.remaining) + ' ' + a.asset], ['Limits per order', `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`], ['Pay by', a.pay_type]])),
+    h('div', { class: 'kv' }, kv([['Available', usd(a.remaining) + ' ' + a.asset], ['Limits per order', `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`], [a.side === 'SELL' ? 'Seller accepts' : 'Buyer pays with', types.map((x) => PAY_NAME[x]).join(', ')]])),
     h('label', {}, 'How many ' + a.asset + '? (not gourdes)'), amount, h('div', { class: 'mute' }, `You can trade from ${minU} to ${maxU} ${a.asset}.`), h('div', { class: 'mute' }, 'You ' + (a.side === 'SELL' ? 'pay' : 'receive')), total];
+  if (a.side === 'SELL') body.push(h('label', {}, 'How will you pay?'), paySeg);
   if (a.side === 'BUY') {
     body.push(h('label', {}, 'Where do you want to get paid?'), mine.length ? pm : null,
       mine.length ? h('button', { class: 'linkbtn', onclick: () => addBox.classList.toggle('hidden') }, '+ Add another number or account') : null, addBox);
   }
   body.push(h('button', { class: 'btn big-btn', onclick: act(async () => {
-    if (a.side === 'BUY' && !mine.length) throw new Error('Add your ' + a.pay_type + ' account first.');
-    const o = await api('POST', '/orders', { ad_id: a.id, amount: amount.value.trim(), payment_method_id: a.side === 'BUY' ? pm.value : undefined });
+    if (a.side === 'BUY' && !mine.length) throw new Error('Add a payment account first.');
+    const o = await api('POST', '/orders', { ad_id: a.id, amount: amount.value.trim(), payment_method_id: a.side === 'BUY' ? pm.value : undefined, pay_type: a.side === 'SELL' ? payWith : undefined });
     go('order/' + o.id);
   }) }, 'Continue'));
   body.push(h('p', { class: 'mute center' }, '🔒 The USDT is locked in escrow before you pay (' + (cfg.network ? cfg.network.charAt(0) + cfg.network.slice(1).toLowerCase() : 'blockchain') + '). ', h('a', { href: '#safety' }, 'How it works')));
@@ -251,26 +262,37 @@ async function adsView(app) {
   const f = {};
   const field = (key, label, el) => { f[key] = el; return [h('label', {}, label), el]; };
   const pms = me.payment_methods.filter((p) => p.verified);
+  const tick = (value, label, sub) => h('label', { class: 'tick' }, h('input', { type: 'checkbox', value, checked: true }), h('span', {}, h('b', {}, label), sub ? h('small', { class: 'mute' }, ' ' + sub) : null));
+  // Sell ad: tick every account you accept money in. Buy ad: tick every way you can pay.
+  const sellBox = h('div', {}, h('label', {}, 'I accept payment in (tick all you want)'),
+    pms.length ? h('div', { class: 'ticks' }, pms.map((p) => tick(p.id, p.bank_name || PAY_NAME[p.type], `${p.account_ref} · ${p.account_name}`)))
+      : h('p', { class: 'mute' }, 'Add a verified MonCash, NatCash or bank account in Profile first.'));
+  const buyBox = h('div', { class: 'hidden' }, h('label', {}, 'I can pay with (tick all you want)'),
+    h('div', { class: 'ticks' }, ['MONCASH', 'NATCASH', 'BANK'].map((tp) => tick(tp, PAY_NAME[tp]))));
   app.append(h('div', { class: 'card' }, h('h2', {}, t('Post an ad')),
     h('div', { class: 'row' },
       h('div', {}, field('side', 'I want to', h('select', {}, h('option', { value: 'SELL' }, 'SELL USDT/USDC (I get HTG)'), h('option', { value: 'BUY' }, 'BUY USDT/USDC (I pay HTG)')))),
       h('div', {}, field('asset', 'Asset', h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC')))),
-      h('div', {}, field('pay_type', 'Pay by', h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'))))),
+    ),
     h('div', { class: 'row' },
       h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal', value: cfg.demo ? '140' : '' }))),
       h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal', value: cfg.demo ? '100' : '' }))),
       h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '500' : '' }))),
       h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '10000' : '' })))),
-    field('payment_method_id', 'Payment account (sell ads: where you get paid)', h('select', {}, pms.map((p) => h('option', { value: p.id }, `${p.bank_name || p.type} ${p.account_ref} (${p.account_name})`)))),
+    sellBox, buyBox,
     h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
     h('button', { class: 'btn', onclick: act(async () => {
       const b = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value]));
+      if (b.side === 'SELL') b.payment_method_ids = [...sellBox.querySelectorAll('input:checked')].map((x) => x.value);
+      else b.pay_types = [...buyBox.querySelectorAll('input:checked')].map((x) => x.value);
+      if (!(b.payment_method_ids || b.pay_types).length) throw new Error('Tick at least one payment method.');
       await api('POST', '/ads', b); toast('Ad posted.'); route();
     }) }, t('Post an ad'))));
+  f.side.addEventListener('change', () => { sellBox.classList.toggle('hidden', f.side.value !== 'SELL'); buyBox.classList.toggle('hidden', f.side.value !== 'BUY'); });
   app.append(h('div', { class: 'card scroll' }, h('h2', {}, t('My ads')), mine.length ? h('table', {},
-    h('thead', {}, h('tr', {}, ['Side', t('Price'), t('Available'), 'Held', 'Status', ''].map((x) => h('th', {}, x)))),
+    h('thead', {}, h('tr', {}, ['Side', t('Price'), t('Available'), 'Payment', 'Held', 'Status', ''].map((x) => h('th', {}, x)))),
     h('tbody', {}, mine.map((a) => h('tr', {},
-      h('td', {}, a.side + ' ' + a.asset), h('td', {}, money(a.price_htg)), h('td', {}, usd(a.remaining)), h('td', {}, usd(a.reserved)),
+      h('td', {}, a.side + ' ' + a.asset), h('td', {}, money(a.price_htg)), h('td', {}, usd(a.remaining)), h('td', {}, payChips(a)), h('td', {}, usd(a.reserved)),
       h('td', {}, a.status),
       h('td', {}, a.status === 'ACTIVE' ? h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/ads/${a.id}/status`, { status: 'PAUSED' }); route(); }) }, 'Pause') : null,
         a.status === 'PAUSED' ? h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/ads/${a.id}/status`, { status: 'ACTIVE' }); route(); }) }, 'Resume') : null,

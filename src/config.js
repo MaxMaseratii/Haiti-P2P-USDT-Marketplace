@@ -21,6 +21,8 @@ export const config = {
   // mock = code 000000, nothing is sent. twilio = real SMS (set the TWILIO_* values).
   // With SMS_PROVIDER=mock, everybody's code is 000000. Staff and owner accounts must use this secret 6-digit code instead.
   apiRateLimit: num('API_RATE_LIMIT', 600),          // API calls per IP per 5 minutes
+  // Websites allowed to call the API from a browser (your admin dashboard on maxmaserati.com).
+  adminOrigins: str('ADMIN_ORIGINS', 'https://www.maxmaserati.com,https://maxmaserati.com').split(',').map((x) => x.trim()).filter(Boolean),
   adminLoginCode: str('ADMIN_LOGIN_CODE', ''),
   smsProvider: str('SMS_PROVIDER', 'mock'),
   twilioSid: str('TWILIO_ACCOUNT_SID', ''),

@@ -17,7 +17,10 @@ export async function createAd(user, b) {
   if (!['SELL', 'BUY'].includes(side)) throw bad('Side must be SELL or BUY.');
   const asset = b.asset || 'USDT';
   if (!['USDT', 'USDC'].includes(asset)) throw bad('Asset must be USDT or USDC.');
-  if (!['MONCASH', 'NATCASH', 'BANK'].includes(b.pay_type)) throw bad('pay_type must be MONCASH, NATCASH or BANK.');
+  // An ad can accept several payment types. Old callers send one pay_type / payment_method_id.
+  const TYPES = ['MONCASH', 'NATCASH', 'BANK'];
+  let types = [...new Set([].concat(b.pay_types || b.pay_type || []))];
+  const pmIds = [...new Set([].concat(b.payment_method_ids || b.payment_method_id || []))];
   const price = num(b.price_htg, 'Price');
   const amount = num(b.amount, 'Amount');
   const minHtg = num(b.min_order_htg, 'Minimum order');
@@ -25,15 +28,16 @@ export async function createAd(user, b) {
   if (Number(maxHtg) < Number(minHtg)) throw bad('Maximum order must be at least the minimum.');
 
   const ad = await tx(async (c) => {
-    let pmId = null;
+    let pmIds2 = null;
     if (side === 'SELL') {
       if (!isMock() && !user.wallet_addr) throw bad('Link your wallet first (Wallet page).', 'WALLET');
-      const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2', [b.payment_method_id, user.id])).rows[0];
-      if (!pm) throw bad('Pick one of your payment accounts.');
-      if (!pm.verified) throw forbidden('That payment account is not verified. The name must match your ID.');
-      if (pm.type !== b.pay_type) throw bad('Payment account type does not match.');
-      pmId = pm.id;
+      if (!pmIds.length) throw bad('Pick at least one of your payment accounts.');
+      const pms = (await c.query('SELECT * FROM payment_methods WHERE id = ANY($1::uuid[]) AND user_id=$2', [pmIds, user.id])).rows;
+      if (pms.length !== pmIds.length) throw bad('Pick your own payment accounts.');
+      if (pms.some((p) => !p.verified)) throw forbidden('A payment account is not verified. The name must match your ID.');
+      pmIds2 = pmIds; types = [...new Set(pms.map((p) => p.type))];
     }
+    if (!types.length || types.some((t) => !TYPES.includes(t))) throw bad('Pick how you get paid: MONCASH, NATCASH or BANK.');
     const feeRate = config.feeRate;
     // SELL ads hold the seller's USDT now: amount + fee.
     const reserve = side === 'SELL'
@@ -42,9 +46,9 @@ export async function createAd(user, b) {
     if (side === 'SELL') await wallet.lock(c, user.id, asset, reserve);
     const r = await c.query(
       `INSERT INTO ads (user_id, side, asset, price_htg, total_amount, remaining, min_order_htg, max_order_htg,
-                        pay_type, payment_method_id, fee_rate, reserved)
-       VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [user.id, side, asset, price, amount, minHtg, maxHtg, b.pay_type, pmId, feeRate, reserve]);
+                        pay_type, payment_method_id, fee_rate, reserved, pay_types, pay_methods)
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [user.id, side, asset, price, amount, minHtg, maxHtg, types[0], pmIds2 ? pmIds2[0] : null, feeRate, reserve, types, pmIds2]);
     return r.rows[0];
   });
   // Real chain: hold the same amount in the contract so the seller cannot withdraw it while the ad is open.
@@ -65,12 +69,12 @@ export async function listAds({ side, asset, pay_type, min_htg } = {}) {
   const add = (sql, v) => { args.push(v); where.push(sql.replace('?', '$' + args.length)); };
   if (side) add('a.side = ?', side);
   if (asset) add('a.asset = ?', asset);
-  if (pay_type) add('a.pay_type = ?', pay_type);
+  if (pay_type) add('? = ANY(a.pay_types)', pay_type);
   if (min_htg) add('a.max_order_htg >= ?', min_htg);
   // Best price first: buyers want the lowest SELL price, sellers want the highest BUY price.
   const order = side === 'BUY' ? 'a.price_htg DESC' : 'a.price_htg ASC';
   const r = await q(
-    `SELECT a.id, a.side, a.asset, a.price_htg, a.remaining, a.min_order_htg, a.max_order_htg, a.pay_type, a.created_at,
+    `SELECT a.id, a.side, a.asset, a.price_htg, a.remaining, a.min_order_htg, a.max_order_htg, a.pay_type, a.pay_types, a.created_at,
             u.id AS owner_id, COALESCE(u.display_name, u.full_name) AS owner_name, (u.display_name IS NOT NULL) AS is_business, (u.avatar_mime IS NOT NULL) AS has_avatar, u.bio,
             (SELECT COUNT(*)::int FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state='COMPLETED') AS trades,
             (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating,
@@ -102,12 +106,12 @@ export async function setAdStatus(user, id, status) {
   if (!['PAUSED', 'ACTIVE', 'CLOSED'].includes(status)) throw bad('Bad status.');
   const closed = await tx(async (c) => {
     const ad = (await c.query('SELECT * FROM ads WHERE id=$1 FOR UPDATE', [id])).rows[0];
-    if (!ad || ad.user_id !== user.id) throw notFound();
+    if (!ad || (ad.user_id !== user.id && user.role !== 'ADMIN')) throw notFound(); // the admin may stop any ad
     if (ad.status === 'CLOSED') throw conflict('Ad is closed.');
     if (status === 'ACTIVE' && ad.remaining === '0.000000') throw conflict('Nothing left to sell.');
     if (status === 'CLOSED') {
       // Give back the USDT that is not inside an open order.
-      if (ad.side === 'SELL' && Number(ad.reserved) > 0) await wallet.unlock(c, user.id, ad.asset, ad.reserved);
+      if (ad.side === 'SELL' && Number(ad.reserved) > 0) await wallet.unlock(c, ad.user_id, ad.asset, ad.reserved);
       const r = await c.query(`UPDATE ads SET status='CLOSED', remaining=0, reserved=0 WHERE id=$1 RETURNING *`, [id]);
       return r.rows[0];
     }
@@ -115,7 +119,7 @@ export async function setAdStatus(user, id, status) {
     return r.rows[0];
   });
   if (status === 'CLOSED' && closed.side === 'SELL') {
-    try { await escrow.syncReserve(user.id, closed.asset); } catch (e) { console.error('reserve sync', e.message); } // the worker retries
+    try { await escrow.syncReserve(closed.user_id, closed.asset); } catch (e) { console.error('reserve sync', e.message); } // the worker retries
   }
   return closed;
 }

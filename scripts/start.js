@@ -15,7 +15,10 @@ for (const sql of [
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar bytea', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime text',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_uid text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_network text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_addr text',
-  'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea']) await client.query(sql);
+  'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea',
+  'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_types text[]', 'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_methods uuid[]',
+  "UPDATE ads SET pay_types = ARRAY[pay_type::text] WHERE pay_types IS NULL",
+  "UPDATE ads SET pay_methods = ARRAY[payment_method_id] WHERE pay_methods IS NULL AND payment_method_id IS NOT NULL"]) await client.query(sql);
 // Login tokens are signed with TOKEN_SECRET. A missing or weak one would let anyone fake a login,
 // so make a strong random one and keep it in the database (logins survive restarts).
 await client.query('CREATE TABLE IF NOT EXISTS app_secrets (name text PRIMARY KEY, value text NOT NULL)');

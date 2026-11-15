@@ -37,7 +37,8 @@ export async function detail(id) {
     q('SELECT id, uploaded_by, kind, file_ref, mime, orig_name, created_at FROM evidence WHERE dispute_id=$1 ORDER BY created_at', [id]),
     q('SELECT agent_id, decision, note, fake_proof, penalize, created_at FROM dispute_votes WHERE dispute_id=$1', [id]),
     q('SELECT sender_id, body, created_at FROM chat_messages WHERE order_id=$1 ORDER BY id', [d.order_id]),
-    q('SELECT * FROM orders WHERE id=$1', [d.order_id]),
+    q(`SELECT o.*, b.full_name AS buyer_name, b.phone AS buyer_phone, s.full_name AS seller_name, s.phone AS seller_phone, pm.type AS pay_type, pm.account_ref, pm.account_name, pm.bank_name
+         FROM orders o JOIN users b ON b.id=o.buyer_id JOIN users s ON s.id=o.seller_id LEFT JOIN payment_methods pm ON pm.id=o.payment_method_id WHERE o.id=$1`, [d.order_id]),
   ]);
   return { dispute: d, order: order.rows[0], evidence: ev.rows, votes: votes.rows, chat: chat.rows };
 }

@@ -380,3 +380,17 @@ test('profile: public name, photo, bank name, no contact info', async () => {
   const b = await ok('POST', '/payment-methods', { type: 'BANK', account_name: 'Prof User', account_ref: '1234567', bank_name: 'Sogebank' }, tk('prof'));
   assert.equal(b.bank_name, 'Sogebank');
 });
+
+test('payout: Binance UID and wallet address are checked per network', async () => {
+  await signup('pay', '+50937000099', 'Pay User');
+  const put = (b) => call('PUT', '/me/payout', b, tk('pay'));
+  assert.equal((await put({ binance_uid: 'abc' })).status, 400);
+  assert.equal((await put({})).status, 400);
+  assert.equal((await put({ network: 'TRON', address: '0x' + 'a'.repeat(40) })).status, 400);
+  assert.equal((await put({ network: 'ARBITRUM', address: 'T' + 'a'.repeat(33) })).status, 400);
+  assert.equal((await put({ binance_uid: '123456789' })).status, 200);
+  assert.equal((await put({ binance_uid: '123456789', network: 'ARBITRUM', address: '0x' + 'a'.repeat(40) })).status, 200);
+  assert.equal((await put({ network: 'TRON', address: 'TXYZopqrstuvwxyzABCDEFGHJKLMNPQRST' })).status, 200);
+  const me = await ok('GET', '/me', null, tk('pay'));
+  assert.equal(me.user.payout_network, 'TRON'); assert.equal(me.user.binance_uid, null);
+});

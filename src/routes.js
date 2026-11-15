@@ -1,3 +1,4 @@
+import { NETWORKS } from './networks.js';
 import express from 'express';
 import { q, tx } from './db.js';
 import { config, isMock, isMockSms } from './config.js';
@@ -23,6 +24,8 @@ api.get('/config', (_req, res) => res.json({
   fee_rate: config.feeRate,
   mock_otp: isMockSms() ? '000000' : null,
   demo: config.demoSeed && isMock(),
+  network: config.escrowNetwork,
+  networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));
@@ -93,6 +96,7 @@ api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.us
 
 // ---------- KYC + payment accounts ----------
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
+api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));
 api.get('/payment-methods', wrap(async (req) => users.myPaymentMethods(req.user.id)));

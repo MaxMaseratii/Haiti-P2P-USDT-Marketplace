@@ -1,3 +1,4 @@
+import { NETWORKS, validAddress, validBinanceUid } from '../networks.js';
 import { tx, q } from '../db.js';
 import { bad, conflict, forbidden, notFound } from '../errors.js';
 import { checkPhone } from '../auth.js';
@@ -33,6 +34,7 @@ export async function findByPhone(phone) {
 export const publicUser = (u) => ({
   id: u.id, phone: u.phone, full_name: u.full_name, role: u.role, tier: u.tier,
   strikes: u.strikes, wallet_addr: u.wallet_addr,
+  binance_uid: u.binance_uid || null, payout_network: u.payout_network || null, payout_addr: u.payout_addr || null,
   display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime,
 });
 
@@ -166,4 +168,17 @@ export async function banAndBlock(c, user, reason) {
   await addBlock(c, 'WALLET', user.wallet_addr, reason);
   const pms = await c.query('SELECT account_ref FROM payment_methods WHERE user_id=$1', [user.id]);
   for (const p of pms.rows) await addBlock(c, 'PAY_ACCOUNT', p.account_ref, reason);
+}
+
+// Where the person wants to receive crypto: a Binance UID (internal transfer, no network fee) and/or a wallet on a network.
+export async function setPayout(user, { binance_uid, network, address }) {
+  const uid = String(binance_uid ?? '').trim(), addr = String(address ?? '').trim();
+  if (uid && !validBinanceUid(uid)) throw bad('Binance UID is a number with 6 to 12 digits. Find it in Binance under Profile.');
+  if (addr || network) {
+    if (!NETWORKS[network]) throw bad('Pick a network.');
+    if (!validAddress(network, addr)) throw bad(`That is not a valid ${NETWORKS[network].label} address. Check it carefully.`);
+  }
+  if (!uid && !addr) throw bad('Add a Binance UID or a wallet address.');
+  await q('UPDATE users SET binance_uid=$2, payout_network=$3, payout_addr=$4 WHERE id=$1', [user.id, uid || null, addr ? network : null, addr || null]);
+  return { ok: true };
 }

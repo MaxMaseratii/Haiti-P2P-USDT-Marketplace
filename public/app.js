@@ -239,7 +239,7 @@ function takeAd(a) {
     const o = await api('POST', '/orders', { ad_id: a.id, amount: amount.value.trim(), payment_method_id: a.side === 'BUY' ? pm.value : undefined });
     go('order/' + o.id);
   }) }, 'Continue'));
-  body.push(h('p', { class: 'mute center' }, '🔒 The USDT is locked in escrow before you pay. ', h('a', { href: '#safety' }, 'How it works')));
+  body.push(h('p', { class: 'mute center' }, '🔒 The USDT is locked in escrow before you pay (' + (cfg.network ? cfg.network.charAt(0) + cfg.network.slice(1).toLowerCase() : 'blockchain') + '). ', h('a', { href: '#safety' }, 'How it works')));
   $('#app').replaceChildren(h('div', { class: 'card narrow' }, body));
 }
 
@@ -568,6 +568,29 @@ async function chainWithdraw(asset, amount) {
   toast('Withdraw sent. Your balance updates after a few blocks.');
 }
 
+
+// Where do you want to receive crypto? Binance UID and/or a wallet on a network.
+function payoutCard() {
+  const u = me.user, nets = cfg.networks || [];
+  const uid = h('input', { inputmode: 'numeric', placeholder: 'Binance UID, for example 123456789', value: u.binance_uid || '' });
+  const net = h('select', {}, nets.map((n) => h('option', { value: n.id, selected: n.id === (u.payout_network || cfg.network) }, n.label)));
+  const addr = h('input', { placeholder: 'Wallet address on that network', value: u.payout_addr || '' });
+  const hint = h('div', { class: 'mute' });
+  const paint = () => { const n = nets.find((x) => x.id === net.value) || {}; hint.textContent = (n.fee || '') + (n.auto ? '. Automatic payouts work on this network.' : '. Saved for staff payouts. Not automatic yet.'); };
+  net.addEventListener('change', paint); paint();
+  const fake = { TRON: () => 'T' + Array.from(crypto.getRandomValues(new Uint8Array(33)), (b) => '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'[b % 58]).join(''), };
+  const evm = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
+  return h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Where do I receive crypto?'),
+    h('p', { class: 'mute' }, 'Binance UID is the easiest: a Binance to Binance transfer has no network fee. Or use a wallet.'),
+    h('label', {}, 'Binance UID'), uid,
+    h('label', {}, 'Or a wallet: choose the network'), net, hint,
+    h('label', {}, 'Wallet address'), addr,
+    h('div', { class: 'warn-note', style: 'margin-top:10px' }, 'Be careful. If you pick the wrong network, the money can be lost forever. Always check the network and the address.'),
+    h('div', { class: 'gactions', style: 'margin-top:12px' },
+      cfg.demo ? h('button', { class: 'btn alt', onclick: () => { uid.value = '123456789'; addr.value = (fake[net.value] || evm)(); } }, 'Fill with test data') : null,
+      h('button', { class: 'btn', onclick: act(async () => { await api('PUT', '/me/payout', { binance_uid: uid.value, network: addr.value ? net.value : undefined, address: addr.value }); me = await api('GET', '/me'); toast('Saved.'); }) }, 'Save')));
+}
+
 // ---------- wallet ----------
 async function walletView(app) {
   const w = me.wallet;
@@ -588,7 +611,8 @@ async function walletView(app) {
       h('button', { class: 'btn', onclick: act(async () => chainDeposit(asset.value, amt.value)) }, t('Deposit')),
       h('button', { class: 'btn alt', onclick: act(async () => chainWithdraw(asset.value, amt.value)) }, 'Withdraw')]
     : [h('h3', {}, 'Wallet address'), addr,
-      h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')]));
+      h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')]),
+    payoutCard());
 }
 
 // ---------- profile ----------

@@ -38,6 +38,7 @@ export const config = {
   arbiterKey: str('ARBITER_PRIVATE_KEY', ''),        // optional. Better: keep it off the server (see README)
   tokenUsdt: str('TOKEN_USDT', ''),
   tokenUsdc: str('TOKEN_USDC', ''),
+  escrowNetwork: str('ESCROW_NETWORK', 'ARBITRUM'),   // the network the escrow runs on (shown to users)
   pgSsl: str('PGSSL', '') === 'true',                // true for hosted databases that need SSL
   adminPhones: str('ADMIN_PHONES', '').split(',').map((x) => x.trim()).filter(Boolean), // these phones become ADMIN when they sign up
   demoSeed: str('DEMO_SEED', '') === 'true',          // MOCK only: fill the market with example sellers

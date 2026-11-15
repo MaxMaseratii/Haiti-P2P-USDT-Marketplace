@@ -27,6 +27,9 @@ CREATE TABLE users (
   bio           text,
   avatar        bytea,
   avatar_mime   text,
+  binance_uid   text,                   -- where to receive crypto by Binance internal transfer
+  payout_network text,
+  payout_addr   text,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 

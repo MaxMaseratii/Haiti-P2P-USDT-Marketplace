@@ -31,14 +31,14 @@ export async function seedDemo() {
   };
   for (const [name, type, price, amount, min, max] of SELL) {
     const u = await mk(name);
-    const pm = (await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,CASE WHEN $2::text='BANK' THEN 'Sogebank' END) RETURNING id`,
-      [u.id, type, name, '3799' + String(n).padStart(4, '0')])).rows[0];
+    const pm = (await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5) RETURNING id`,
+      [u.id, type, name, '3799' + String(n).padStart(4, '0'), type === 'BANK' ? 'Unibank' : null])).rows[0];
     await tx((c) => wallet.credit(c, u.id, 'USDT', String(amount + 10)));
     await ads.createAd(u, { side: 'SELL', pay_type: type, price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max), payment_method_id: pm.id });
   }
   for (const [name, type, price, amount, min, max] of BUY) {
     const u = await mk(name);
-    await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,CASE WHEN $2::text='BANK' THEN 'Sogebank' END)`, [u.id, type, name, '3799' + String(n).padStart(4, '0')]);
+    await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5)`, [u.id, type, name, '3799' + String(n).padStart(4, '0'), type === 'BANK' ? 'Unibank' : null]);
     await ads.createAd(u, { side: 'BUY', pay_type: type, price_htg: price, amount: String(amount), min_order_htg: String(min), max_order_htg: String(max) });
   }
   return true;
@@ -62,7 +62,7 @@ export async function ensureTestAccounts() {
       await q('UPDATE users SET tier=3, wallet_addr=$2 WHERE phone=$1', [phone, addr]);
       u = await users.findByPhone(phone);
       await q(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','demo',$2,now())`, [u.id, name]);
-      await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,CASE WHEN $2::text='BANK' THEN 'Sogebank' END)`, [u.id, type, name, ref]);
+      await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5)`, [u.id, type, name, ref, type === 'BANK' ? 'Sogebank' : null]);
       await tx((c) => wallet.credit(c, u.id, 'USDT', '1000'));
       const pm = (await q('SELECT id FROM payment_methods WHERE user_id=$1', [u.id])).rows[0];
       if (who === 'seller') await ads.createAd(u, { side: 'SELL', pay_type: type, price_htg: '140.10', amount: '300', min_order_htg: '500', max_order_htg: '10000', payment_method_id: pm.id });
@@ -72,7 +72,7 @@ export async function ensureTestAccounts() {
     const extra = who === 'buyer' ? [['NATCASH', '38990003'], ['BANK', '38990005']] : [['MONCASH', '38990004'], ['BANK', '38990006']];
     for (const [t2, r2] of extra) {
       const has = (await q('SELECT 1 FROM payment_methods WHERE user_id=$1 AND type=$2', [u.id, t2])).rows[0];
-      if (!has) await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,CASE WHEN $2::text='BANK' THEN 'Sogebank' END) ON CONFLICT DO NOTHING`, [u.id, t2, name, r2]);
+      if (!has) await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name) VALUES ($1,$2,$3,$4,true,$5) ON CONFLICT DO NOTHING`, [u.id, t2, name, r2, t2 === 'BANK' ? 'Sogebank' : null]);
     }
     out[who] = u;
   }

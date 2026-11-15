@@ -235,29 +235,42 @@ async function ordersView(app) {
       h('td', {}, h('button', { class: 'btn alt', onclick: () => go('order/' + o.id) }, 'Open')))))) : h('p', { class: 'mute' }, 'No orders yet.')));
 }
 
+// Small pop-up window used instead of the browser's plain confirm/prompt boxes.
+function modal(title, body, actions) {
+  const back = h('div', { class: 'modal-back' });
+  const close = () => back.remove();
+  const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('h2', {}, title), body,
+    h('div', { class: 'modal-actions' }, actions.map((a) => h('button', { class: 'btn ' + (a.cls || 'alt'),
+      onclick: act(async () => { if (a.run && (await a.run()) === false) return; close(); }) }, a.label))));
+  back.addEventListener('click', (e) => { if (e.target === back) close(); });
+  back.append(box); document.body.append(back);
+  return close;
+}
+
 async function orderView(app, id) {
-  const card = h('div'); app.append(card, h('div', { id: 'chatbox' }));
+  const left = h('div', { class: 'col' }), right = h('div', { class: 'col' });
+  app.append(h('div', { class: 'order-grid' }, left, right));
   let busy = false, lastView = null, sig = '', n = 0;
   const draw = async () => {
     if (busy) return; busy = true;
     try {
       const v = await api('GET', '/orders/' + id); lastView = v;
       const chat = await api('GET', `/orders/${id}/chat`);
-      // Only redraw when something changed, so typing in a box is not wiped.
-      const next = v.order.updated_at + '|' + v.events.length + '|' + chat.length + '|' + (v.dispute ? v.dispute.status : '');
-      if (next !== sig) { sig = next; renderOrder(card, v); renderChat($('#chatbox'), v, chat); }
+      // Redraw only when something changed, so typing in a box is never wiped.
+      const next = v.order.updated_at + '|' + v.events.length + '|' + chat.length + '|' + (v.dispute ? v.dispute.status : '') + '|' + v.evidence.length;
+      if (next !== sig) { sig = next; renderOrder(left, v); renderChat(right, v, chat); }
     } catch (e) { toast(e.message, true); } finally { busy = false; }
   };
   await draw();
-  timer = setInterval(() => { tickClock(lastView); if (++n % 5 === 0) draw(); }, 1000);
+  timer = setInterval(() => { tickClock(lastView); if (++n % 4 === 0) draw(); }, 1000);
 }
 
 function tickClock(v) {
   const el = $('#clock'); if (!el || !v || !v.order.state_deadline) return;
   const skew = Date.now() - new Date(v.server_time).getTime();
-  let end = new Date(v.order.state_deadline).getTime() + skew;
-  let left = Math.round((end - Date.now()) / 1000);
-  let txt = left >= 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'time is up';
+  const end = new Date(v.order.state_deadline).getTime() + skew;
+  const left = Math.round((end - Date.now()) / 1000);
+  let txt = left >= 0 ? (left >= 3600 ? `${Math.floor(left / 3600)}h ${Math.floor(left % 3600 / 60)}m` : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`) : 'time is up';
   if (left < 0 && v.order.state === 'AWAITING_PAYMENT') {
     const g = Math.round((end + v.grace_min * 60000 - Date.now()) / 1000);
     txt = g > 0 ? `grace ${Math.floor(g / 60)}:${String(g % 60).padStart(2, '0')}` : 'refund soon';
@@ -265,61 +278,146 @@ function tickClock(v) {
   el.textContent = txt;
 }
 
-function renderOrder(card, v) {
-  const o = v.order, role = v.role, s = o.state;
-  const reload = () => route();
-  const buttons = [];
-  if (role === 'BUYER' && s === 'AWAITING_PAYMENT') {
-    buttons.push(h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/orders/${o.id}/paid`); reload(); }) }, t('I paid')));
-    buttons.push(h('button', { class: 'btn alt', onclick: act(async () => { if (confirm('Cancel this order?')) { await api('POST', `/orders/${o.id}/cancel`); reload(); } }) }, t('Cancel order')));
-  }
-  if (role === 'SELLER' && s === 'PAID_CLAIMED') {
-    buttons.push(h('button', { class: 'btn good', onclick: act(async () => { if (confirm('Check your own MonCash, NatCash or bank app first. Did the money arrive?')) { await api('POST', `/orders/${o.id}/confirm`, cfg.chain ? await signRelease(o.id) : undefined); reload(); } }) }, t('Confirm received')));
-  }
-  if ((role === 'BUYER' || role === 'SELLER') && s === 'PAID_CLAIMED') {
-    buttons.push(h('button', { class: 'btn danger', onclick: act(async () => { const r = prompt('What is wrong?'); if (r) { await api('POST', `/orders/${o.id}/dispute`, { reason: r }); reload(); } }) }, t('Open dispute')));
-  }
-  const pay = v.payment ? h('div', { class: 'card payto' }, h('h3', {}, 'Pay to'),
-    h('div', {}, `${v.payment.type}: ${v.payment.account_ref}`), h('div', {}, 'Account name: ' + v.payment.account_name),
-    role === 'BUYER' ? h('p', { class: 'mute' }, 'Pay exactly this amount. Put this code in the payment note:') : h('p', { class: 'mute' }, 'Buyer must put this code in the payment note:'),
+const initial = (name) => (name || '?').trim()[0].toUpperCase();
+const hm = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const kv = (rows) => h('div', { class: 'kv' }, rows.filter(Boolean).map(([k, v]) => h('div', { class: 'kvrow' }, h('span', {}, k), h('b', {}, v))));
+
+// ----- dispute window: reason, details, documents -----
+const REASONS = {
+  BUYER: ['I paid, but the seller did not release', 'The seller says they did not receive my payment', 'The seller asks for more money or wants to leave the app', 'Other'],
+  SELLER: ['I did not receive the money', 'The amount I received is wrong', 'The payment came from a different name', 'Other'],
+};
+const DOC_KINDS = [['RECEIPT', 'Payment receipt'], ['STATEMENT', 'Account statement'], ['CHAT_EXPORT', 'Chat screenshot'], ['OTHER', 'Other document']];
+const toB64 = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
+
+async function uploadFiles(orderId, files, kind) {
+  for (const f of files) await api('POST', `/orders/${orderId}/evidence/upload`, { kind, filename: f.name, data: await toB64(f) });
+}
+
+function filePicker() {
+  const input = h('input', { type: 'file', multiple: true, accept: 'image/png,image/jpeg,image/webp,application/pdf', class: 'hidden' });
+  const list = h('div', { class: 'files' });
+  const box = h('label', { class: 'drop' }, input, h('div', { class: 'drop-ic' }, '⬆'), h('b', {}, 'Add photos or PDF'), h('span', { class: 'mute' }, 'PNG, JPG, WEBP or PDF. Up to 4 MB each.'));
+  input.addEventListener('change', () => list.replaceChildren(...[...input.files].map((f) => h('div', { class: 'file' }, '📎 ' + f.name))));
+  return { el: h('div', {}, box, list), files: () => [...input.files] };
+}
+
+function openDisputeWindow(v) {
+  const o = v.order;
+  const reason = h('select', {}, REASONS[v.role].map((r) => h('option', {}, r)));
+  const text = h('textarea', { rows: 4, placeholder: 'Tell us what happened. Be clear and honest. Say the time, the amount and what you did.' });
+  const kind = h('select', {}, DOC_KINDS.map(([k, l]) => h('option', { value: k }, l)));
+  const pick = filePicker();
+  modal('Open a dispute', h('div', {},
+    h('p', { class: 'mute' }, 'A staff agent will read both sides and the proof, then decide. The crypto stays locked until then. Fake proof means a ban.'),
+    h('label', {}, 'What is the problem?'), reason,
+    h('label', {}, 'Details'), text,
+    h('label', {}, 'Proof (you can also add it later)'), kind, pick.el),
+  [{ label: 'Cancel' }, { label: 'Submit dispute', cls: 'danger', run: async () => {
+    if (text.value.trim().length < 10) throw new Error('Write at least a few words about what happened.');
+    await api('POST', `/orders/${o.id}/dispute`, { reason: `${reason.value}: ${text.value.trim()}` });
+    if (pick.files().length) await uploadFiles(o.id, pick.files(), kind.value).catch((e) => toast('Dispute opened, but a file failed: ' + e.message, true));
+    toast('Dispute opened. A staff agent will review it.'); route();
+  } }]);
+}
+
+function openReleaseWindow(v) {
+  const o = v.order;
+  modal('Release the USDT?', h('div', {},
+    h('p', {}, 'Open your ', h('b', {}, v.payment ? v.payment.type : 'payment'), ' app or bank and look at your account. Only release when you can see the money.'),
+    kv([['Amount to receive', money(o.total_htg) + ' HTG'], ['From', v.buyer.full_name], ['Payment note code', o.pay_reference]]),
+    h('p', { class: 'warn-note' }, 'Once released, it cannot be undone. Never release because of a screenshot alone.')),
+  [{ label: 'Not yet' }, { label: 'Yes, I received it. Release.', cls: 'good', run: async () => {
+    await api('POST', `/orders/${o.id}/confirm`, cfg.chain ? await signRelease(o.id) : undefined); route();
+  } }]);
+}
+
+function openCancelWindow(v) {
+  modal('Cancel this order?', h('p', {}, 'Only cancel if you have NOT sent any money. If you already paid, press "I have paid" or open a dispute instead.'),
+    [{ label: 'Keep order' }, { label: 'Yes, cancel', cls: 'danger', run: async () => { await api('POST', `/orders/${v.order.id}/cancel`); route(); } }]);
+}
+
+// ----- what the person should do now -----
+function guide(v) {
+  const o = v.order, r = v.role, s = o.state, buyer = r === 'BUYER', seller = r === 'SELLER';
+  const dispBtn = h('button', { class: 'btn alt sm', onclick: () => openDisputeWindow(v) }, buyer ? 'Problem? Open a dispute' : 'Not received? Open a dispute');
+  if (r === 'STAFF') return { tone: '', title: 'Staff view', text: 'You are reading this order as staff.', actions: [] };
+  if (buyer && s === 'AWAITING_PAYMENT') return { tone: 'go', title: `Pay ${money(o.total_htg)} HTG now`, steps: [
+      `Open your ${v.payment ? v.payment.type : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
+      `Write the code ${o.pay_reference} in the payment note.`, 'Come back and press "I have paid".'],
+    actions: [h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/orders/${o.id}/paid`); route(); }) }, 'I have paid'),
+      h('button', { class: 'btn alt', onclick: () => openCancelWindow(v) }, 'Cancel order')] };
+  if (seller && s === 'AWAITING_PAYMENT') return { tone: 'wait', title: 'Waiting for the buyer to pay', text: `Your USDT is locked and safe. The buyer must send ${money(o.total_htg)} HTG to your account. Do not release anything yet.`, actions: [] };
+  if (buyer && s === 'PAID_CLAIMED') return { tone: 'wait', title: 'Waiting for the seller to confirm', text: 'The seller is checking their account. When they confirm, the USDT comes to you. If they do not answer in time, a dispute opens by itself.', actions: [dispBtn] };
+  if (seller && s === 'PAID_CLAIMED') return { tone: 'go', title: `Did ${money(o.total_htg)} HTG arrive in your account?`, text: `Check your ${v.payment ? v.payment.type : 'payment'} app or bank. Look for the code ${o.pay_reference}. Release only if you see the money.`,
+    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, release the USDT'), dispBtn] };
+  if (s === 'DISPUTED') return { tone: 'bad', title: 'Dispute open. A staff agent is deciding', text: 'Add your proof below. Keep chatting here, politely. Do not send money outside the app.', actions: [] };
+  if (s === 'RELEASING') return { tone: 'wait', title: 'Sending the USDT', text: 'This takes a moment.', actions: [] };
+  if (s === 'REFUNDING') return { tone: 'wait', title: 'Returning the USDT to the seller', text: 'This takes a moment.', actions: [] };
+  if (s === 'COMPLETED') return { tone: 'done', title: buyer ? 'Done. The USDT is yours' : 'Done. Trade complete', text: 'Thank you. Please rate the other person.', actions: [], rate: true };
+  if (s === 'REFUNDED') return { tone: '', title: 'Order closed', text: 'The USDT went back to the seller. No money moved.', actions: [] };
+  if (s === 'CANCELLED_TIMEOUT') return { tone: '', title: 'Order cancelled', text: 'The lock did not finish in time. Nothing was charged.', actions: [] };
+  return { tone: 'wait', title: 'Locking the USDT', text: 'One moment.', actions: [] };
+}
+
+function renderOrder(col, v) {
+  const o = v.order, r = v.role, other = r === 'BUYER' ? v.seller : v.buyer;
+  const g = guide(v);
+  const rate = g.rate && r !== 'STAFF' ? h('div', { class: 'rate' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'star', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks for your rating.'); }) }, '★' + n))) : null;
+  const pay = v.payment && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'card ' + (r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? 'payto' : '') },
+    h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : 'Your receiving account'),
+    kv([[v.payment.type, v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
+    h('div', { class: 'mute', style: 'margin-top:10px' }, r === 'BUYER' ? 'Write this code in the payment note:' : 'The buyer must write this code in the note:'),
     h('div', { class: 'code' }, o.pay_reference, h('button', { onclick: () => { navigator.clipboard?.writeText(o.pay_reference); toast('Code copied.'); } }, 'Copy'))) : null;
-  const rate = s === 'COMPLETED' && role !== 'STAFF' ? h('div', {}, h('span', { class: 'mute' }, 'Rate the other side: '),
-    [1, 2, 3, 4, 5].map((n) => h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks.'); }) }, n + '★'))) : null;
-  const dispute = v.dispute ? h('div', { class: 'card' }, h('h3', {}, 'Dispute: ' + v.dispute.status), h('div', {}, v.dispute.reason),
-    v.dispute.status === 'OPEN' && role !== 'STAFF' ? evidenceForm(o.id) : null,
-    v.dispute.decision_note ? h('p', { class: 'mute' }, 'Decision: ' + v.dispute.decision_note) : null) : null;
-  card.replaceChildren(...[
+
+  const dispute = v.dispute ? disputePanel(v, o) : null;
+  col.replaceChildren(...[
     h('div', { class: 'card' },
-      h('div', { class: 'row' },
-        h('div', {}, h('div', { class: 'mute' }, role === 'BUYER' ? 'You buy' : role === 'SELLER' ? 'You sell' : 'Order'), h('div', { class: 'big' }, usd(o.amount) + ' ' + o.asset)),
-        h('div', {}, h('div', { class: 'mute' }, 'Total in gourdes'), h('div', { class: 'big' }, money(o.total_htg) + ' HTG')),
-        h('div', {}, h('div', { class: 'mute' }, t('Time left')), h('div', { class: 'big', id: 'clock' }, '–'))),
-      stepper(s),
-      h('p', {}, statePill(s), o.refund_reason ? h('span', { class: 'mute' }, ' (' + o.refund_reason + ')') : null),
-      h('div', { class: 'mute' }, `${t('Price')} ${money(o.price_htg)} HTG · ${t('Buyer')}: ${v.buyer.full_name} · ${t('Seller')}: ${v.seller.full_name} · Fee ${usd(o.fee_amount)} ${o.asset} (paid by seller)`),
-      buttons, rate),
+      h('div', { class: 'ohead' },
+        h('div', {}, h('div', { class: 'mute' }, r === 'BUYER' ? 'You buy' : r === 'SELLER' ? 'You sell' : 'Order'), h('div', { class: 'big' }, usd(o.amount) + ' ' + o.asset)),
+        h('div', { class: 'timer' }, h('div', { class: 'lab' }, t('Time left')), h('div', { class: 'tnum', id: 'clock' }, '–'))),
+      stepper(o.state),
+      h('div', { class: 'cp' }, h('div', { class: 'avatar' }, initial(other.full_name)),
+        h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, r === 'BUYER' ? 'Seller' : 'Buyer', ' · ID checked ✓')), statePill(o.state))),
+    h('div', { class: 'card guide ' + g.tone },
+      h('h2', {}, g.title),
+      g.steps ? h('ol', { class: 'gsteps' }, g.steps.map((x) => h('li', {}, x))) : h('p', { class: 'gtext' }, g.text),
+      rate, h('div', { class: 'gactions' }, g.actions)),
     pay, dispute,
-    h('div', { class: 'card' }, h('h3', {}, 'Timeline'), h('div', { class: 'timeline' },
-      v.events.map((e) => h('div', {}, new Date(e.created_at).toLocaleTimeString() + '  ' + (e.to_state || '') + (e.note ? ' · ' + e.note : ''))),
-      v.escrow.map((x) => h('div', {}, `escrow ${x.kind}: ${x.status}` + (x.tx_hash ? ' ' + x.tx_hash.slice(0, 14) + '…' : '')))))].filter(Boolean));
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Order details'),
+      kv([['Price', money(o.price_htg) + ' HTG per ' + o.asset], ['You ' + (r === 'SELLER' ? 'sell' : 'buy'), usd(o.amount) + ' ' + o.asset], ['Total', money(o.total_htg) + ' HTG'],
+        ['Platform fee', usd(o.fee_amount) + ' ' + o.asset + ' (paid by the seller)'], ['Order number', o.id.slice(0, 8).toUpperCase()]])),
+    h('details', { class: 'card' }, h('summary', {}, 'History'), h('div', { class: 'timeline' },
+      v.events.map((e) => h('div', {}, hm(e.created_at) + '  ' + (e.to_state || '').replaceAll('_', ' ').toLowerCase() + (e.note ? ' · ' + e.note : '')),
+      v.escrow.map((x) => h('div', {}, `escrow ${x.kind.toLowerCase()}: ${x.status.toLowerCase()}` + (x.tx_hash ? ' ' + x.tx_hash.slice(0, 14) + '…' : '')))))),
+  ].filter(Boolean));
   tickClock(v);
 }
 
-function evidenceForm(orderId) {
-  const kind = h('select', {}, ['RECEIPT', 'STATEMENT', 'CHAT_EXPORT', 'OTHER'].map((k) => h('option', {}, k)));
-  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,application/pdf' });
-  const note = h('input', { placeholder: 'Short note (optional)' });
-  const toB64 = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
-  return h('div', {}, h('h3', {}, 'Add proof'), h('p', { class: 'mute' }, 'PNG, JPG, WEBP or PDF. Max 4 MB. A receipt screenshot alone may not be enough: add your own account statement too.'),
-    h('div', { class: 'row' }, kind, file, note),
-    h('button', { class: 'btn', onclick: act(async () => {
-      const f = file.files[0]; if (!f) throw new Error('Pick a file first.');
-      await api('POST', `/orders/${orderId}/evidence/upload`, { kind: kind.value, filename: f.name, data: await toB64(f), note: note.value || undefined });
-      toast('Proof added.'); file.value = ''; note.value = ''; route();
-    }) }, 'Upload'));
+function disputePanel(v, o) {
+  const d = v.dispute, open = d.status === 'OPEN', party = v.role !== 'STAFF';
+  const status = open ? ['In review', 'bad'] : d.status === 'RESOLVED_BUYER' ? ['Decided for the buyer', 'good'] : ['Decided for the seller', 'good'];
+  const kind = h('select', {}, DOC_KINDS.map(([k, l]) => h('option', { value: k }, l)));
+  const pick = filePicker();
+  return h('div', { class: 'card dispute' },
+    h('div', { class: 'dhead' }, h('h3', { class: 'ct' }, 'Dispute'), h('span', { class: 'pill ' + status[1] }, status[0])),
+    h('div', { class: 'quote' }, d.reason),
+    open ? h('p', { class: 'mute' }, 'Proof must be added before ', h('b', {}, new Date(d.evidence_due).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })), '.') : null,
+    h('h3', { class: 'ct' }, 'Documents (' + v.evidence.length + ')'),
+    v.evidence.length ? h('div', { class: 'docs' }, v.evidence.map((e) => h('div', { class: 'doc' },
+      h('span', { class: 'chip' }, (DOC_KINDS.find((k) => k[0] === e.kind) || [0, e.kind])[1]),
+      e.file_ref.startsWith('upload:') ? h('a', { href: '#', onclick: (ev) => { ev.preventDefault(); act(() => openProof(e.id))(); } }, '📎 ' + (e.orig_name || 'file')) : h('span', {}, e.file_ref),
+      h('span', { class: 'mute' }, (e.by === v.role ? 'You' : e.by === 'BUYER' ? 'Buyer' : 'Seller') + ' · ' + hm(e.created_at))))) : h('p', { class: 'mute' }, 'No documents yet.'),
+    open && party ? h('div', {}, h('label', {}, 'Add proof'), kind, pick.el,
+      h('button', { class: 'btn sm', onclick: act(async () => {
+        if (!pick.files().length) throw new Error('Pick a file first.');
+        await uploadFiles(o.id, pick.files(), kind.value); toast('Proof added.'); route();
+      }) }, 'Upload'),
+      h('p', { class: 'mute' }, 'Tip: a receipt screenshot alone may not be enough. Add your own account statement too.')) : null,
+    d.decision_note ? h('div', { class: 'quote ok' }, h('b', {}, 'Decision: '), d.decision_note) : null);
 }
 
-// Open a stored proof file. The file needs the login token, so fetch it and show it as a blob.
+// Open a stored proof file. It needs the login token, so fetch it and show it as a blob.
 async function openProof(id) {
   const r = await fetch('/api/evidence/' + id + '/file', { headers: { authorization: 'Bearer ' + token } });
   if (!r.ok) throw new Error('Could not open the file.');
@@ -329,13 +427,27 @@ const proofLine = (e, who) => h('div', {}, `${e.kind} (${who}): `, e.file_ref.st
   ? h('a', { href: '#', onclick: (ev) => { ev.preventDefault(); act(() => openProof(e.id))(); } }, e.orig_name || 'file')
   : e.file_ref);
 
-function renderChat(box, v, msgs) {
-  const log = h('div', { class: 'chat' }, msgs.map((m) => h('div', { class: 'msg ' + (m.sender_id === null ? 'sys' : m.sender_id === me.user.id ? 'me' : '') }, h('span', { class: 'b' }, m.body))));
-  const input = h('input', { placeholder: 'Message (no links or phone numbers)' });
-  const send = act(async () => { if (!input.value.trim()) return; await api('POST', `/orders/${v.order.id}/chat`, { body: input.value }); input.value = ''; route(); });
+// ----- chat: one place for buyer and seller -----
+function renderChat(col, v, msgs) {
+  const o = v.order, other = v.role === 'BUYER' ? v.seller : v.buyer;
+  const name = (id) => (id === v.buyer.id ? v.buyer : v.seller).full_name;
+  const closed = ['COMPLETED', 'REFUNDED', 'CANCELLED_TIMEOUT'].includes(o.state) && v.role !== 'STAFF';
+  const log = h('div', { class: 'chatlog' }, msgs.length ? msgs.map((m) => m.sender_id === null
+    ? h('div', { class: 'sysmsg' }, m.body)
+    : h('div', { class: 'bub ' + (m.sender_id === me.user.id ? 'me' : '') }, h('div', { class: 'bt' }, m.body), h('div', { class: 'bm' }, (m.sender_id === me.user.id ? 'You' : name(m.sender_id).split(' ')[0]) + ' · ' + hm(m.created_at))))
+    : [h('div', { class: 'sysmsg' }, 'Say hello. Keep all talk here, where staff can see it if there is a problem.')]);
+  const input = h('input', { placeholder: 'Write a message…', maxlength: 500 });
+  const sendText = async (text) => { if (!text.trim()) return; await api('POST', `/orders/${o.id}/chat`, { body: text }); input.value = ''; route(); };
+  const send = act(() => sendText(input.value));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
-  const closed = ['COMPLETED', 'REFUNDED', 'CANCELLED_TIMEOUT'].includes(v.order.state) && v.role !== 'STAFF';
-  box.replaceChildren(h('div', { class: 'card' }, h('h3', {}, t('Chat')), log, closed ? h('p', { class: 'mute' }, 'Chat is closed.') : h('div', { class: 'row' }, input, h('button', { class: 'btn', onclick: send }, t('Send')))));
+  const quick = v.role === 'BUYER' ? ['I have paid. Please check.', 'Thank you!', 'Please confirm when you see it.'] : v.role === 'SELLER' ? ['Checking now.', 'I do not see it yet.', 'Received. Thank you!'] : [];
+  col.replaceChildren(h('div', { class: 'card chat' },
+    h('div', { class: 'chead' }, h('div', { class: 'avatar' }, initial(other.full_name)), h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, 'Order chat'))),
+    log,
+    closed ? h('p', { class: 'mute', style: 'text-align:center' }, 'This chat is closed.') : [
+      quick.length ? h('div', { class: 'quick' }, quick.map((q) => h('button', { onclick: act(() => sendText(q)) }, q))) : null,
+      v.role === 'STAFF' ? h('p', { class: 'mute' }, 'Staff can read but not write here.') : h('div', { class: 'compose' }, input, h('button', { class: 'btn sm', onclick: send }, t('Send')))],
+    h('div', { class: 'safe' }, '🔒 Stay in the app. No links or phone numbers. Never pay outside the order.')));
   log.scrollTop = log.scrollHeight;
 }
 

@@ -299,8 +299,12 @@ export async function getOrderView(user, id) {
     q('SELECT * FROM disputes WHERE order_id=$1', [id]),
   ]);
   const showPay = ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) || isFinal(o.state) || o.state === 'RELEASING' || o.state === 'REFUNDING';
+  let evidence = [];
+  if (dispute.rows[0]) evidence = (await q(
+    `SELECT id, kind, file_ref, orig_name, mime, created_at, uploaded_by FROM evidence WHERE dispute_id=$1 ORDER BY created_at`,
+    [dispute.rows[0].id])).rows.map((e) => ({ ...e, by: e.uploaded_by === o.buyer_id ? 'BUYER' : 'SELLER', uploaded_by: undefined }));
   return {
-    order: o,
+    order: o, evidence,
     role: o.buyer_id === user.id ? 'BUYER' : o.seller_id === user.id ? 'SELLER' : 'STAFF',
     buyer: buyer.rows[0], seller: seller.rows[0],
     payment: showPay ? pm.rows[0] : null,

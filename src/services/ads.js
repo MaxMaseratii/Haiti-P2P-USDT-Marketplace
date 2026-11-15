@@ -73,7 +73,16 @@ export async function listAds({ side, asset, pay_type, min_htg } = {}) {
     `SELECT a.id, a.side, a.asset, a.price_htg, a.remaining, a.min_order_htg, a.max_order_htg, a.pay_type, a.created_at,
             u.id AS owner_id, u.full_name AS owner_name,
             (SELECT COUNT(*)::int FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state='COMPLETED') AS trades,
-            (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating
+            (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating,
+            u.created_at AS member_since,
+            EXISTS (SELECT 1 FROM kyc k WHERE k.user_id=u.id AND k.status='APPROVED') AS id_verified,
+            (SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE ROUND(100.0 * COUNT(*) FILTER (WHERE o.state='COMPLETED') / COUNT(*))::int END
+               FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT')) AS completion_pct,
+            (SELECT ROUND(AVG(EXTRACT(EPOCH FROM (c.created_at - p.created_at)) / 60))::int
+               FROM orders o JOIN order_events p ON p.order_id=o.id AND p.to_state='PAID_CLAIMED'
+                             JOIN order_events c ON c.order_id=o.id AND c.to_state='COMPLETED'
+              WHERE o.seller_id=u.id) AS avg_release_min,
+            (SELECT COUNT(*)::int FROM disputes d JOIN orders o ON o.id=d.order_id WHERE o.seller_id=u.id OR o.buyer_id=u.id) AS disputes
      FROM ads a JOIN users u ON u.id=a.user_id
      WHERE ${where.join(' AND ')} ORDER BY ${order}, a.created_at LIMIT 100`, args);
   return r.rows;

@@ -60,7 +60,7 @@ async function route() {
   try { const m = await api('GET', '/me'); me = m; } catch { return; }
   renderNav();
   const [view, arg] = (location.hash.slice(1) || 'market').split('/');
-  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView };
+  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView };
   try { await (views[view] || marketView)(app, arg); } catch (e) { toast(e.message, true); }
 }
 
@@ -68,7 +68,7 @@ function renderNav() {
   const nav = $('#nav'); nav.replaceChildren();
   if (!token) return;
   const cur = (location.hash.slice(1) || 'market').split('/')[0];
-  const items = [['market', 'Market'], ['ads', 'My ads'], ['orders', 'My orders'], ['wallet', 'Wallet'], ['profile', 'Profile']];
+  const items = [['market', 'Market'], ['ads', 'My ads'], ['orders', 'My orders'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
   if (me && ['AGENT', 'ADMIN'].includes(me.user.role)) items.push(['staff', 'Staff']);
   if (me && me.user.role === 'ADMIN') items.push(['admin', 'Admin']);
   for (const [k, label] of items) nav.append(h('button', { class: cur === k ? 'on' : '', onclick: () => go(k) }, t(label)));
@@ -119,7 +119,7 @@ async function publicAds(app) {
   const list = (title, ads, verb, cls) => h('div', {}, h('h3', {}, title),
     ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
       h('div', { class: 'who' }, h('div', { class: 'avatar' }, a.owner[0].toUpperCase()),
-        h('div', {}, h('strong', {}, a.owner), h('div', { class: 'mute' }, `${a.trades} trades` + (a.rating ? ` · ${a.rating}★` : '')))),
+        h('div', {}, h('strong', {}, a.owner), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, 'Price'), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'), h('div', {}, usd(a.remaining) + ' ' + a.asset),
         h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`), h('span', { class: 'chip' }, a.pay_type)),
@@ -143,7 +143,7 @@ async function marketView(app) {
     const ads = await api('GET', '/ads?' + qs);
     box.replaceChildren(ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
       h('div', { class: 'who' }, h('div', { class: 'avatar' }, (a.owner_name || '?').trim()[0].toUpperCase()),
-        h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, `${a.trades} trades` + (a.rating ? ` · ${a.rating}★` : '')))),
+        h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, t('Available') + ' · ' + t('Limits')),
         h('div', {}, usd(a.remaining) + ' ' + a.asset), h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`),
@@ -158,6 +158,41 @@ async function marketView(app) {
       h('button', { class: 'sell' + (marketSide === 'BUY' ? ' on' : ''), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
     h('div', { class: 'row' }, asset, pay), box));
   load();
+}
+
+// Trust badges for a trader. Real numbers only: a new trader is shown as new, never with a made-up score.
+function repBadges(a) {
+  const out = [];
+  if (a.id_verified) out.push(h('span', { class: 'badge ok' }, '✓ ID checked'));
+  if (a.trades > 0 && a.completion_pct != null) out.push(h('span', { class: 'badge' }, a.completion_pct + '% completed'));
+  if (a.avg_release_min != null) out.push(h('span', { class: 'badge' }, '⏱ releases in ~' + (a.avg_release_min < 1 ? '1' : a.avg_release_min) + ' min'));
+  if (!a.trades) out.push(h('span', { class: 'badge new' }, 'New trader'));
+  return h('div', { class: 'badges' }, out);
+}
+const whoLine = (a) => `${a.trades} trade${a.trades === 1 ? '' : 's'}` + (a.rating ? ` · ${a.rating}★` : '');
+
+function safetyView(app) {
+  const step = (n, title, text) => h('div', { class: 'sstep' }, h('div', { class: 'snum' }, n), h('div', {}, h('b', {}, title), h('div', { class: 'mute' }, text)));
+  app.append(h('div', { class: 'card narrow2' },
+    h('h2', {}, 'How your money stays safe'),
+    h('p', { class: 'mute' }, 'Short and simple. This is how every trade works here.'),
+    step(1, 'The seller\'s crypto is locked first', 'Before a buyer pays anything, the USDT is locked in escrow. The seller cannot take it back.'),
+    step(2, 'The buyer pays the seller directly', 'Gourdes go from the buyer to the seller by MonCash, NatCash or bank. We never hold gourdes.'),
+    step(3, 'The seller checks, then releases', 'The seller looks at their own account. Only when the money is there, they press release.'),
+    step(4, 'Problem? Staff decide', 'If something is wrong, open a dispute. Both sides upload proof. A staff agent decides. Big orders need two agents.'),
+    h('h3', {}, 'Rules that protect you'),
+    h('ul', { class: 'rules' },
+      h('li', {}, 'Only real, ID-checked people can trade. The name on the payment account must match the ID.'),
+      h('li', {}, 'The platform never releases crypto by itself. A timer alone never sends money.'),
+      h('li', {}, 'If the seller goes quiet, a dispute opens automatically.'),
+      h('li', {}, 'Every message and proof is kept, so staff can see what happened.'),
+      h('li', {}, 'Fake proof or scams mean a ban.')),
+    h('h3', {}, 'Stay safe yourself'),
+    h('ul', { class: 'rules' },
+      h('li', {}, 'Never pay outside the order. Never share your PIN or password.'),
+      h('li', {}, 'Sellers: never release because of a screenshot. Look at your own account.'),
+      h('li', {}, 'Buyers: write the payment code in the note, and pay the exact amount.')),
+    h('button', { class: 'btn big-btn', onclick: () => go('market') }, 'Go to the market')));
 }
 
 function takeAd(a) {
@@ -180,6 +215,8 @@ function takeAd(a) {
     }) }, 'Save account'));
   const body = [h('button', { class: 'back', onclick: route }, '← Back to market'),
     h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
+    h('div', { class: 'tcard' }, h('div', { class: 'avatar' }, (a.owner_name || '?').trim()[0].toUpperCase()),
+      h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), repBadges(a))),
     h('div', { class: 'kv' }, kv([['Available', usd(a.remaining) + ' ' + a.asset], ['Limits per order', `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`], ['Pay by', a.pay_type]])),
     h('label', {}, 'How many ' + a.asset + '? (not gourdes)'), amount, h('div', { class: 'mute' }, `You can trade from ${minU} to ${maxU} ${a.asset}.`), h('div', { class: 'mute' }, 'You ' + (a.side === 'SELL' ? 'pay' : 'receive')), total];
   if (a.side === 'BUY') {
@@ -191,6 +228,7 @@ function takeAd(a) {
     const o = await api('POST', '/orders', { ad_id: a.id, amount: amount.value.trim(), payment_method_id: a.side === 'BUY' ? pm.value : undefined });
     go('order/' + o.id);
   }) }, 'Continue'));
+  body.push(h('p', { class: 'mute center' }, '🔒 The USDT is locked in escrow before you pay. ', h('a', { href: '#safety' }, 'How it works')));
   $('#app').replaceChildren(h('div', { class: 'card narrow' }, body));
 }
 

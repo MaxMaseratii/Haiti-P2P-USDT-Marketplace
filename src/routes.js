@@ -69,6 +69,7 @@ api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.
   const [first, ...rest] = String(a.owner_name).trim().split(/\s+/);
   return { side: a.side, asset: a.asset, price_htg: a.price_htg, remaining: a.remaining, min_order_htg: a.min_order_htg,
     max_order_htg: a.max_order_htg, pay_type: a.pay_type, trades: a.trades, rating: a.rating,
+    id_verified: a.id_verified, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
     owner: rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
 })));
 

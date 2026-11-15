@@ -22,6 +22,12 @@ export const config = {
   // With SMS_PROVIDER=mock, everybody's code is 000000. Staff and owner accounts must use this secret 6-digit code instead.
   apiRateLimit: num('API_RATE_LIMIT', 600),          // API calls per IP per 5 minutes
   // Websites allowed to call the API from a browser (your admin dashboard on maxmaserati.com).
+  // Country phone codes we refuse (full sanctions): Cuba, Iran, North Korea, Syria.
+  blockedCountryCodes: str('BLOCKED_COUNTRY_CODES', '53,98,850,963').split(',').map((x) => x.trim()).filter(Boolean),
+  // Family receivers: the first one is free, each extra one costs this much USDT every 30 days.
+  receiverFeeUsdt: str('RECEIVER_FEE_USDT', '2'),
+  // The public address of the app, used in SMS links. Render fills RENDER_EXTERNAL_URL by itself.
+  publicUrl: str('PUBLIC_URL', process.env.RENDER_EXTERNAL_URL || ''),
   adminOrigins: str('ADMIN_ORIGINS', 'https://www.maxmaserati.com,https://maxmaserati.com').split(',').map((x) => x.trim()).filter(Boolean),
   adminLoginCode: str('ADMIN_LOGIN_CODE', ''),
   smsProvider: str('SMS_PROVIDER', 'mock'),

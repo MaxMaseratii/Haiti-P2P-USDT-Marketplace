@@ -70,9 +70,15 @@ CREATE TABLE payment_methods (
   account_ref   text NOT NULL,          -- MonCash/NatCash number or bank account
   verified      boolean NOT NULL DEFAULT false,
   bank_name     text,                   -- for BANK accounts: which bank
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (type, account_ref)
+  -- Family receiver: an account of someone else (family in Haiti) the user sends money to.
+  is_receiver   boolean NOT NULL DEFAULT false,
+  receiver_phone text,                  -- their phone, they get an SMS to confirm the money arrived
+  paid_until    timestamptz,            -- extra receivers are paid monthly; the first one is free (NULL)
+  active        boolean NOT NULL DEFAULT true,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
+-- One MonCash/NatCash/bank account belongs to one user. Family receivers are the exception.
+CREATE UNIQUE INDEX payment_methods_account_uniq ON payment_methods (type, account_ref) WHERE NOT is_receiver;
 
 CREATE TABLE ads (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -109,6 +115,9 @@ CREATE TABLE orders (
   total_htg       numeric(14,2) NOT NULL,
   fee_amount      numeric(18,6) NOT NULL DEFAULT 0, -- taken from the seller, in USDT
   payment_method_id uuid NOT NULL REFERENCES payment_methods(id),
+  receiver_token_hash text,              -- SMS link for a family receiver to confirm the money arrived
+  receiver_said   text,                  -- RECEIVED or NOT_RECEIVED
+  receiver_at     timestamptz,
   pay_reference   text NOT NULL,                    -- code the buyer must put in the payment note
   state           order_state NOT NULL DEFAULT 'ORDER_CREATED',
   refund_reason   refund_reason,

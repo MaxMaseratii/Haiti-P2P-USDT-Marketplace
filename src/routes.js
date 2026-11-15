@@ -1,4 +1,14 @@
 import { NETWORKS } from './networks.js';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const LOGO_DIR = fileURLToPath(new URL('../public/img/pay/', import.meta.url));
+let logoCache = null, logoAt = 0;
+function payLogos() {
+  if (logoCache && Date.now() - logoAt < 60000) return logoCache;
+  const out = {};
+  try { for (const f of fs.readdirSync(LOGO_DIR)) { const m = /^(moncash|natcash|bank)\.(png|svg|webp|jpg)$/i.exec(f); if (m) out[m[1].toUpperCase()] = 'img/pay/' + f; } } catch {}
+  logoCache = out; logoAt = Date.now(); return out;
+}
 import express from 'express';
 import { q, tx } from './db.js';
 import { config, isMock, isMockSms } from './config.js';
@@ -9,6 +19,7 @@ import { bad, forbidden, notFound } from './errors.js';
 import * as users from './services/users.js';
 import * as wallet from './services/wallet.js';
 import * as ads from './services/ads.js';
+import * as receivers from './services/receivers.js';
 import * as orders from './services/orders.js';
 import * as disputes from './services/disputes.js';
 import { addBlock } from './services/screening.js';
@@ -25,6 +36,9 @@ api.get('/config', (_req, res) => res.json({
   mock_otp: isMockSms() ? '000000' : null,
   demo: config.demoSeed && isMock(),
   network: config.escrowNetwork,
+  // Official logo files, if you add them to public/img/pay/ (moncash.png, natcash.png, bank.png). Otherwise the name is shown.
+  pay_logos: payLogos(),
+  receiver_fee: config.receiverFeeUsdt,
   networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
@@ -85,6 +99,10 @@ api.get('/avatar/:id', wrap(async (req, res) => {
   res.set('Content-Type', a.avatar_mime).set('Cache-Control', 'public, max-age=300').send(a.avatar);
 }));
 
+// Family receiver confirms the money arrived: opened from an SMS link, no login.
+api.get('/receive/:token', wrap(async (req) => receivers.view(req.params.token)));
+api.post('/receive/:token', wrap(async (req) => receivers.answer(req.params.token, req.body?.received === true)));
+
 // Everything below needs login.
 api.use(auth);
 
@@ -100,6 +118,9 @@ api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.us
 api.get('/kyc/me', wrap(async (req) => users.kycState(req.user)));
 api.post('/kyc/file/:kind', wrap(async (req) => users.addKycFile(req.user, String(req.params.kind).toUpperCase(), req.body)));
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
+api.get('/receivers', wrap(async (req) => receivers.list(req.user)));
+api.post('/receivers', wrap(async (req) => receivers.add(req.user, req.body || {})));
+api.post('/receivers/:id/remove', wrap(async (req) => receivers.remove(req.user, req.params.id)));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));

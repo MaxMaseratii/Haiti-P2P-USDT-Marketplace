@@ -23,8 +23,13 @@ function readToken(tok) {
 }
 
 // Haiti-only. Phone must be +509 and 8 digits.
+// Any country can sign up (family abroad send to Haiti). Phone in world format: + country code + number.
+// Countries under full sanctions are refused (list in BLOCKED_COUNTRY_CODES).
 export function checkPhone(phone) {
-  if (!/^\+509\d{8}$/.test(phone || '')) throw bad('Phone must look like +50937001234 (Haiti only).', 'PHONE');
+  phone = String(phone || '');
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw bad('Write your phone with the country code, like +50937001234 or +13055551234.', 'PHONE');
+  if (phone.startsWith('+509') && !/^\+509\d{8}$/.test(phone)) throw bad('A Haiti number is +509 and 8 digits.', 'PHONE');
+  if (config.blockedCountryCodes.some((cc) => phone.startsWith('+' + cc))) throw forbidden('Sorry, we cannot serve this country.', 'COUNTRY');
 }
 
 // Haiti-only by network. Needs a CDN header such as Cloudflare's CF-IPCountry.

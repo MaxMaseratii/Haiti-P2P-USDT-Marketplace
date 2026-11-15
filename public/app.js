@@ -44,14 +44,16 @@ function logout() { token = null; localStorage.removeItem('token'); me = null; r
 // ---------- router ----------
 let timer = null;
 const stopTimer = () => { clearInterval(timer); timer = null; };
-function go(hash) { location.hash = hash; }
+// Go to a page. Same page again = redraw it (fresh data).
+function go(hash) { if (location.hash.slice(1) === hash) route(); else location.hash = hash; }
 window.addEventListener('hashchange', route);
 $('#lang').value = lang;
 $('#lang').addEventListener('change', (e) => { lang = e.target.value; localStorage.setItem('lang', lang); route(); });
 
 async function route() {
   stopTimer();
-  const app = $('#app'); app.replaceChildren();
+  // Each draw gets its own box. If a newer draw starts, the old one writes into a box nobody sees.
+  const app = h('div', { class: 'view' }); $('#app').replaceChildren(app);
   if (!cfg.escrow_mode) cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   const ban = $('#banner');
   ban.hidden = cfg.escrow_mode !== 'MOCK';
@@ -80,7 +82,7 @@ function authView(app) {
   const phone = h('input', { placeholder: '+50937001234', inputmode: 'tel' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
   const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code', inputmode: 'numeric' });
-  const done = (r) => { token = r.token; localStorage.setItem('token', token); go('market'); route(); };
+  const done = (r) => { token = r.token; localStorage.setItem('token', token); go('market'); };
   const pt = (txt) => h('li', {}, h('span', { class: 'ic' }, '✓'), h('span', {}, txt));
   app.append(h('div', { class: 'hero' },
     h('div', {},
@@ -282,7 +284,12 @@ const STATE_TEXT = {
   RELEASING: ['Sending USDT', ''], COMPLETED: ['Done', 'good'], REFUNDING: ['Returning USDT', ''],
   REFUNDED: ['Refunded to seller', ''], CANCELLED_TIMEOUT: ['Cancelled', ''],
 };
-const statePill = (s) => h('span', { class: 'pill ' + STATE_TEXT[s][1] }, t(STATE_TEXT[s][0]));
+// Status label. With a role it speaks to that person: "Your turn" vs "Waiting for…".
+const MY_TURN = { BUYER: { AWAITING_PAYMENT: 'Your turn: pay' }, SELLER: { PAID_CLAIMED: 'Your turn: check and release', AWAITING_PAYMENT: 'Waiting for payment' } };
+const statePill = (s, role) => {
+  const mine = role && MY_TURN[role] && MY_TURN[role][s];
+  return h('span', { class: 'pill ' + (mine && mine.startsWith('Your') ? 'good' : STATE_TEXT[s][1]) }, mine || t(STATE_TEXT[s][0]));
+};
 
 function stepper(s) {
   const at = { ORDER_CREATED: 0, AWAITING_PAYMENT: 1, PAID_CLAIMED: 2, DISPUTED: 2, RELEASING: 3, COMPLETED: 4, REFUNDING: 3, REFUNDED: 4, CANCELLED_TIMEOUT: 4 }[s];
@@ -297,7 +304,7 @@ async function ordersView(app) {
     h('thead', {}, h('tr', {}, ['When', 'Role', t('Amount'), 'HTG', t('Status'), ''].map((x) => h('th', {}, x)))),
     h('tbody', {}, list.map((o) => h('tr', {},
       h('td', {}, new Date(o.created_at).toLocaleString()), h('td', {}, o.buyer_id === me.user.id ? t('Buyer') : t('Seller')),
-      h('td', {}, usd(o.amount) + ' ' + o.asset), h('td', {}, money(o.total_htg)), h('td', {}, statePill(o.state)),
+      h('td', {}, usd(o.amount) + ' ' + o.asset), h('td', {}, money(o.total_htg)), h('td', {}, statePill(o.state, o.buyer_id === me.user.id ? 'BUYER' : 'SELLER')),
       h('td', {}, h('button', { class: 'btn alt', onclick: () => go('order/' + o.id) }, 'Open')))))) : h('p', { class: 'mute' }, 'No orders yet.')));
 }
 
@@ -328,7 +335,8 @@ async function orderView(app, id) {
     } catch (e) { toast(e.message, true); } finally { busy = false; }
   };
   await draw();
-  timer = setInterval(() => { tickClock(lastView); if (++n % 4 === 0) draw(); }, 1000);
+  const t0 = setInterval(() => { if (!app.isConnected) return clearInterval(t0); tickClock(lastView); if (++n % 4 === 0) draw(); }, 1000);
+  timer = t0;
 }
 
 function tickClock(v) {
@@ -451,7 +459,7 @@ function renderOrder(col, v) {
         h('div', { class: 'timer' }, h('div', { class: 'lab' }, t('Time left')), h('div', { class: 'tnum', id: 'clock' }, '–'))),
       stepper(o.state),
       h('div', { class: 'cp' }, avatarEl(other.id, other.full_name, other.has_avatar),
-        h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, r === 'BUYER' ? 'Seller' : 'Buyer', ' · ID checked ✓')), statePill(o.state))),
+        h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, r === 'BUYER' ? 'Seller' : 'Buyer', ' · ID checked ✓')), statePill(o.state, r))),
     h('div', { class: 'card guide ' + g.tone },
       h('h2', {}, g.title),
       g.steps ? h('ol', { class: 'gsteps' }, g.steps.map((x) => h('li', {}, x))) : h('p', { class: 'gtext' }, g.text),
@@ -711,6 +719,28 @@ async function disputeView(app, id) {
 }
 
 // ---------- admin ----------
+// Admin: find people by phone or name, then change tier, ban or unban.
+function usersCard() {
+  const search = h('input', { placeholder: 'Search phone or name' }), list = h('div', { class: 'ulist' });
+  const load = act(async () => {
+    const rows = await api('GET', '/admin/users?q=' + encodeURIComponent(search.value.trim()));
+    list.replaceChildren(...(rows.length ? rows.map((u) => {
+      const tier = h('select', {}, [0, 1, 2, 3].map((n) => h('option', { selected: n === u.tier }, n)));
+      return h('div', { class: 'urow' },
+        h('div', {}, h('b', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, `${u.phone} · ${u.role} · ${u.orders} orders` + (u.strikes ? ` · ${u.strikes} strike(s)` : '')),
+          u.banned ? h('span', { class: 'pill bad' }, 'banned') : null),
+        h('div', { class: 'gactions' }, h('span', { class: 'mute' }, 'Tier'), tier,
+          h('button', { class: 'btn alt sm', onclick: act(async () => { await api('POST', `/admin/users/${u.id}/tier`, { tier: Number(tier.value) }); toast('Tier set.'); }) }, 'Save tier'),
+          u.banned ? h('button', { class: 'btn alt sm', onclick: act(async () => { await api('POST', `/admin/users/${u.id}/unban`); load(); }) }, 'Unban')
+            : h('button', { class: 'btn danger sm', onclick: () => modal('Ban ' + u.full_name + '?', h('p', {}, 'They cannot log in or trade. Their phone is blocked.'),
+              [{ label: 'No' }, { label: 'Ban', cls: 'danger', run: async () => { await api('POST', `/admin/users/${u.id}/ban`, { reason: 'Admin ban' }); load(); } }]) }, 'Ban')));
+    }) : [h('p', { class: 'mute' }, 'Nobody found.')]));
+  });
+  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+  load();
+  return h('div', { class: 'card' }, h('h2', {}, 'Users'), h('div', { class: 'compose', style: 'padding:0 0 10px' }, search, h('button', { class: 'btn sm', onclick: load }, 'Search')), list);
+}
+
 async function adminView(app) {
   const [limits, block] = await Promise.all([api('GET', '/admin/limits'), api('GET', '/admin/blocklist')]);
   const rows = limits.map((l) => {
@@ -718,14 +748,10 @@ async function adminView(app) {
     return h('tr', {}, h('td', {}, 'Tier ' + l.tier), h('td', {}, a), h('td', {}, b), h('td', {}, c),
       h('td', {}, h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/admin/limits/' + l.tier, { max_order_htg: a.value, max_daily_htg: b.value, max_open_orders: c.value }); toast('Saved.'); }) }, 'Save')));
   });
-  const uid = h('input', { placeholder: 'User id' }); const tier = h('select', {}, [0, 1, 2, 3].map((n) => h('option', {}, n)));
   const kind = h('select', {}, ['PHONE', 'WALLET', 'PAY_ACCOUNT', 'NAME'].map((k) => h('option', {}, k))); const val = h('input', { placeholder: 'Value' });
   app.append(
     h('div', { class: 'card scroll' }, h('h2', {}, 'Limits (starting guesses, tune after the pilot)'), h('table', {}, h('thead', {}, h('tr', {}, ['Tier', 'Max per order (HTG)', 'Max per day (HTG)', 'Open orders', ''].map((x) => h('th', {}, x)))), h('tbody', {}, rows))),
-    h('div', { class: 'card' }, h('h2', {}, 'Users'), h('div', { class: 'row' }, uid, tier),
-      h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/admin/users/${uid.value.trim()}/tier`, { tier: Number(tier.value) }); toast('Tier set.'); }) }, 'Set tier'),
-      h('button', { class: 'btn danger', onclick: act(async () => { if (confirm('Ban and block this user?')) { await api('POST', `/admin/users/${uid.value.trim()}/ban`, { reason: 'Admin ban' }); toast('Banned.'); } }) }, 'Ban + block'),
-      h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/admin/users/${uid.value.trim()}/unban`); toast('Unbanned.'); }) }, 'Unban')),
+    usersCard(),
     h('div', { class: 'card scroll' }, h('h2', {}, 'Blocklist'), h('div', { class: 'row' }, kind, val),
       h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/admin/blocklist', { kind: kind.value, value: val.value.trim(), reason: 'Admin' }); route(); }) }, 'Add'),
       h('table', {}, h('tbody', {}, block.map((x) => h('tr', {}, h('td', {}, x.kind), h('td', {}, x.value), h('td', {}, x.reason || ''))))),

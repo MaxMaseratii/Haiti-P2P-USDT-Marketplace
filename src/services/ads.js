@@ -76,8 +76,14 @@ export async function listAds({ side, asset, pay_type, min_htg } = {}) {
             (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating,
             u.created_at AS member_since,
             EXISTS (SELECT 1 FROM kyc k WHERE k.user_id=u.id AND k.status='APPROVED') AS id_verified,
-            (SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE ROUND(100.0 * COUNT(*) FILTER (WHERE o.state='COMPLETED') / COUNT(*))::int END
-               FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT')) AS completion_pct,
+            -- Completion rate counts only what this person did wrong: a dispute they lost,
+            -- or (as buyer) an order they cancelled or let expire. The other side's mistakes do not count against them.
+            (SELECT CASE WHEN good + bad = 0 THEN NULL ELSE ROUND(100.0 * good / (good + bad))::int END FROM (
+               SELECT COUNT(*) FILTER (WHERE o.state='COMPLETED' AND NOT (o.seller_id=u.id AND COALESCE(d.status::text,'')='RESOLVED_BUYER')) AS good,
+                      COUNT(*) FILTER (WHERE (o.seller_id=u.id AND d.status='RESOLVED_BUYER') OR (o.buyer_id=u.id AND d.status='RESOLVED_SELLER')
+                                          OR (o.buyer_id=u.id AND d.id IS NULL AND o.state IN ('REFUNDED','CANCELLED_TIMEOUT'))) AS bad
+                 FROM orders o LEFT JOIN disputes d ON d.order_id=o.id
+                WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT')) x) AS completion_pct,
             (SELECT ROUND(AVG(EXTRACT(EPOCH FROM (c.created_at - p.created_at)) / 60))::int
                FROM orders o JOIN order_events p ON p.order_id=o.id AND p.to_state='PAID_CLAIMED'
                              JOIN order_events c ON c.order_id=o.id AND c.to_state='COMPLETED'

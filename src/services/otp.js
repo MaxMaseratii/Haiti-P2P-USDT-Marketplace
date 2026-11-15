@@ -37,10 +37,26 @@ export async function requestCode(phone) {
 }
 
 // Check a code. A code works once, expires, and dies after too many wrong tries.
-export async function verifyCode(phone, code) {
+const fails = new Map(); // phone -> [times of wrong codes]. Stops guessing.
+function guard(phone) {
+  const now = Date.now(), list = (fails.get(phone) || []).filter((t) => now - t < 15 * 60000);
+  fails.set(phone, list);
+  if (list.length >= 5) throw new HttpError(429, 'Too many wrong codes. Wait 15 minutes.', 'OTP_LOCK');
+  return () => { list.push(now); };
+}
+
+// privileged = staff or owner phone. In test mode (mock SMS) they need ADMIN_LOGIN_CODE, not 000000,
+// because 000000 is public and anyone could log in as the owner.
+export async function verifyCode(phone, code, privileged = false) {
   if (!/^\d{6}$/.test(String(code || ''))) throw bad('The code is 6 digits.', 'OTP');
-  if (isMockSms()) { // dev only: no SMS is sent, the code is always 000000
-    if (code !== '000000') throw bad('Wrong code.', 'OTP');
+  if (isMockSms()) {
+    const fail = guard(phone);
+    if (privileged) {
+      if (!/^\d{6}$/.test(config.adminLoginCode)) throw new HttpError(403, 'Owner login is locked. Set ADMIN_LOGIN_CODE (6 digits) on the server.', 'ADMIN_CODE_MISSING');
+      if (!safeEq(code, config.adminLoginCode) || code === '000000') { fail(); throw bad('Wrong code.', 'OTP'); }
+      return;
+    }
+    if (code !== '000000') { fail(); throw bad('Wrong code.', 'OTP'); }
     return;
   }
   const row = (await q(

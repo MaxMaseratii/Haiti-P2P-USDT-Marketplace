@@ -41,7 +41,8 @@ api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
 api.post('/auth/signup', wrap(async (req) => {
   const { phone, full_name, code } = req.body || {};
   checkPhone(phone);
-  if (!isMockSms() || code !== undefined) await otp.verifyCode(phone, code);
+  const owner = config.adminPhones.includes(phone);
+  if (!isMockSms() || code !== undefined || owner) await otp.verifyCode(phone, code, owner);
   const u = await users.signup({ phone, full_name });
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
@@ -60,8 +61,9 @@ api.post('/auth/demo-login', wrap(async (req) => {
 api.post('/auth/login', wrap(async (req) => {
   const { phone, code } = req.body || {};
   checkPhone(phone);
-  await otp.verifyCode(phone, code);
-  const u = await users.findByPhone(phone);
+  const known = await users.findByPhone(phone);
+  await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
+  const u = known;
   if (!u) throw notFound('No account for this phone.');
   if (u.banned) throw forbidden('Account is frozen or banned.');
   return { token: makeToken(u.id), user: users.publicUser(u) };
@@ -141,7 +143,7 @@ api.get('/evidence/:id/file', async (req, res, next) => {
   try {
     const f = await disputes.openUpload(req.user, req.params.id);
     res.set({ 'Content-Type': f.mime, 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline', 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; sandbox" });
-    res.sendFile(f.file);
+    res.send(f.data);
   } catch (e) { next(e); }
 });
 
@@ -169,7 +171,15 @@ admin.put('/limits/:tier', wrap(async (req) => {
   if (!r.rowCount) throw notFound();
   return r.rows[0];
 }));
-admin.post('/users/:id/ban', wrap(async (req) => { await users.setBanned(req.params.id, true, req.body?.reason); return { ok: true }; }));
+admin.get('/users', wrap(async (req) => (await q(
+  `SELECT u.id, u.phone, u.full_name, u.display_name, u.role, u.tier, u.banned, u.strikes, u.created_at,
+          (SELECT COUNT(*)::int FROM orders o WHERE o.buyer_id=u.id OR o.seller_id=u.id) AS orders
+     FROM users u WHERE u.id <> $2 AND ($1 = '' OR u.phone ILIKE '%' || $1 || '%' OR u.full_name ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%')
+    ORDER BY u.created_at DESC LIMIT 100`, [String(req.query.q || '').trim().slice(0, 60), config.platformUserId])).rows));
+admin.post('/users/:id/ban', wrap(async (req) => {
+  const t = (await q('SELECT role FROM users WHERE id=$1', [req.params.id])).rows[0];
+  if (!t) throw notFound();
+  if (req.params.id === req.user.id || req.params.id === config.platformUserId || t.role === 'ADMIN') throw forbidden('You cannot ban this account.'); await users.setBanned(req.params.id, true, req.body?.reason); return { ok: true }; }));
 admin.post('/users/:id/unban', wrap(async (req) => { await users.setBanned(req.params.id, false); return { ok: true }; }));
 admin.post('/users/:id/tier', wrap(async (req) => {
   const t = Number(req.body?.tier);

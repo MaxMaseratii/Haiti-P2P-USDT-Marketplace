@@ -187,6 +187,7 @@ CREATE TABLE evidence (
   file_ref    text NOT NULL,                 -- a link, or 'upload:<id>' for a stored file
   mime        text,
   orig_name   text,
+  data        bytea,                         -- the stored file itself (kept in the database so it survives redeploys)
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

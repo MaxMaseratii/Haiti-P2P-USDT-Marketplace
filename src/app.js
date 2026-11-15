@@ -4,10 +4,33 @@ import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
 import { geoGuard } from './auth.js';
 import { HttpError } from './errors.js';
+import { config } from './config.js';
+
+// Simple per-IP limit for the whole API: 600 calls per 5 minutes (the app polls every few seconds).
+const seen = new Map();
+function apiLimit(req, _res, next) {
+  const ip = req.ip || 'x', now = Date.now();
+  let e = seen.get(ip);
+  if (!e || now - e.t > 300000) { e = { t: now, n: 0 }; seen.set(ip, e); }
+  if (++e.n > config.apiRateLimit) return next(new HttpError(429, 'Too many requests. Slow down a little.', 'RATE'));
+  if (seen.size > 50000) seen.clear();
+  next();
+}
 
 export function buildApp() {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1); // Render and other hosts sit behind one proxy: use the real visitor IP
+  app.use((req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    });
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+    next();
+  });
+  app.use('/api', apiLimit);
   app.use('/api/orders/:id/evidence/upload', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', geoGuard, api);

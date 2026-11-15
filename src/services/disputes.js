@@ -131,13 +131,11 @@ export async function addUpload(user, orderId, { kind, filename, data, note }) {
   if (count >= 10) throw conflict('Too many files (max 10).', 'LIMIT');
 
   const id = crypto.randomUUID();
-  fs.mkdirSync(config.uploadDir, { recursive: true });
-  fs.writeFileSync(path.join(config.uploadDir, `${id}.${type.ext}`), buf, { flag: 'wx' });
   const name = String(filename || 'file').replace(/[^\w.\- ]/g, '_').slice(0, 80);
   const r = await q(
-    `INSERT INTO evidence (id, dispute_id, uploaded_by, kind, file_ref, mime, orig_name)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, kind, file_ref, mime, orig_name, created_at`,
-    [id, d.id, user.id, kind, note ? `upload:${id} | ${String(note).slice(0, 200)}` : `upload:${id}`, type.mime, name]);
+    `INSERT INTO evidence (id, dispute_id, uploaded_by, kind, file_ref, mime, orig_name, data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, kind, file_ref, mime, orig_name, created_at`,
+    [id, d.id, user.id, kind, note ? `upload:${id} | ${String(note).slice(0, 200)}` : `upload:${id}`, type.mime, name, buf]);
   return r.rows[0];
 }
 
@@ -149,8 +147,10 @@ export async function openUpload(user, evidenceId) {
   if (!e || !e.mime) throw notFound();
   const staff = ['AGENT', 'ADMIN'].includes(user.role);
   if (!staff && e.buyer_id !== user.id && e.seller_id !== user.id) throw notFound();
+  if (e.data) return { data: e.data, mime: e.mime, name: e.orig_name };
+  // older files were saved on disk
   const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'application/pdf': 'pdf' }[e.mime];
   const file = path.join(config.uploadDir, `${e.id}.${ext}`);
-  if (!fs.existsSync(file)) throw notFound();
-  return { file: path.resolve(file), mime: e.mime, name: e.orig_name };
+  if (!fs.existsSync(file)) throw notFound('This file was lost in an old server update. Please upload it again.');
+  return { data: fs.readFileSync(file), mime: e.mime, name: e.orig_name };
 }

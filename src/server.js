@@ -11,7 +11,7 @@ if (config.escrowMode === 'EVM') {
   try { await initEvm(); } catch (e) { console.error('EVM escrow check failed:', e.message); process.exit(1); }
   console.warn('EVM escrow is ON. The contract is UNAUDITED. Do not use real funds before an audit.');
 }
-if (config.tokenSecret === 'dev-only-secret') console.warn('Warning: using the dev TOKEN_SECRET. Set TOKEN_SECRET in .env.');
+if (config.tokenSecret === 'dev-only-secret') console.warn('Warning: using the dev TOKEN_SECRET. Start with npm start so a strong one is made.');
 
 buildApp().listen(config.port, () => console.log(`Haiti P2P marketplace on http://localhost:${config.port} (${config.escrowMode} escrow)`));
 startWorker();

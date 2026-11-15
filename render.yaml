@@ -20,6 +20,8 @@ services:
         value: "true"          # example sellers on the home page
       - key: ADMIN_PHONES
         sync: false            # YOUR phone, like +50937001234. You become admin when you sign up
+      - key: ADMIN_LOGIN_CODE
+        sync: false            # YOUR secret 6-digit login code while SMS is mock (000000 is public)
       - key: PGSSL
         value: "false"
 databases:

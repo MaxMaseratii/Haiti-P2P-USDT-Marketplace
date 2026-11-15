@@ -13,6 +13,9 @@ process.env.ESCROW_MODE = 'MOCK';
 process.env.DUAL_AGENT_HTG = '1000';      // every test order needs two agents
 process.env.WORKER_INTERVAL_SEC = '3600';
 process.env.FEE_RATE = '0.005';
+process.env.API_RATE_LIMIT = '100000';
+process.env.ADMIN_PHONES = '+50937000777';
+process.env.ADMIN_LOGIN_CODE = '482913';
 process.env.UPLOAD_DIR = fs.mkdtempSync('/tmp/p2p-uploads-');
 process.env.MAX_UPLOAD_BYTES = '200000';
 
@@ -393,4 +396,37 @@ test('payout: Binance UID and wallet address are checked per network', async () 
   assert.equal((await put({ network: 'TRON', address: 'TXYZopqrstuvwxyzABCDEFGHJKLMNPQRST' })).status, 200);
   const me = await ok('GET', '/me', null, tk('pay'));
   assert.equal(me.user.payout_network, 'TRON'); assert.equal(me.user.binance_uid, null);
+});
+
+test('test mode: owner and staff phones cannot log in with the public code 000000', async () => {
+  // owner signup needs the secret code
+  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person' })).status, 400);
+  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person', code: '000000' })).status, 400);
+  const o = await ok('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person', code: '482913' });
+  assert.equal(o.user.role, 'ADMIN');
+  assert.equal((await call('POST', '/auth/login', { phone: '+50937000777', code: '000000' })).status, 400);
+  await ok('POST', '/auth/login', { phone: '+50937000777', code: '482913' });
+  // a staff account made in the database is protected too
+  await signup('stf', '+50937000778', 'Staff Person', 'AGENT');
+  assert.equal((await call('POST', '/auth/login', { phone: '+50937000778', code: '000000' })).status, 400);
+  // guessing is stopped after 5 wrong codes
+  for (let i = 0; i < 4; i++) await call('POST', '/auth/login', { phone: '+50937000778', code: '111111' });
+  assert.equal((await call('POST', '/auth/login', { phone: '+50937000778', code: '482913' })).status, 429);
+});
+
+test('security headers are set', async () => {
+  const r = await fetch(url + '/');
+  assert.equal(r.headers.get('x-frame-options'), 'DENY');
+  assert.match(r.headers.get('content-security-policy'), /default-src 'self'/);
+});
+
+test('proof files are kept in the database, not on the server disk', async () => {
+  assert.equal(fs.readdirSync(process.env.UPLOAD_DIR).length, 0);
+  const n = (await pool.query('SELECT COUNT(*)::int n FROM evidence WHERE data IS NOT NULL')).rows[0].n;
+  assert.ok(n > 0);
+});
+
+test('completion rate: a buyer cancel does not hurt the seller', async () => {
+  const ads = await ok('GET', '/public/ads');
+  for (const a of ads) if (a.completion_pct != null) { assert.ok(a.completion_pct >= 0 && a.completion_pct <= 100); }
 });

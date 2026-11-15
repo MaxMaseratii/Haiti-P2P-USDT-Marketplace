@@ -174,3 +174,4 @@ a{color:var(--brand);font-weight:600}
 .filebtn{cursor:pointer;margin-right:8px}
 .accs{display:flex;flex-direction:column;gap:8px}.acc{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--soft);border-radius:12px;padding:10px 12px}
 .bio{font-size:13px;margin-top:2px}
+.ulist{display:flex;flex-direction:column;gap:8px}.urow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:10px 12px}.urow select{width:auto}

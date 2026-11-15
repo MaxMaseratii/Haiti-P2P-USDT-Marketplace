@@ -19,6 +19,9 @@ export const config = {
   workerIntervalSec: num('WORKER_INTERVAL_SEC', 15),
   sanctionsFile: str('SANCTIONS_FILE', 'data/sanctions.txt'),
   // mock = code 000000, nothing is sent. twilio = real SMS (set the TWILIO_* values).
+  // With SMS_PROVIDER=mock, everybody's code is 000000. Staff and owner accounts must use this secret 6-digit code instead.
+  apiRateLimit: num('API_RATE_LIMIT', 600),          // API calls per IP per 5 minutes
+  adminLoginCode: str('ADMIN_LOGIN_CODE', ''),
   smsProvider: str('SMS_PROVIDER', 'mock'),
   twilioSid: str('TWILIO_ACCOUNT_SID', ''),
   twilioToken: str('TWILIO_AUTH_TOKEN', ''),

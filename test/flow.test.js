@@ -356,3 +356,12 @@ test('real SMS codes: send, expire, one use, wrong tries, rate limit', async () 
     config.smsProvider = 'mock';
   }
 });
+
+test('payment account added before ID approval is verified when the ID is approved', async () => {
+  await signup('late', '+50937000077', 'Late Person');
+  const pm = await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Person Late', account_ref: '37000077' }, tk('late'));
+  assert.equal(pm.verified, false);
+  await kyc('late');
+  const row = (await pool.query('SELECT verified FROM payment_methods WHERE id=$1', [pm.id])).rows[0];
+  assert.equal(row.verified, true);
+});

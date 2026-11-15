@@ -18,6 +18,8 @@ export async function signup({ phone, full_name }) {
     const isAdmin = config.adminPhones.includes(phone);
     const r = await c.query('INSERT INTO users (phone, full_name, role, tier) VALUES ($1,$2,$3,$4) RETURNING *',
       [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0]);
+    if (isAdmin) // owner accounts skip the ID queue: their ID check is approved right away
+      await c.query(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','owner',$2,now())`, [r.rows[0].id, full_name.trim()]);
     await screenUser(c, r.rows[0].id, full_name);
     return (await c.query('SELECT * FROM users WHERE id=$1', [r.rows[0].id])).rows[0];
   });
@@ -79,6 +81,11 @@ export async function decideKyc(staff, id, approve) {
     await c.query(`UPDATE kyc SET status=$2, reviewed_by=$3, reviewed_at=now() WHERE id=$1`,
       [id, approve ? 'APPROVED' : 'REJECTED', staff.id]);
     if (approve && u.tier < 1) await c.query('UPDATE users SET tier=1 WHERE id=$1', [u.id]);
+    // Payment accounts added before the ID was approved get checked now.
+    if (approve) {
+      for (const pm of (await c.query('SELECT id, account_name FROM payment_methods WHERE user_id=$1 AND NOT verified', [u.id])).rows)
+        if (namesMatch(k.name_on_id, pm.account_name)) await c.query('UPDATE payment_methods SET verified=true WHERE id=$1', [pm.id]);
+    }
     return { id, status: approve ? 'APPROVED' : 'REJECTED' };
   });
 }

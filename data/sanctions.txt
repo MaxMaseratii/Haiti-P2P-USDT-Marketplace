@@ -1,0 +1,2 @@
+# One sanctioned name per line. Lines starting with # are ignored.
+# Load the real lists (OFAC, UN, Haiti-specific) here or replace screening.js with a vendor.

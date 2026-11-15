@@ -1,0 +1,17 @@
+{
+  "name": "haiti-p2p-usdt-marketplace",
+  "version": "0.1.0",
+  "description": "Haiti-only P2P USDT/USDC marketplace with escrow. Buyers pay HTG (MonCash, NatCash, bank) directly to sellers; the platform never holds gourdes.",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "migrate": "node scripts/migrate.js",
+    "start": "node src/server.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

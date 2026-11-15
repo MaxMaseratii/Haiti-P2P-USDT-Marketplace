@@ -1,0 +1,30 @@
+// Draft translations. Have a native Haitian Creole and French speaker review before launch.
+window.I18N = {
+  en: {},
+  fr: {
+    'Market': 'Marché', 'Buy USDT': 'Acheter USDT', 'Sell USDT': 'Vendre USDT', 'My ads': 'Mes annonces', 'My orders': 'Mes commandes',
+    'Wallet': 'Portefeuille', 'Profile': 'Profil', 'Staff': 'Équipe', 'Admin': 'Admin', 'Log out': 'Déconnexion',
+    'Log in': 'Connexion', 'Sign up': 'Inscription', 'Phone': 'Téléphone', 'Full name (as on your ID)': 'Nom complet (comme sur votre pièce d\'identité)',
+    'Price': 'Prix', 'Amount': 'Montant', 'Available': 'Disponible', 'Limits': 'Limites', 'Seller': 'Vendeur', 'Buyer': 'Acheteur',
+    'Chat': 'Chat', 'Send': 'Envoyer', 'Time left': 'Temps restant', 'Status': 'Statut', 'I paid': 'J\'ai payé',
+    'Confirm received': 'Confirmer la réception', 'Open dispute': 'Ouvrir un litige', 'Cancel order': 'Annuler la commande',
+    'Trade': 'Échanger', 'Post an ad': 'Publier une annonce', 'Payment account': 'Compte de paiement', 'Deposit': 'Dépôt',
+    'Locking the USDT': 'Blocage des USDT', 'Waiting for the buyer to pay': 'En attente du paiement de l\'acheteur',
+    'Buyer says paid. Seller must check': 'L\'acheteur dit avoir payé. Le vendeur doit vérifier',
+    'In dispute. A staff agent decides': 'En litige. Un agent décide', 'Sending USDT': 'Envoi des USDT', 'Done': 'Terminé',
+    'Returning USDT': 'Retour des USDT', 'Refunded to seller': 'Remboursé au vendeur', 'Cancelled': 'Annulé',
+  },
+  ht: {
+    'Market': 'Mache', 'Buy USDT': 'Achte USDT', 'Sell USDT': 'Vann USDT', 'My ads': 'Piblisite mwen', 'My orders': 'Kòmand mwen',
+    'Wallet': 'Pòtfèy', 'Profile': 'Pwofil', 'Staff': 'Ekip', 'Admin': 'Admin', 'Log out': 'Dekonekte',
+    'Log in': 'Konekte', 'Sign up': 'Enskri', 'Phone': 'Telefòn', 'Full name (as on your ID)': 'Non konplè (jan li ye sou kat ID ou)',
+    'Price': 'Pri', 'Amount': 'Kantite', 'Available': 'Disponib', 'Limits': 'Limit', 'Seller': 'Vandè', 'Buyer': 'Achtè',
+    'Chat': 'Chat', 'Send': 'Voye', 'Time left': 'Tan ki rete', 'Status': 'Estati', 'I paid': 'Mwen peye',
+    'Confirm received': 'Mwen resevwa lajan an', 'Open dispute': 'Louvri yon diskisyon', 'Cancel order': 'Anile kòmand lan',
+    'Trade': 'Fè echanj', 'Post an ad': 'Mete yon piblisite', 'Payment account': 'Kont peman', 'Deposit': 'Depo',
+    'Locking the USDT': 'N ap bloke USDT la', 'Waiting for the buyer to pay': 'N ap tann achtè a peye',
+    'Buyer says paid. Seller must check': 'Achtè a di li peye. Vandè a dwe verifye',
+    'In dispute. A staff agent decides': 'Gen diskisyon. Yon ajan ekip la deside', 'Sending USDT': 'N ap voye USDT la', 'Done': 'Fini',
+    'Returning USDT': 'N ap retounen USDT la', 'Refunded to seller': 'Retounen bay vandè a', 'Cancelled': 'Anile',
+  },
+};

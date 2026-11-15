@@ -1,6 +1,7 @@
 import express from 'express';
 import { q, tx } from './db.js';
 import { config, isMock, isMockSms } from './config.js';
+import * as evm from './escrow-evm.js';
 import { auth, needRole, makeToken, checkPhone } from './auth.js';
 import * as otp from './services/otp.js';
 import { bad, forbidden, notFound } from './errors.js';
@@ -21,6 +22,8 @@ api.get('/config', (_req, res) => res.json({
   pay_grace_min: config.payGraceMin,
   fee_rate: config.feeRate,
   mock_otp: isMockSms() ? '000000' : null,
+  chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
+    tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));
 
 // ---------- auth ----------
@@ -57,7 +60,8 @@ api.get('/me', wrap(async (req) => ({
   wallet: await wallet.balances({ query: q }, req.user.id),
   payment_methods: await users.myPaymentMethods(req.user.id),
 })));
-api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.user, req.body?.wallet_addr); return { ok: true }; }));
+api.get('/me/wallet-link-message', wrap(async (req) => ({ message: evm.linkMessage(req.user.id) })));
+api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.user, req.body?.wallet_addr, req.body?.signature); return { ok: true }; }));
 
 // ---------- KYC + payment accounts ----------
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
@@ -86,7 +90,14 @@ api.get('/orders', wrap(async (req) => orders.myOrders(req.user.id)));
 api.get('/orders/:id', wrap(async (req) => orders.getOrderView(req.user, req.params.id)));
 api.post('/orders/:id/paid', wrap(async (req) => orders.markPaid(req.user, req.params.id)));
 api.post('/orders/:id/cancel', wrap(async (req) => orders.buyerCancel(req.user, req.params.id)));
-api.post('/orders/:id/confirm', wrap(async (req) => orders.sellerConfirm(req.user, req.params.id)));
+api.get('/orders/:id/release-typed-data', wrap(async (req) => {
+  if (isMock()) throw bad('Only needed on a real chain.');
+  const o = await orders.getOrderRaw(req.params.id);
+  if (o.seller_id !== req.user.id) throw forbidden('Only the seller can release.');
+  const deadline = Math.floor(Date.now() / 1000) + 3 * 86400; // the seller signs this
+  return { ...evm.releaseTypedData(o, deadline), deadline };
+}));
+api.post('/orders/:id/confirm', wrap(async (req) => orders.sellerConfirm(req.user, req.params.id, req.body || {})));
 api.post('/orders/:id/dispute', wrap(async (req) => orders.openDispute(req.user, req.params.id, req.body?.reason)));
 api.get('/orders/:id/chat', wrap(async (req) => orders.getChat(req.user, req.params.id)));
 api.post('/orders/:id/chat', wrap(async (req) => orders.postChat(req.user, req.params.id, req.body?.body)));
@@ -149,5 +160,6 @@ admin.post('/screening-hits/:id/resolve', wrap(async (req) => {
   });
   return { ok: true };
 }));
+admin.get('/reconcile', wrap(async () => (isMock() ? { mock: true } : evm.reconcile())));
 admin.post('/run-timers', wrap(async () => orders.runTimers()));
 api.use('/admin', admin);

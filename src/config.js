@@ -28,10 +28,21 @@ export const config = {
   otpResendSec: num('OTP_RESEND_SEC', 60),
   otpMaxPerHour: num('OTP_MAX_PER_HOUR', 5),
   otpMaxTries: num('OTP_MAX_TRIES', 5),
+  // ESCROW_MODE=EVM (smart contract). Needs all of these. Use a chain where USDT/USDC have 6 decimals.
+  evmRpcUrl: str('EVM_RPC_URL', ''),
+  evmChainId: num('EVM_CHAIN_ID', 0),
+  evmContract: str('EVM_ESCROW_ADDRESS', ''),
+  evmStartBlock: num('EVM_START_BLOCK', 0),
+  evmConfirmations: num('EVM_CONFIRMATIONS', 3),     // blocks to wait before a deposit counts
+  operatorKey: str('OPERATOR_PRIVATE_KEY', ''),      // app key: reserve, lock, cancel unpaid orders
+  arbiterKey: str('ARBITER_PRIVATE_KEY', ''),        // optional. Better: keep it off the server (see README)
+  tokenUsdt: str('TOKEN_USDT', ''),
+  tokenUsdc: str('TOKEN_USDC', ''),
   uploadDir: str('UPLOAD_DIR', 'uploads'),
   maxUploadBytes: num('MAX_UPLOAD_BYTES', 4 * 1024 * 1024),
   platformUserId: '00000000-0000-0000-0000-000000000001',
 };
 
 export const isMock = () => config.escrowMode === 'MOCK';
+export const isMockEscrow = isMock;
 export const isMockSms = () => config.smsProvider === 'mock';

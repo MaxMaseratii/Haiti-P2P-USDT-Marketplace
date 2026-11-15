@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import { tx, q } from '../db.js';
-import { config } from '../config.js';
+import { config, isMock } from '../config.js';
 import { escrow } from '../escrow.js';
 import { bad, conflict, forbidden, notFound } from '../errors.js';
 import * as wallet from './wallet.js';
 import { checkUserCanTrade } from './limits.js';
 import { banAndBlock } from './users.js';
+import * as evm from '../escrow-evm.js';
 
 const mins = (m) => new Date(Date.now() + m * 60000);
 const hours = (h) => new Date(Date.now() + h * 3600000);
@@ -63,6 +64,8 @@ export async function createOrder(user, { ad_id, amount, payment_method_id }) {
 
     const buyer = buyerId === user.id ? user : owner;
     const seller = sellerId === user.id ? user : owner;
+    if (!isMock() && (!buyer.wallet_addr || !seller.wallet_addr))
+      throw bad('Both traders must link a wallet first (Wallet page).', 'WALLET');
     await checkUserCanTrade(c, buyer, Number(total), { asSeller: false });
     await checkUserCanTrade(c, seller, Number(total), { asSeller: true });
 
@@ -159,7 +162,7 @@ async function cancelNoLock(c, o, note) {
 
 // ---------- buyer actions ----------
 export async function markPaid(user, orderId) {
-  return tx(async (c) => {
+  const o = await tx(async (c) => {
     const o = await lockOrder(c, orderId);
     if (o.buyer_id !== user.id) throw forbidden('Only the buyer can do this.');
     if (o.state !== 'AWAITING_PAYMENT') throw conflict('Order is not waiting for payment.', 'STATE');
@@ -169,6 +172,10 @@ export async function markPaid(user, orderId) {
       actor: user.id, note: 'Buyer says paid', set: { state_deadline: mins(config.sellerReplyMin) } });
     return (await c.query('SELECT * FROM orders WHERE id=$1', [orderId])).rows[0];
   });
+  // Tell the chain, so the app key cannot cancel this order any more. If this fails the app still never
+  // cancels a PAID order (the database blocks it). The contract rule is a second lock.
+  try { await escrow.claimed(o); } catch (e) { console.error('claim on chain failed', orderId, e.message); }
+  return o;
 }
 
 export async function buyerCancel(user, orderId) {
@@ -183,20 +190,28 @@ export async function buyerCancel(user, orderId) {
 }
 
 // ---------- seller action ----------
-export async function sellerConfirm(user, orderId) {
+export async function sellerConfirm(user, orderId, { sig, deadline } = {}) {
   await tx(async (c) => {
     const o = await lockOrder(c, orderId);
     if (o.seller_id !== user.id) throw forbidden('Only the seller can confirm.');
     if (o.state !== 'PAID_CLAIMED') throw conflict('Nothing to confirm yet.', 'STATE');
-    await beginRelease(c, o, user.id, 'Seller confirmed money received');
+    let extra = {};
+    if (!isMock()) {
+      // On a real chain the seller approves the release with a wallet signature (no gas needed).
+      if (sig) {
+        evm.verifyReleaseSig(o, user.wallet_addr, sig, Number(deadline));
+        extra = { release_sig: sig, release_deadline: Number(deadline) };
+      } else if (!config.arbiterKey) throw bad('Sign the release with your wallet.', 'SIG');
+    }
+    await beginRelease(c, o, user.id, 'Seller confirmed money received', extra);
   });
   await confirmRelease(orderId);
   return getOrderRaw(orderId);
 }
 
 // ---------- release / refund ----------
-export async function beginRelease(c, o, actor, note) {
-  await setState(c, o.id, ['PAID_CLAIMED', 'DISPUTED'], 'RELEASING', { actor, note, set: { state_deadline: null } });
+export async function beginRelease(c, o, actor, note, extra = {}) {
+  await setState(c, o.id, ['PAID_CLAIMED', 'DISPUTED'], 'RELEASING', { actor, note, set: { state_deadline: null, ...extra } });
   await c.query(`INSERT INTO escrow_txs (order_id, kind) VALUES ($1,'RELEASE')`, [o.id]);
 }
 
@@ -237,6 +252,8 @@ export async function confirmRefund(orderId) {
     await c.query(`UPDATE escrow_txs SET status='CONFIRMED', tx_hash=$2, confirmed_at=now() WHERE order_id=$1 AND kind='REFUND'`, [orderId, txHash]);
     await setState(c, orderId, 'REFUNDING', 'REFUNDED', { note: 'USDT returned to seller' });
   });
+  // If the ad is still open the money goes back into its reserve (chain: reserve again).
+  try { await escrow.syncReserve(o0.seller_id, o0.asset); } catch (e) { console.error('reserve sync', e.message); }
 }
 
 // ---------- disputes (opening) ----------
@@ -384,6 +401,8 @@ export async function runTimers() {
   for (const { id } of (await q(`SELECT id FROM orders WHERE state='REFUNDING'`)).rows) { await confirmRefund(id); done.retried++; }
   // Locks that were not confirmed yet (the first try failed): try again.
   for (const { id } of (await q(`SELECT id FROM orders WHERE state='ORDER_CREATED'`)).rows) { await confirmLock(id); }
+  // 5. Real chain: read deposits and withdrawals, keep ad reserves equal on chain.
+  try { await escrow.tick(); } catch (e) { console.error('chain tick', e.message); }
   return done;
 }
 

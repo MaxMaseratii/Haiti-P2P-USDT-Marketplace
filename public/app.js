@@ -233,7 +233,7 @@ function renderOrder(card, v) {
     buttons.push(h('button', { class: 'btn alt', onclick: act(async () => { if (confirm('Cancel this order?')) { await api('POST', `/orders/${o.id}/cancel`); reload(); } }) }, t('Cancel order')));
   }
   if (role === 'SELLER' && s === 'PAID_CLAIMED') {
-    buttons.push(h('button', { class: 'btn good', onclick: act(async () => { if (confirm('Check your own MonCash, NatCash or bank app first. Did the money arrive?')) { await api('POST', `/orders/${o.id}/confirm`); reload(); } }) }, t('Confirm received')));
+    buttons.push(h('button', { class: 'btn good', onclick: act(async () => { if (confirm('Check your own MonCash, NatCash or bank app first. Did the money arrive?')) { await api('POST', `/orders/${o.id}/confirm`, cfg.chain ? await signRelease(o.id) : undefined); reload(); } }) }, t('Confirm received')));
   }
   if ((role === 'BUYER' || role === 'SELLER') && s === 'PAID_CLAIMED') {
     buttons.push(h('button', { class: 'btn danger', onclick: act(async () => { const r = prompt('What is wrong?'); if (r) { await api('POST', `/orders/${o.id}/dispute`, { reason: r }); reload(); } }) }, t('Open dispute')));
@@ -297,6 +297,48 @@ function renderChat(box, v, msgs) {
   log.scrollTop = log.scrollHeight;
 }
 
+// ---------- real chain helpers (ESCROW_MODE=EVM). NOT TESTED in a browser wallet yet. ----------
+const pad = (hex) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const toUnits = (v) => { const [i, f = ''] = String(v).split('.'); return BigInt(i + f.padEnd(6, '0').slice(0, 6)); };
+async function eth() {
+  if (!window.ethereum) throw new Error('No wallet found. Install a wallet like MetaMask.');
+  const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+  const want = '0x' + Number(cfg.chain.chain_id).toString(16);
+  if ((await window.ethereum.request({ method: 'eth_chainId' })) !== want)
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
+  return account;
+}
+async function linkWalletWithSignature() {
+  const account = await eth();
+  const { message } = await api('GET', '/me/wallet-link-message');
+  const hex = '0x' + [...new TextEncoder().encode(message)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const signature = await window.ethereum.request({ method: 'personal_sign', params: [hex, account] });
+  await api('PUT', '/me/wallet-address', { wallet_addr: account, signature });
+}
+async function signRelease(orderId) {
+  const account = await eth();
+  const td = await api('GET', `/orders/${orderId}/release-typed-data`);
+  const data = { domain: td.domain, types: { EIP712Domain: [
+    { name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }],
+    ...td.types }, primaryType: 'Release', message: td.value };
+  const sig = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(data)] });
+  return { sig, deadline: td.deadline };
+}
+async function chainDeposit(asset, amount) {
+  const account = await eth(); const token = cfg.chain.tokens[asset]; const v = toUnits(amount).toString(16);
+  const send = (to, data) => window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: account, to, data }] });
+  await send(token, '0x095ea7b3' + pad(cfg.chain.contract) + pad(v));            // approve(escrow, amount)
+  toast('Approved. Now confirm the deposit in your wallet.');
+  await send(cfg.chain.contract, '0x47e7ef24' + pad(token) + pad(v));             // deposit(token, amount)
+  toast('Deposit sent. It shows here after a few blocks.');
+}
+async function chainWithdraw(asset, amount) {
+  const account = await eth(); const token = cfg.chain.tokens[asset];
+  await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: account, to: cfg.chain.contract,
+    data: '0xf3fef3a3' + pad(token) + pad(toUnits(amount).toString(16)) }] });                // withdraw(token, amount)
+  toast('Withdraw sent. Your balance updates after a few blocks.');
+}
+
 // ---------- wallet ----------
 async function walletView(app) {
   const w = me.wallet;
@@ -308,8 +350,15 @@ async function walletView(app) {
       h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
     cfg.escrow_mode === 'MOCK' ? [h('h3', {}, t('Deposit') + ' (fake money, test mode)'), h('div', { class: 'row' }, asset, amt),
       h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/wallet/dev-deposit', { asset: asset.value, amount: amt.value }); route(); }) }, t('Deposit'))] : null,
-    h('h3', {}, 'Wallet address'), addr,
-    h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')));
+    cfg.chain ? [
+      h('p', { class: 'mute' }, 'Real chain mode. The contract is UNAUDITED. Use small amounts only.'),
+      h('h3', {}, 'Your wallet'), h('p', {}, me.user.wallet_addr || 'Not linked yet.'),
+      h('button', { class: 'btn alt', onclick: act(async () => { await linkWalletWithSignature(); toast('Wallet linked.'); route(); }) }, 'Connect and link my wallet'),
+      h('h3', {}, 'Deposit or withdraw'), h('div', { class: 'row' }, asset, amt),
+      h('button', { class: 'btn', onclick: act(async () => chainDeposit(asset.value, amt.value)) }, t('Deposit')),
+      h('button', { class: 'btn alt', onclick: act(async () => chainWithdraw(asset.value, amt.value)) }, 'Withdraw')]
+    : [h('h3', {}, 'Wallet address'), addr,
+      h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')]));
 }
 
 // ---------- profile ----------

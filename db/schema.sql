@@ -274,3 +274,25 @@ CREATE TABLE otp_codes (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX otp_phone_idx ON otp_codes (phone, created_at DESC);
+
+-- ---- On-chain escrow (ESCROW_MODE=EVM) ----
+-- One wallet belongs to one account.
+CREATE UNIQUE INDEX users_wallet_unique ON users (lower(wallet_addr)) WHERE wallet_addr IS NOT NULL;
+-- The seller's signed approval to release, kept until the release is sent.
+ALTER TABLE orders ADD COLUMN release_sig text, ADD COLUMN release_deadline bigint;
+-- Deposits and withdrawals seen on the chain. One row per log, applied to wallet_balances once.
+CREATE TABLE chain_events (
+  id           bigserial PRIMARY KEY,
+  tx_hash      text NOT NULL,
+  log_index    int  NOT NULL,
+  block_number bigint NOT NULL,
+  kind         text NOT NULL CHECK (kind IN ('DEPOSIT','WITHDRAW')),
+  token        text NOT NULL,
+  address      text NOT NULL,
+  amount       numeric(18,6) NOT NULL,
+  applied      boolean NOT NULL DEFAULT false,
+  error        text,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tx_hash, log_index)
+);
+CREATE TABLE chain_state (key text PRIMARY KEY, value text NOT NULL);

@@ -21,6 +21,7 @@ const neg = (x) => '-' + x;
 
 export const credit = (c, u, a, amt) => apply(c, u, a, amt, '0');
 export const lock = (c, u, a, amt) => apply(c, u, a, neg(amt), amt);          // available -> locked
+export const debit = (c, u, a, amt) => apply(c, u, a, neg(amt), '0');          // free balance leaves (withdrawn on chain)
 export const unlock = (c, u, a, amt) => apply(c, u, a, amt, neg(amt));        // locked -> available
 export const burnLocked = (c, u, a, amt) => apply(c, u, a, '0', neg(amt));    // locked leaves (paid out)
 

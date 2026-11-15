@@ -1,5 +1,6 @@
 import { tx, q } from '../db.js';
-import { config } from '../config.js';
+import { config, isMock } from '../config.js';
+import { escrow } from '../escrow.js';
 import { bad, forbidden, notFound, conflict } from '../errors.js';
 import * as wallet from './wallet.js';
 
@@ -23,9 +24,10 @@ export async function createAd(user, b) {
   const maxHtg = num(b.max_order_htg, 'Maximum order');
   if (Number(maxHtg) < Number(minHtg)) throw bad('Maximum order must be at least the minimum.');
 
-  return tx(async (c) => {
+  const ad = await tx(async (c) => {
     let pmId = null;
     if (side === 'SELL') {
+      if (!isMock() && !user.wallet_addr) throw bad('Link your wallet first (Wallet page).', 'WALLET');
       const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2', [b.payment_method_id, user.id])).rows[0];
       if (!pm) throw bad('Pick one of your payment accounts.');
       if (!pm.verified) throw forbidden('That payment account is not verified. The name must match your ID.');
@@ -45,6 +47,16 @@ export async function createAd(user, b) {
       [user.id, side, asset, price, amount, minHtg, maxHtg, b.pay_type, pmId, feeRate, reserve]);
     return r.rows[0];
   });
+  // Real chain: hold the same amount in the contract so the seller cannot withdraw it while the ad is open.
+  if (side === 'SELL') {
+    try { await escrow.syncReserve(user.id, asset); }
+    catch (e) {
+      console.error('reserve failed, closing ad', e.message);
+      await setAdStatus(user, ad.id, 'CLOSED').catch(() => {});
+      throw conflict('Could not hold the funds on chain. Check your deposit has arrived and try again.', 'RESERVE_FAILED');
+    }
+  }
+  return ad;
 }
 
 export async function listAds({ side, asset, pay_type, min_htg } = {}) {
@@ -73,7 +85,7 @@ export async function myAds(userId) {
 
 export async function setAdStatus(user, id, status) {
   if (!['PAUSED', 'ACTIVE', 'CLOSED'].includes(status)) throw bad('Bad status.');
-  return tx(async (c) => {
+  const closed = await tx(async (c) => {
     const ad = (await c.query('SELECT * FROM ads WHERE id=$1 FOR UPDATE', [id])).rows[0];
     if (!ad || ad.user_id !== user.id) throw notFound();
     if (ad.status === 'CLOSED') throw conflict('Ad is closed.');
@@ -87,4 +99,8 @@ export async function setAdStatus(user, id, status) {
     const r = await c.query('UPDATE ads SET status=$2 WHERE id=$1 RETURNING *', [id, status]);
     return r.rows[0];
   });
+  if (status === 'CLOSED' && closed.side === 'SELL') {
+    try { await escrow.syncReserve(user.id, closed.asset); } catch (e) { console.error('reserve sync', e.message); } // the worker retries
+  }
+  return closed;
 }

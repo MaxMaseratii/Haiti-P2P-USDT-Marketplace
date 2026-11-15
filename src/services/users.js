@@ -3,6 +3,8 @@ import { bad, conflict, forbidden, notFound } from '../errors.js';
 import { checkPhone } from '../auth.js';
 import { isBlocked, screenUser, addBlock } from './screening.js';
 import { namesMatch } from './names.js';
+import { isMock } from '../config.js';
+import * as evm from '../escrow-evm.js';
 
 export async function signup({ phone, full_name }) {
   checkPhone(phone);
@@ -28,11 +30,19 @@ export const publicUser = (u) => ({
   strikes: u.strikes, wallet_addr: u.wallet_addr,
 });
 
-export async function setWallet(user, addr) {
+export async function setWallet(user, addr, signature) {
   if (!addr || addr.length < 20) throw bad('Wallet address looks wrong.');
+  // On a real chain deposits are credited to the account that owns the wallet, so the user must prove it.
+  if (!isMock()) {
+    addr = evm.verifyWalletLink(user.id, addr, signature);
+    if (user.wallet_addr && user.wallet_addr.toLowerCase() !== addr.toLowerCase()
+        && (await q(`SELECT 1 FROM wallet_balances WHERE user_id=$1 AND (available > 0 OR locked > 0) LIMIT 1`, [user.id])).rowCount)
+      throw forbidden('You have funds in the contract. Withdraw them before you change wallet.');
+  }
   return tx(async (c) => {
     if (await isBlocked(c, 'WALLET', addr)) throw forbidden('This wallet is blocked.');
-    await c.query('UPDATE users SET wallet_addr=$2 WHERE id=$1', [user.id, addr]);
+    try { await c.query('UPDATE users SET wallet_addr=$2 WHERE id=$1', [user.id, addr]); }
+    catch (e) { if (e.code === '23505') throw conflict('This wallet is already linked to another account.'); throw e; }
   });
 }
 

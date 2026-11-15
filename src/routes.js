@@ -22,6 +22,7 @@ api.get('/config', (_req, res) => res.json({
   pay_grace_min: config.payGraceMin,
   fee_rate: config.feeRate,
   mock_otp: isMockSms() ? '000000' : null,
+  demo: config.demoSeed && isMock(),
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));
@@ -39,6 +40,17 @@ api.post('/auth/signup', wrap(async (req) => {
   checkPhone(phone);
   if (!isMockSms() || code !== undefined) await otp.verifyCode(phone, code);
   const u = await users.signup({ phone, full_name });
+  return { token: makeToken(u.id), user: users.publicUser(u) };
+}));
+
+// Test mode only: one-click login as the ready-made test buyer or test seller.
+api.post('/auth/demo-login', wrap(async (req) => {
+  if (!(config.demoSeed && isMock())) throw forbidden('Not available.');
+  const { TEST_PHONES } = await import('./services/demo.js');
+  const phone = TEST_PHONES[req.body?.who];
+  if (!phone) throw bad('who must be buyer or seller.');
+  const u = await users.findByPhone(phone);
+  if (!u) throw notFound('Test accounts are not ready yet.');
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 

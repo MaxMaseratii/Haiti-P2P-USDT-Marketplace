@@ -15,5 +15,7 @@ await client.end();
 if (config.demoSeed && config.escrowMode === 'MOCK') {
   const { seedDemo } = await import('../src/services/demo.js');
   console.log((await seedDemo()) ? 'Demo ads added.' : 'Demo ads skipped (market is not empty).');
+  const { ensureTestAccounts } = await import('../src/services/demo.js');
+  await ensureTestAccounts(); console.log('Test buyer and test seller are ready.');
 }
 await import('../src/server.js');

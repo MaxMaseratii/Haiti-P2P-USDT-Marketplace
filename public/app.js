@@ -103,6 +103,11 @@ function authView(app) {
       h('div', {},
         h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.trim(), code: code.value.trim() }))) }, t('Log in')),
         h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up'))))));
+  if (cfg.demo) app.insertBefore(h('div', { class: 'card payto' },
+    h('h2', {}, 'Quick test (fake money)'),
+    h('p', { class: 'mute' }, 'Ready-made accounts. ID approved, payment account saved, wallet saved, 1000 fake USDT. Just click and trade.'),
+    h('button', { class: 'btn good', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'buyer' }))) }, 'Log in as TEST BUYER'),
+    h('button', { class: 'btn danger', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'seller' }))) }, 'Log in as TEST SELLER')), app.firstChild);
   publicAds(app);
 }
 
@@ -156,9 +161,10 @@ async function marketView(app) {
 }
 
 function takeAd(a) {
-  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset });
+  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset, value: cfg.demo ? '10' : '' });
   const total = h('div', { class: 'big' }, '0 HTG');
-  amount.addEventListener('input', () => { total.textContent = money(Number(amount.value || 0) * Number(a.price_htg)) + ' HTG'; });
+  const upd = () => { total.textContent = money(Number(amount.value || 0) * Number(a.price_htg)) + ' HTG'; };
+  amount.addEventListener('input', upd); upd();
   const pm = h('select', {}, (me.payment_methods || []).filter((p) => p.type === a.pay_type && p.verified).map((p) => h('option', { value: p.id }, `${p.type} ${p.account_ref}`)));
   const body = [h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
     h('p', { class: 'mute' }, `Limits ${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG. Pay by ${a.pay_type}.`),
@@ -183,10 +189,10 @@ async function adsView(app) {
       h('div', {}, field('asset', 'Asset', h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC')))),
       h('div', {}, field('pay_type', 'Pay by', h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'))))),
     h('div', { class: 'row' },
-      h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal' })))),
+      h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal', value: cfg.demo ? '140' : '' }))),
+      h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal', value: cfg.demo ? '100' : '' }))),
+      h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '500' : '' }))),
+      h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '10000' : '' })))),
     field('payment_method_id', 'Payment account (sell ads: where you get paid)', h('select', {}, pms.map((p) => h('option', { value: p.id }, `${p.type} ${p.account_ref} (${p.account_name})`)))),
     h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
     h('button', { class: 'btn', onclick: act(async () => {
@@ -380,7 +386,8 @@ async function walletView(app) {
   const w = me.wallet;
   const amt = h('input', { value: '100', inputmode: 'decimal' });
   const asset = h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC'));
-  const addr = h('input', { value: me.user.wallet_addr || '', placeholder: 'Your USDT wallet address (for withdrawals when live)' });
+  const fakeAddr = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
+  const addr = h('input', { value: me.user.wallet_addr || (cfg.demo ? fakeAddr() : ''), placeholder: 'Your USDT wallet address (for withdrawals when live)' });
   app.append(h('div', { class: 'card' }, h('h2', {}, t('Wallet')),
     w.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Asset', t('Available'), 'Locked'].map((x) => h('th', {}, x)))),
       h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
@@ -399,9 +406,9 @@ async function walletView(app) {
 
 // ---------- profile ----------
 async function profileView(app) {
-  const nm = h('input', { value: me.user.full_name }); const doc = h('input', { placeholder: 'Link or file name of your ID photo' });
+  const nm = h('input', { value: me.user.full_name }); const doc = h('input', { placeholder: 'Link or file name of your ID photo', value: cfg.demo ? 'test-id-photo' : '' });
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
-  const an = h('input', { placeholder: 'Name on the account (must match your ID)' }); const ar = h('input', { placeholder: 'MonCash / NatCash number or bank account' });
+  const an = h('input', { placeholder: 'Name on the account (must match your ID)', value: cfg.demo ? me.user.full_name : '' }); const ar = h('input', { placeholder: 'MonCash / NatCash number or bank account', value: cfg.demo ? '37' + String(Math.floor(Math.random() * 1e6)).padStart(6, '0') : '' });
   app.append(
     h('div', { class: 'card' }, h('h2', {}, t('Profile')), h('div', {}, `${me.user.full_name} · ${me.user.phone}`),
       h('p', {}, h('span', { class: 'pill ' + (me.user.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + me.user.tier), me.user.strikes ? h('span', { class: 'pill bad' }, me.user.strikes + ' strike(s)') : null),

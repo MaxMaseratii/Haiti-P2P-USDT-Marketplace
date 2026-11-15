@@ -43,3 +43,32 @@ export async function seedDemo() {
   }
   return true;
 }
+
+// Ready-made test accounts: ID approved, payment account verified, wallet saved, fake USDT in the wallet.
+// The home page has "Log in as test buyer / test seller" buttons for them (test mode only).
+export const TEST_PHONES = { buyer: '+50999990001', seller: '+50999990002' };
+
+export async function ensureTestAccounts() {
+  const out = {};
+  const defs = [
+    ['buyer', 'Test Buyer', 'MONCASH', '38990001', '0x7777777777777777777777777777777777777777'],
+    ['seller', 'Test Seller', 'NATCASH', '38990002', '0x8888888888888888888888888888888888888888'],
+  ];
+  for (const [who, name, type, ref, addr] of defs) {
+    const phone = TEST_PHONES[who];
+    let u = await users.findByPhone(phone);
+    if (!u) {
+      await users.signup({ phone, full_name: name });
+      await q('UPDATE users SET tier=3, wallet_addr=$2 WHERE phone=$1', [phone, addr]);
+      u = await users.findByPhone(phone);
+      await q(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','demo',$2,now())`, [u.id, name]);
+      await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified) VALUES ($1,$2,$3,$4,true)`, [u.id, type, name, ref]);
+      await tx((c) => wallet.credit(c, u.id, 'USDT', '1000'));
+      const pm = (await q('SELECT id FROM payment_methods WHERE user_id=$1', [u.id])).rows[0];
+      if (who === 'seller') await ads.createAd(u, { side: 'SELL', pay_type: type, price_htg: '140.10', amount: '300', min_order_htg: '500', max_order_htg: '10000', payment_method_id: pm.id });
+      else await ads.createAd(u, { side: 'BUY', pay_type: type, price_htg: '138.20', amount: '200', min_order_htg: '500', max_order_htg: '10000' });
+    }
+    out[who] = u;
+  }
+  return out;
+}

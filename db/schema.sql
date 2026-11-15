@@ -27,7 +27,8 @@ CREATE TABLE users (
   bio           text,
   avatar        bytea,
   avatar_mime   text,
-  kyc_challenge text,                   -- code the person must say in their ID video
+  kyc_challenge text,
+  closed_at     timestamptz,            -- the person closed their account                   -- code the person must say in their ID video
   binance_uid   text,                   -- where to receive crypto by Binance internal transfer
   payout_network text,
   payout_addr   text,

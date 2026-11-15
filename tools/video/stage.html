@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden}
+body{font-family:Inter,sans-serif;background:radial-gradient(ellipse at 30% 20%,#13402f 0%,#0b2a20 45%,#081a14 100%);color:#fff;position:relative}
+.top{position:absolute;left:40px;top:30px;display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px}
+.logo{width:40px;height:40px;border-radius:10px;background:#1a8a63;display:grid;place-items:center;font-size:22px}
+.chip{position:absolute;right:40px;top:34px;font:700 15px 'JetBrains Mono';letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:8px 14px;border-radius:99px;color:#bdf2d6}
+.stage{position:absolute;left:0;right:0;top:96px;bottom:150px;display:flex;align-items:center;justify-content:center;gap:42px}
+.cap{position:absolute;left:60px;right:60px;bottom:34px;min-height:92px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:31px;line-height:1.3;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.4)}
+.card{background:#fff;color:#14171a;border-radius:20px;padding:22px 26px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.wallet{width:380px;background:linear-gradient(135deg,#0f6b4f,#0b4f3b 60%,#13212a);color:#fff;border:1px solid rgba(255,255,255,.15)}
+.wallet .t{font-size:16px;opacity:.85}.wallet .a{font:700 46px 'JetBrains Mono';margin:6px 0 14px}.wallet .a small{font-size:18px;opacity:.8}
+.wallet .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid rgba(255,255,255,.2);padding-top:12px}
+.wallet .row small{display:block;font-size:14px;opacity:.75}.wallet .row b{font:700 26px 'JetBrains Mono'}
+.hl{outline:4px solid #ffd166;outline-offset:6px;border-radius:10px}
+.phone{width:230px;height:430px;border-radius:34px;background:#0e0e0e;padding:10px;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.scr{height:100%;border-radius:26px;background:#fff;color:#14171a;padding:22px 16px;display:flex;flex-direction:column;gap:10px;font-size:16px}
+.scr .app{font-weight:800;font-size:17px;color:#0f6b4f}.scr .app.mc{color:#c8102e}
+.scr .big{font:700 30px 'JetBrains Mono'}.scr .mute{color:#6b7280;font-size:14px}
+.btn{background:#0f6b4f;color:#fff;border-radius:12px;padding:13px;text-align:center;font-weight:700;margin-top:auto}
+.btn.grey{background:#e5e7eb;color:#6b7280}.btn.red{background:#c8102e}
+.who{text-align:center;font-weight:700;margin-top:10px;font-size:18px}.who small{display:block;font-weight:500;opacity:.7;font-size:14px}
+.arrow{font-size:60px;color:#7ee2b0;font-weight:800}
+.box{width:300px;min-height:230px;border-radius:24px;background:#162a33;border:4px solid #3e5a66;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#cfe3ea;text-align:center;padding:20px}
+.box .ic{font-size:70px}.box b{font-size:22px;color:#fff}.box small{font-size:15px;opacity:.8}
+.ad{width:420px}.ad .h{display:flex;justify-content:space-between;align-items:center}.ad .tag{background:#dff6ec;color:#0d8a5f;font-weight:800;padding:6px 12px;border-radius:8px;font-size:15px}
+.ad .p{font:700 40px 'JetBrains Mono';margin:12px 0 4px}.ad .p small{font-size:18px;color:#6b7280}
+.bar{height:34px;border-radius:10px;background:#e5e7eb;display:flex;overflow:hidden;margin-top:14px;font:700 15px 'JetBrains Mono'}
+.bar i{display:grid;place-items:center;font-style:normal;color:#fff}
+.lk{display:inline-flex;align-items:center;gap:8px;background:#ffd166;color:#3d2a00;font-weight:800;padding:8px 14px;border-radius:10px;font-size:18px}
+.coin{display:inline-flex;align-items:center;gap:8px;background:#26a17b;color:#fff;font:700 22px 'JetBrains Mono';padding:10px 18px;border-radius:99px}
+.note{display:inline-flex;align-items:center;gap:8px;background:#f0b341;color:#2a1c00;font:700 22px 'JetBrains Mono';padding:10px 18px;border-radius:8px}
+.col{display:flex;flex-direction:column;align-items:center;gap:16px}
+.pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:8px 16px;font-weight:700;font-size:18px}
+.x{color:#ff8b8b}.ok{color:#7ee2b0}
+.wa{width:520px;background:#e5ddd5;border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:10px;color:#111}
+.wa div{background:#fff;border-radius:10px;padding:10px 14px;max-width:85%;font-size:20px}.wa div b{display:block;font-size:14px;color:#b34}
+.wa .me{align-self:flex-end;background:#dcf8c6}.wa .me b{color:#2a7}.wa .sys{align-self:center;background:#fff3c4;font-size:17px}
+.title{font-family:'Source Serif 4';font-weight:700;font-size:74px;text-align:center;line-height:1.1}
+.title small{display:block;font-family:Inter;font-weight:600;font-size:26px;color:#bdf2d6;margin-top:18px}
+.list{display:flex;flex-direction:column;gap:12px;width:560px}
+.lrow{display:grid;grid-template-columns:52px 1fr auto auto;gap:14px;align-items:center;background:#fff;color:#14171a;border-radius:14px;padding:12px 16px}
+.av{width:44px;height:44px;border-radius:50%;background:#dff6ec;color:#0d8a5f;display:grid;place-items:center;font-weight:800}
+.lrow .pr{font:700 26px 'JetBrains Mono'}.lrow small{color:#6b7280;font-size:14px;display:block}
+.best{outline:4px solid #ffd166}
+.badge{background:#ffd166;color:#3d2a00;font-weight:800;font-size:13px;padding:4px 8px;border-radius:6px}
+.icons{display:flex;gap:30px}.ib{width:220px;height:220px;border-radius:24px;background:#fff;color:#14171a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;font-weight:700;font-size:20px}
+.ib span{font-size:80px}.ib small{font-weight:500;color:#6b7280;font-size:15px}
+</style></head><body>
+<div class="top"><div class="logo">⇄</div>Haiti P2P</div>
+<div class="chip" id="chip"></div>
+<div class="stage" id="stage"></div>
+<div class="cap" id="cap"></div>
+<script>
+const P = new URLSearchParams(location.search), lang = P.get('lang') || 'ht', v = P.get('v'), cap = P.get('cap') || '';
+const L = {
+  ht: { avail: 'Disponib', locked: 'Kadnase', total: 'Balans', mywallet: 'Pòtfèy pa w', contract: 'Kontra entèlijan', rules: 'Règ fiks · sou blockchain', any: 'Retire nenpòt lè ✓',
+    sell: 'VANN', left: 'rete', order: 'Kòmand', cant: 'Vandè a pa ka manyen l', outside: 'Goud yo pa pase nan aplikasyon an', sent: 'Mwen voye lajan an', got: 'Mwen resevwa l',
+    buyer: 'Achtè', seller: 'Vandè', bal: 'Balans', sendmc: 'Voye lajan', back: 'Tounen nan piblisite a', team: 'Ekip la tcheke prèv yo', proof: 'Prèv', closed: 'Piblisite fèmen',
+    step: 'Etap', gourd: 'Goud: dirèk ant 2 moun', crypto: 'Kripto: nou kadnase l', how: 'Kijan sa mache', why: 'Poukisa Haiti P2P?', slogan: 'Chanje USDT ak goud, san risk.',
+    m1: 'Kiyès ki gen USDT? M bezwen 200.', m2: 'Mwen. Voye MonCash anvan, m a voye.', m3: 'M voye 28,000 ✓✓', m4: 'Alo? Ou voye USDT a?', sys: 'Li wè mesaj la. Li pa reponn.', gone: 'Lajan an ale ✗',
+    phone: 'Telefòn', otp: 'Kòd OTP', id: 'Pyès idantite', video: 'Videyo', lockb: 'Kadnase anvan ou peye', unl: 'Dekadnase lè lajan an rive', minutes: 'kèk minit', fastt: 'Echanj rapid',
+    best: 'PI BON PRI', trades: 'echanj', join: 'Kreye kont ou gratis' },
+  en: { avail: 'Available', locked: 'Locked', total: 'Balance', mywallet: 'Your own wallet', contract: 'Smart contract', rules: 'Fixed rules · on the blockchain', any: 'Withdraw any time ✓',
+    sell: 'SELL', left: 'left', order: 'Order', cant: 'The seller cannot touch it', outside: 'Gourdes never pass through the app', sent: 'I sent the money', got: 'I received it',
+    buyer: 'Buyer', seller: 'Seller', bal: 'Balance', sendmc: 'Send money', back: 'Back to the ad', team: 'Our team checks the proof', proof: 'Proof', closed: 'Ad closed',
+    step: 'Step', gourd: 'Gourdes: directly between 2 people', crypto: 'Crypto: we lock it', how: 'How it works', why: 'Why Haiti P2P?', slogan: 'Swap USDT and gourdes, without the risk.',
+    m1: 'Who has USDT? I need 200.', m2: 'Me. Send MonCash first, then I send.', m3: 'Sent 28,000 ✓✓', m4: 'Hello? Did you send the USDT?', sys: 'Seen. No answer.', gone: 'Money gone ✗',
+    phone: 'Phone', otp: 'OTP code', id: 'ID card', video: 'Video', lockb: 'Locked before you pay', unl: 'Unlocked when the money arrives', minutes: 'minutes', fastt: 'Fast swaps',
+    best: 'BEST PRICE', trades: 'swaps', join: 'Create your free account' } }[lang];
+const W = (a, l, t, hlA, hlL) => `<div class="card wallet"><div class="t">${L.total}</div><div class="a">${t}<small> USDT</small></div>
+  <div class="row"><div class="${hlA ? 'hl' : ''}"><small>${L.avail}</small><b>${a}</b></div><div class="${hlL ? 'hl' : ''}"><small>🔒 ${L.locked}</small><b>${l}</b></div></div></div>`;
+const ph = (inner, who, sub) => `<div class="col"><div class="phone"><div class="scr">${inner}</div></div>${who ? `<div class="who">${who}<small>${sub || ''}</small></div>` : ''}</div>`;
+const AD = (left, ord, lockTxt, extra = '') => `<div class="card ad"><div class="h"><span class="tag">${L.sell} USDT</span>${lockTxt ? `<span class="lk">🔒 ${lockTxt}</span>` : ''}</div>
+  <div class="p">140<small> HTG / USDT</small></div><div class="mute" style="color:#6b7280">500 USDT</div>
+  <div class="bar">${ord ? `<i style="width:${ord / 5}%;background:#c8102e">${L.order} ${ord}</i>` : ''}<i style="width:${left / 5}%;background:#0f6b4f">${left} ${L.left}</i></div>${extra}</div>`;
+const S = {
+  title: () => `<div class="title">${L.how}<small>Haiti P2P</small></div>`,
+  title2: () => `<div class="title">${L.why}<small>Haiti P2P</small></div>`,
+  intro: () => `<div class="icons"><div class="ib"><span>🇭🇹</span>${L.gourd}</div><div class="ib"><span>🔒</span>${L.crypto}</div></div>`,
+  deposit: () => `${ph(`<div class="app" style="color:#555">${L.mywallet}</div><div class="big">1,000</div><div class="mute">USDT</div>`)}<div class="arrow">→</div><div class="box"><div class="ic">📜</div><b>${L.contract}</b><small>${L.rules}</small></div>`,
+  deposit2: () => `<div class="box"><div class="ic">📜</div><b>${L.contract}</b><small>${L.rules}</small></div>${W('1,000', '0', '1,000', true)}<div class="pill ok">${L.any}</div>`,
+  ad: () => `${AD(500, 0, '')}${W('1,000', '0', '1,000')}`,
+  adlock: () => `${AD(500, 0, '500')}${W('500', '500', '1,000', false, true)}`,
+  order: () => `${AD(300, 200, '500')}<div class="col"><span class="lk" style="font-size:24px">🔒 ${L.order}: 200 USDT</span></div>`,
+  order2: () => `${AD(300, 200, '500')}<div class="col"><span class="lk" style="font-size:24px">🔒 200 USDT</span><div class="pill x">✋ ${L.cant}</div></div>`,
+  pay: () => `${ph(`<div class="app mc">MonCash</div><div class="mute">${L.sendmc}</div><div class="big">28,000</div><div class="mute">HTG</div><div class="btn red">${L.sendmc} ✓</div>`, L.buyer)}<div class="col"><div class="note">G 28,000 →</div><div class="pill">${L.outside}</div></div>${ph(`<div class="app mc">MonCash</div><div class="mute">${L.bal}</div><div class="big">+28,000</div><div class="mute">HTG</div>`, L.seller)}`,
+  confirm: () => `${ph(`<div class="app">Haiti P2P</div><div class="mute">${L.order} 200 USDT</div><div class="btn">${L.sent} ✓</div>`, L.buyer)}<div class="col"><span class="lk">🔒 200 USDT</span></div>${ph(`<div class="app">Haiti P2P</div><div class="mute">${L.order} 200 USDT</div><div class="btn">${L.got} ✓</div>`, L.seller)}`,
+  unlock: () => `<div class="col"><span class="lk" style="background:#cdeedd;color:#0b4f3b">🔓 200 USDT</span><div class="coin">₮ 200 →</div></div>${ph(`<div class="app">Haiti P2P</div><div class="mute">${L.total}</div><div class="big ok" style="color:#0d8a5f">+200</div><div class="mute">USDT</div>`, L.buyer)}`,
+  cancel: () => `<div class="col"><span class="lk">🔒 ${L.order}: 200</span><div class="arrow">↩</div><div class="pill">${L.back}</div></div>${AD(500, 0, '500')}`,
+  dispute: () => `<div class="icons"><div class="ib"><span>🧾</span>${L.proof}</div><div class="ib"><span>🛡️</span>${L.team}</div><div class="ib"><span>🔒</span>200 USDT<small>${L.locked}</small></div></div>`,
+  close: () => `<div class="card ad"><div class="h"><span class="tag" style="background:#eee;color:#555">${L.closed}</span></div><div class="p">300<small> USDT</small></div></div><div class="arrow">→</div>${W('800', '0', '800', true)}`,
+  end: () => `<div class="title">Haiti P2P<small>${L.slogan}</small></div>`,
+  wa1: () => `<div class="wa"><div class="me"><b>You</b>${L.m1}</div><div><b>+509 •••• ••••</b>${L.m2}</div><div class="me"><b>You</b>${L.m3}</div></div>`,
+  wa2: () => `<div class="wa"><div class="me"><b>You</b>${L.m3}</div><div class="me"><b>You</b>${L.m4}</div><div class="sys">${L.sys}</div></div><div class="pill x" style="font-size:30px">${L.gone}</div>`,
+  verify: () => `<div class="icons"><div class="ib"><span>📱</span>${L.phone}<small>${L.otp}</small></div><div class="ib"><span>🪪</span>${L.id}</div><div class="ib"><span>🎥</span>${L.video}</div></div>`,
+  lockfirst: () => `<div class="col"><span class="lk" style="font-size:34px;padding:16px 26px">🔒 200 USDT</span><div class="pill">${L.lockb}</div></div>`,
+  unlockonly: () => `${ph(`<div class="app mc">MonCash</div><div class="mute">${L.bal}</div><div class="big">+28,000</div><div class="btn">${L.got} ✓</div>`, L.seller)}<div class="arrow">→</div><div class="col"><span class="lk" style="background:#cdeedd;color:#0b4f3b;font-size:30px">🔓 200 USDT</span><div class="pill ok">${L.unl}</div></div>`,
+  team: () => `<div class="icons"><div class="ib"><span>🔒</span>${L.locked}</div><div class="ib"><span>🧾</span>${L.proof}</div><div class="ib"><span>🛡️</span>${L.team}</div></div>`,
+  fast: () => `<div class="icons"><div class="ib" style="width:300px;height:260px"><span>⏱️</span>${L.fastt}<small>${L.minutes}</small></div></div>`,
+  price: () => `<div class="list">${[['J', 'Jean B.', '139.50', '128', true], ['M', 'Marie D.', '140.00', '64'], ['P', 'Pierre L.', '141.00', '210']].map(([a, n, p, tr, b]) =>
+    `<div class="lrow ${b ? 'best' : ''}"><div class="av">${a}</div><div><b>${n}</b><small>${tr} ${L.trades} · ★ 4.9</small></div>${b ? `<span class="badge">${L.best}</span>` : '<span></span>'}<div class="pr">${p}</div></div>`).join('')}</div>`,
+  end2: () => `<div class="title">${L.join}<small>Haiti P2P · ${L.slogan}</small></div>`,
+};
+const STEP = { deposit: 1, deposit2: 1, ad: 2, adlock: 2, order: 3, order2: 3, pay: 4, confirm: 5, unlock: 5 };
+document.getElementById('stage').innerHTML = S[v]();
+document.getElementById('chip').textContent = STEP[v] ? `${L.step} ${STEP[v]}` : '';
+document.getElementById('cap').textContent = cap;
+</script></body></html>

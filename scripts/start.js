@@ -18,7 +18,7 @@ for (const sql of [
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea',
   'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_types text[]', 'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_methods uuid[]',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_type text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_number text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS challenge text',
-  'ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_challenge text',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_challenge text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS closed_at timestamptz',
   `CREATE TABLE IF NOT EXISTS kyc_files (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id), kyc_id uuid REFERENCES kyc(id),
      kind text NOT NULL CHECK (kind IN ('FRONT','BACK','VIDEO')), mime text NOT NULL, size int NOT NULL, data bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
   'CREATE UNIQUE INDEX IF NOT EXISTS kyc_files_draft ON kyc_files (user_id, kind) WHERE kyc_id IS NULL',

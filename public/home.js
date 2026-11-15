@@ -87,6 +87,17 @@ function oldWay() {
       h('p', { class: 'ow-end ok' }, tx3(C.neuEnd))));
 }
 
+// ---------- the two short videos (vertical, like a phone story) ----------
+function videoRow() {
+  const L = HL() === 'ht' ? 'ht' : 'en'; // the films exist in Kreyòl and English
+  const vid = (name, title) => h('figure', { class: 'vfig' },
+    h('video', { src: `video/${name}_${L}.mp4`, poster: `video/${name}_${L}.jpg`, controls: true, playsinline: true, preload: 'none' }),
+    h('figcaption', {}, tx3(title)));
+  return h('div', { class: 'vrow' },
+    vid('problem', { en: 'The problem we solve (45 s)', fr: 'Le problème que nous réglons (45 s)', ht: 'Pwoblèm nou rezoud (45 s)' }),
+    vid('how', { en: 'How it works, step by step (70 s)', fr: 'Comment ça marche, étape par étape (70 s)', ht: 'Kijan sa mache, etap pa etap (70 s)' }));
+}
+
 // ---------- page ----------
 function homeView(app, loginCard, quickTest, adsBox) {
   const go2 = (id) => () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -95,7 +106,7 @@ function homeView(app, loginCard, quickTest, adsBox) {
   const fee = (Number(cfg.fee_rate || 0.005) * 100).toFixed(1);
   const join = { en: 'Create my free account', fr: 'Créer mon compte gratuit', ht: 'Kreye kont mwen gratis' };
 
-  app.append(
+  app.append(...[
     h('section', { class: 'hhero' },
       h('div', { class: 'hh-left' },
         h('div', { class: 'hkick' }, tx3({ en: 'Made for Haiti · open to the world', fr: 'Fait pour Haïti · ouvert au monde', ht: 'Fèt pou Ayiti · louvri pou tout moun' })),
@@ -112,8 +123,13 @@ function homeView(app, loginCard, quickTest, adsBox) {
           h('div', {}, h('b', {}, '⚖️'), h('span', {}, tx3({ en: 'Our team settles problems', fr: 'Notre équipe règle les problèmes', ht: 'Ekip nou an rezoud pwoblèm' }))))),
       h('div', { class: 'hh-right', id: 'join' }, loginCard)),
     quickTest,
+    sec('videos', { en: 'Videos', fr: 'Vidéos', ht: 'Videyo' }, { en: 'Watch: how it works, and why it is safe.', fr: 'Regardez : comment ça marche, et pourquoi c\'est sûr.', ht: 'Gade: kijan sa mache, ak poukisa li an sekirite.' }, null,
+      h('div', { class: 'vids' },
+        h('div', { class: 'vid' }, h('video', { src: 'video/haiti-p2p-why-ht.mp4', poster: 'video/why-poster.jpg', controls: true, preload: 'none', playsinline: true }), h('p', {}, tx3({ en: 'Why Haiti P2P? The problem we solve', fr: 'Pourquoi Haiti P2P ?', ht: 'Poukisa Haiti P2P? Pwoblèm nou rezoud' }))),
+        h('div', { class: 'vid' }, h('video', { src: 'video/haiti-p2p-how-ht.mp4', poster: 'video/how-poster.jpg', controls: true, preload: 'none', playsinline: true }), h('p', {}, tx3({ en: 'How it works, step by step', fr: 'Comment ça marche, étape par étape', ht: 'Kijan sa mache, etap pa etap' })))),
+      h('p', { class: 'mute', style: 'font-size:12px;margin-top:8px' }, 'Temporary voice: Piper fr_FR-siwis (SIWIS dataset, CC BY 4.0).')),
     sec('how', { en: 'How it works', fr: 'Comment ça marche', ht: 'Kijan sa mache' }, { en: 'We lock it. You pay. We unlock it.', fr: 'On verrouille. Vous payez. On libère.', ht: 'Nou kadnase l. Ou peye. Nou dekadnase l.' },
-      { en: 'Every swap on Haiti P2P, in 30 seconds. Change the language at the top: Kreyòl, Français, English.', fr: 'Chaque échange sur Haiti P2P, en 30 secondes. Changez la langue en haut.', ht: 'Chak echanj sou Haiti P2P, nan 30 segonn. Chanje lang lan anwo a: Kreyòl, Français, English.' }, howFilm()),
+      { en: 'Every swap on Haiti P2P, in 30 seconds. Change the language at the top: Kreyòl, Français, English.', fr: 'Chaque échange sur Haiti P2P, en 30 secondes. Changez la langue en haut.', ht: 'Chak echanj sou Haiti P2P, nan 30 segonn. Chanje lang lan anwo a: Kreyòl, Français, English.' }, howFilm(), videoRow()),
     sec('problem', { en: 'The problem we solve', fr: 'Le problème que nous réglons', ht: 'Pwoblèm nou rezoud' },
       { en: 'No more sending money to strangers and praying.', fr: 'Fini d\'envoyer de l\'argent à des inconnus en priant.', ht: 'Pa voye lajan bay moun ou pa konnen ankò, epi priye.' },
       { en: 'Today, to buy crypto in Haiti you ask in every WhatsApp group, send MonCash first, and hope. Too many people never get their crypto, and the seller stops answering.',
@@ -160,5 +176,6 @@ function homeView(app, loginCard, quickTest, adsBox) {
       h('p', {}, tx3({ en: 'Free to join. Takes 3 minutes.', fr: 'Gratuit. 3 minutes.', ht: 'Gratis. Li pran 3 minit.' })),
       h('button', { class: 'btn', onclick: go2('join') }, tx3(join))),
     h('footer', { class: 'hfoot' }, h('span', {}, '© ' + new Date().getFullYear() + ' Haiti P2P'), h('a', { href: '#safety' }, tx3({ en: 'Safety', fr: 'Sécurité', ht: 'Sekirite' })),
-      h('span', { class: 'mute' }, tx3({ en: 'Crypto prices move. Only swap what you can afford.', fr: 'Le prix de la crypto bouge.', ht: 'Pri kripto a ka chanje. Pa riske lajan ou pa ka pèdi.' }))));
+      h('span', { class: 'mute' }, tx3({ en: 'Crypto prices move. Only swap what you can afford.', fr: 'Le prix de la crypto bouge.', ht: 'Pri kripto a ka chanje. Pa riske lajan ou pa ka pèdi.' }))),
+    h('div', { class: 'hfoot' }, legalLinks())].filter(Boolean));
 }

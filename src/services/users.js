@@ -237,3 +237,17 @@ export async function setPayout(user, { binance_uid, network, address }) {
   await q('UPDATE users SET binance_uid=$2, payout_network=$3, payout_addr=$4 WHERE id=$1', [user.id, uid || null, addr ? network : null, addr || null]);
   return { ok: true };
 }
+
+// The person closes their own account. Only when nothing is open and no crypto is left.
+export async function closeAccount(user) {
+  return tx(async (c) => {
+    const open = (await c.query(`SELECT 1 FROM orders WHERE (buyer_id=$1 OR seller_id=$1) AND state IN ('ORDER_CREATED','AWAITING_PAYMENT','PAID_CLAIMED','DISPUTED','RELEASING','REFUNDING') LIMIT 1`, [user.id])).rowCount;
+    if (open) throw conflict('You still have an open order. Finish it first.', 'OPEN_ORDER');
+    if ((await c.query(`SELECT 1 FROM ads WHERE user_id=$1 AND status <> 'CLOSED' LIMIT 1`, [user.id])).rowCount) throw conflict('Close your ads first (My ads).', 'OPEN_AD');
+    const bal = (await c.query('SELECT COALESCE(SUM(available + locked),0)::numeric AS b FROM wallet_balances WHERE user_id=$1', [user.id])).rows[0].b;
+    if (Number(bal) > 0) throw conflict('Withdraw all your crypto first (Wallet).', 'BALANCE');
+    await c.query(`UPDATE account_links SET status='ENDED' WHERE (owner_id=$1 OR member_id=$1) AND status <> 'ENDED'`, [user.id]);
+    await c.query('UPDATE users SET closed_at=now() WHERE id=$1', [user.id]);
+    return { ok: true };
+  });
+}

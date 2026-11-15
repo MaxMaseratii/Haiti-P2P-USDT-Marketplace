@@ -79,6 +79,7 @@ api.post('/auth/login', wrap(async (req) => {
   await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
   const u = known;
   if (!u) throw notFound('No account for this phone.');
+  if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
   if (u.banned) throw forbidden('Account is frozen or banned.');
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
@@ -121,6 +122,7 @@ api.post('/links/:id/end', wrap(async (req) => links.end(req.user, req.params.id
 api.get('/links/to-check', wrap(async (req) => links.toCheck(req.user)));
 api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, req.params.orderId, req.body?.received === true)));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
+api.post('/me/close', wrap(async (req) => users.closeAccount(req.user)));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));
 api.get('/payment-methods', wrap(async (req) => users.myPaymentMethods(req.user.id)));

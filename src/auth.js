@@ -48,6 +48,7 @@ export async function auth(req, _res, next) {
     const r = await q('SELECT * FROM users WHERE id=$1', [data.uid]);
     const u = r.rows[0];
     if (!u) throw unauth();
+    if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
     if (u.banned) throw forbidden('Account is frozen or banned.');
     if (u.suspended_until && new Date(u.suspended_until) > new Date()) throw forbidden('Account is suspended until ' + new Date(u.suspended_until).toISOString().slice(0, 10) + '.');
     req.user = u;

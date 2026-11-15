@@ -541,3 +541,14 @@ test('linked accounts: the other person registers, passes ID, accepts; they conf
   await ok('POST', `/links/${l.id}/end`, null, tk('mem'));
   assert.equal((await call('POST', '/orders', { ad_id: bad.id, amount: '5', payment_method_id: pm.id }, tk('trd'))).status, 400);
 });
+
+test('close account: refused while something is open, then the person cannot log in', async () => {
+  await signup('cls', '+50937000555', 'Closing Person'); await kyc('cls');
+  await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+50937000555'),'USDT',5)
+                    ON CONFLICT (user_id, asset) DO UPDATE SET available = 5`);
+  assert.equal((await call('POST', '/me/close', null, tk('cls'))).status, 409); // crypto left
+  await pool.query(`UPDATE wallet_balances SET available=0 WHERE user_id=(SELECT id FROM users WHERE phone='+50937000555')`);
+  await ok('POST', '/me/close', null, tk('cls'));
+  assert.equal((await call('GET', '/me', null, tk('cls'))).status, 403);
+  assert.equal((await call('POST', '/auth/login', { phone: '+50937000555', code: '000000' })).status, 403);
+});

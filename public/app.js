@@ -59,6 +59,8 @@ async function route() {
   const ban = $('#banner');
   ban.hidden = cfg.escrow_mode !== 'MOCK';
   ban.textContent = 'TEST MODE: fake money. Nothing here is real USDT or real gourdes.';
+  if (location.hash.startsWith('#legal')) { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return legalView(app, location.hash.split('/')[1]); }
+  if (location.hash === '#welcome') { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return authView(app); } // the public home page, also for logged-in people
   if (!token && location.hash === '#safety') { renderNav(); return safetyView(app); }
   if (!token) { renderNav(); return authView(app); }
   try { const m = await api('GET', '/me'); me = m; } catch { return; }
@@ -108,7 +110,11 @@ function authView(app) {
       h('button', { class: 'btn good sm', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'buyer' }))) }, 'Log in as TEST BUYER'),
       h('button', { class: 'btn danger sm', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'seller' }))) }, 'Log in as TEST SELLER'))) : null;
   const adsBox = h('div');
-  homeView(app, loginCard, quickTest, adsBox);
+  // Logged in and looking at the public home page: show a way back to the account instead of the login form.
+  const card = token && me ? h('div', { class: 'card logincard' }, h('h2', {}, (me.user.display_name || me.user.full_name).split(' ')[0] + ' 👋'),
+    h('p', { class: 'mute' }, lang === 'ht' ? 'Ou konekte deja.' : lang === 'fr' ? 'Vous êtes déjà connecté.' : 'You are already logged in.'),
+    h('button', { class: 'btn big-btn', onclick: () => go('home') }, lang === 'ht' ? 'Ale nan kont mwen' : lang === 'fr' ? 'Aller à mon compte' : 'Go to my account')) : loginCard;
+  homeView(app, card, token ? null : quickTest, adsBox);
   publicAds(adsBox);
 }
 
@@ -940,7 +946,7 @@ async function profileView(app) {
   }));
   const save = act(async () => { await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo }); me = await api('GET', '/me'); toast('Profile saved.'); route(); });
   const methods = me.payment_methods.filter((p) => !p.linked);
-  const menu = [['ads', '📣', 'My ads'], ['linked', '🔗', 'Linked accounts'], ['safety', '🛡️', 'Safety']];
+  const menu = [['welcome', '🌐', 'Home page'], ['ads', '📣', 'My ads'], ['linked', '🔗', 'Linked accounts'], ['safety', '🛡️', 'Safety'], ['legal/terms', '📄', 'Legal']];
   if (['AGENT', 'ADMIN'].includes(u.role)) menu.push(['staff', '🧑‍⚖️', 'Staff']);
   if (u.role === 'ADMIN') menu.push(['admin', '⚙️', 'Admin']);
   app.append(

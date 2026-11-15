@@ -87,8 +87,12 @@ function authView(app) {
     h('label', {}, t('Phone')), phone,
     h('label', {}, t('Full name (as on your ID)') + ' (sign up only)'), name,
     h('label', {}, 'Code'), code,
+    h('button', { class: 'btn alt', onclick: act(async () => {
+      const r = await api('POST', '/auth/request-code', { phone: phone.value.trim() });
+      toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+    }) }, 'Send me a code'),
     h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.trim(), code: code.value.trim() }))) }, t('Log in')),
-    h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value }))) }, t('Sign up')),
+    h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up')),
   ));
 }
 
@@ -261,11 +265,27 @@ function renderOrder(card, v) {
 
 function evidenceForm(orderId) {
   const kind = h('select', {}, ['RECEIPT', 'STATEMENT', 'CHAT_EXPORT', 'OTHER'].map((k) => h('option', {}, k)));
-  const ref = h('input', { placeholder: 'Link or file name of your proof' });
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,application/pdf' });
   const note = h('input', { placeholder: 'Short note (optional)' });
-  return h('div', {}, h('h3', {}, 'Add proof'), h('div', { class: 'row' }, kind, ref, note),
-    h('button', { class: 'btn', onclick: act(async () => { await api('POST', `/orders/${orderId}/evidence`, { kind: kind.value, file_ref: ref.value, note: note.value || undefined }); toast('Proof added.'); ref.value = ''; note.value = ''; }) }, 'Add'));
+  const toB64 = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
+  return h('div', {}, h('h3', {}, 'Add proof'), h('p', { class: 'mute' }, 'PNG, JPG, WEBP or PDF. Max 4 MB. A receipt screenshot alone may not be enough: add your own account statement too.'),
+    h('div', { class: 'row' }, kind, file, note),
+    h('button', { class: 'btn', onclick: act(async () => {
+      const f = file.files[0]; if (!f) throw new Error('Pick a file first.');
+      await api('POST', `/orders/${orderId}/evidence/upload`, { kind: kind.value, filename: f.name, data: await toB64(f), note: note.value || undefined });
+      toast('Proof added.'); file.value = ''; note.value = ''; route();
+    }) }, 'Upload'));
 }
+
+// Open a stored proof file. The file needs the login token, so fetch it and show it as a blob.
+async function openProof(id) {
+  const r = await fetch('/api/evidence/' + id + '/file', { headers: { authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error('Could not open the file.');
+  window.open(URL.createObjectURL(await r.blob()), '_blank', 'noopener');
+}
+const proofLine = (e, who) => h('div', {}, `${e.kind} (${who}): `, e.file_ref.startsWith('upload:')
+  ? h('a', { href: '#', onclick: (ev) => { ev.preventDefault(); act(() => openProof(e.id))(); } }, e.orig_name || 'file')
+  : e.file_ref);
 
 function renderChat(box, v, msgs) {
   const log = h('div', { class: 'chat' }, msgs.map((m) => h('div', { class: 'msg ' + (m.sender_id === null ? 'sys' : m.sender_id === me.user.id ? 'me' : '') }, h('span', { class: 'b' }, m.body))));
@@ -341,7 +361,7 @@ async function disputeView(app, id) {
     h('div', { class: 'mute' }, `Order ${usd(d.order.amount)} ${d.order.asset} · ${money(d.order.total_htg)} HTG · reference ${d.order.pay_reference}`),
     h('button', { class: 'btn alt', onclick: () => go('order/' + d.order.id) }, 'Open order page')),
     h('div', { class: 'card' }, h('h3', {}, 'Checklist'), h('ul', {}, ['Name on the payment matches the buyer ID and the seller account', 'Amount matches exactly', 'Time is inside the payment window', 'Reference code is in the payment note', 'Receipt matches the SELLER own statement (a screenshot alone is not enough)', 'No pressure to move off the platform'].map((x) => h('li', {}, x)))),
-    h('div', { class: 'card' }, h('h3', {}, 'Proof'), d.evidence.length ? d.evidence.map((e) => h('div', {}, `${e.kind}: ${e.file_ref} (${e.uploaded_by === d.order.buyer_id ? 'buyer' : 'seller'})`)) : h('p', { class: 'mute' }, 'No proof uploaded.')),
+    h('div', { class: 'card' }, h('h3', {}, 'Proof'), d.evidence.length ? d.evidence.map((e) => proofLine(e, e.uploaded_by === d.order.buyer_id ? 'buyer' : 'seller')) : h('p', { class: 'mute' }, 'No proof uploaded.')),
     h('div', { class: 'card' }, h('h3', {}, 'Chat'), d.chat.map((m) => h('div', { class: 'mute' }, (m.sender_id === d.order.buyer_id ? 'Buyer: ' : m.sender_id === d.order.seller_id ? 'Seller: ' : 'System: ') + m.body))),
     h('div', { class: 'card' }, h('h3', {}, 'Your vote'), d.votes.length ? h('p', { class: 'mute' }, d.votes.length + ' vote(s) so far.') : null, note,
       h('label', {}, fake, ' Fake or edited proof (immediate ban)'),

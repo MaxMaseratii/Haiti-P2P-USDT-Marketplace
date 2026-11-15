@@ -176,7 +176,9 @@ CREATE TABLE evidence (
   dispute_id  uuid NOT NULL REFERENCES disputes(id),
   uploaded_by uuid NOT NULL REFERENCES users(id),
   kind        text NOT NULL CHECK (kind IN ('RECEIPT', 'STATEMENT', 'CHAT_EXPORT', 'OTHER')),
-  file_ref    text NOT NULL,
+  file_ref    text NOT NULL,                 -- a link, or 'upload:<id>' for a stored file
+  mime        text,
+  orig_name   text,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -260,3 +262,15 @@ INSERT INTO tier_limits (tier, max_order_htg, max_daily_htg, max_open_orders) VA
 -- The platform's own fee account (receives fees in USDT/USDC only).
 INSERT INTO users (id, phone, full_name, role)
   VALUES ('00000000-0000-0000-0000-000000000001', 'platform', 'Platform fees', 'ADMIN');
+
+-- One-time SMS codes. Only a hash of the code is stored.
+CREATE TABLE otp_codes (
+  id          bigserial PRIMARY KEY,
+  phone       text NOT NULL,
+  code_hash   text NOT NULL,
+  expires_at  timestamptz NOT NULL,
+  attempts    smallint NOT NULL DEFAULT 0,
+  used        boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX otp_phone_idx ON otp_codes (phone, created_at DESC);

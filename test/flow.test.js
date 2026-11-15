@@ -13,6 +13,8 @@ process.env.ESCROW_MODE = 'MOCK';
 process.env.DUAL_AGENT_HTG = '1000';      // every test order needs two agents
 process.env.WORKER_INTERVAL_SEC = '3600';
 process.env.FEE_RATE = '0.005';
+process.env.UPLOAD_DIR = fs.mkdtempSync('/tmp/p2p-uploads-');
+process.env.MAX_UPLOAD_BYTES = '200000';
 
 let server, url, pool;
 const U = {}; // name -> { token, id }
@@ -193,6 +195,22 @@ test('dispute: chat rules, evidence, two agents must agree, buyer wins, seller g
   await ok('POST', `/orders/${id}/evidence`, { kind: 'RECEIPT', file_ref: 'img://receipt1', note: 'MonCash receipt' }, tk('buyer'));
   assert.equal((await call('POST', `/orders/${id}/evidence`, { kind: 'RECEIPT', file_ref: 'img://x' }, tk('stranger'))).status, 403);
 
+  // real file upload: type is checked from the bytes, size is capped, only parties and staff can read it
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('fake-but-valid-header')]);
+  const up = await ok('POST', `/orders/${id}/evidence/upload`, { kind: 'RECEIPT', filename: '../../evil name.png', data: png.toString('base64') }, tk('buyer'));
+  assert.equal(up.mime, 'image/png');
+  assert.ok(!up.orig_name.includes('/'), 'file name is cleaned');
+  assert.equal((await call('POST', `/orders/${id}/evidence/upload`, { kind: 'RECEIPT', filename: 'a.png', data: Buffer.from('MZ not an image').toString('base64') }, tk('buyer'))).status, 400, 'wrong type');
+  assert.equal((await call('POST', `/orders/${id}/evidence/upload`, { kind: 'RECEIPT', filename: 'a.png', data: Buffer.concat([png, Buffer.alloc(300000)]).toString('base64') }, tk('buyer'))).status, 400, 'too big');
+  assert.equal((await call('POST', `/orders/${id}/evidence/upload`, { kind: 'RECEIPT', filename: 'a.png', data: png.toString('base64') }, tk('stranger'))).status, 403);
+  const get = (tok) => fetch(url + `/api/evidence/${up.id}/file`, { headers: { authorization: 'Bearer ' + tok } });
+  assert.equal((await get(tk('stranger'))).status, 404);
+  const file = await get(tk('a1'));
+  assert.equal(file.status, 200);
+  assert.equal(file.headers.get('content-type'), 'image/png');
+  assert.equal(file.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal((await get(tk('seller'))).status, 200, 'the other side can see it');
+
   const dq = await ok('GET', '/staff/disputes', null, tk('a1'));
   assert.equal(dq.length, 1);
   assert.equal((await call('GET', '/staff/disputes', null, tk('buyer'))).status, 403, 'users cannot see the queue');
@@ -287,4 +305,54 @@ test('staff only routes and login', async () => {
   assert.equal((await call('POST', '/auth/login', { phone: '+50937000001', code: '111111' })).status, 400);
   const l = await ok('POST', '/auth/login', { phone: '+50937000001', code: '000000' });
   assert.ok(l.token);
+});
+
+test('real SMS codes: send, expire, one use, wrong tries, rate limit', async () => {
+  const { config } = await import('../src/config.js');
+  const { setSender } = await import('../src/sms.js');
+  const sent = [];
+  config.smsProvider = 'twilio'; // any non-mock value; the sender below is a fake
+  setSender(async (phone, text) => { sent.push({ phone, text }); });
+  try {
+    const phone = '+50938111222';
+    // no code asked yet
+    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Sms User', code: '000000' })).status, 400);
+    await ok('POST', '/auth/request-code', { phone });
+    assert.equal(sent.length, 1);
+    const code = sent[0].text.match(/\b(\d{6})\b/)[1];
+    assert.notEqual(code, '000000');
+    // asking again right away is refused
+    assert.equal((await call('POST', '/auth/request-code', { phone })).status, 429);
+    // wrong code, then the right one
+    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Sms User', code: code === '123456' ? '654321' : '123456' })).status, 400);
+    const r = await ok('POST', '/auth/signup', { phone, full_name: 'Sms User', code });
+    assert.ok(r.token);
+    // the same code cannot be used twice
+    assert.equal((await call('POST', '/auth/login', { phone, code })).status, 400);
+    // expired code
+    await ok('POST', '/auth/request-code', { phone: '+50938111333' }); // different phone, no limit hit
+    const c2 = sent.at(-1).text.match(/\b(\d{6})\b/)[1];
+    await pool.query(`UPDATE otp_codes SET expires_at = now() - interval '1 second' WHERE phone='+50938111333'`);
+    assert.equal((await call('POST', '/auth/signup', { phone: '+50938111333', full_name: 'Late User', code: c2 })).status, 400);
+    // too many wrong tries kills the code, even the right one
+    await pool.query(`DELETE FROM otp_codes WHERE phone=$1`, [phone]);
+    await ok('POST', '/auth/request-code', { phone });
+    const c3 = sent.at(-1).text.match(/\b(\d{6})\b/)[1];
+    const wrong = c3 === '111111' ? '222222' : '111111';
+    for (let i = 0; i < config.otpMaxTries; i++) await call('POST', '/auth/login', { phone, code: wrong });
+    assert.equal((await call('POST', '/auth/login', { phone, code: c3 })).status, 400);
+    // only a hash is stored
+    const row = (await pool.query(`SELECT code_hash FROM otp_codes WHERE phone=$1`, [phone])).rows[0];
+    assert.ok(!row.code_hash.includes(c3) && row.code_hash.length === 64);
+    // a provider failure returns 502 and does not use up the limit
+    setSender(async () => { throw new Error('boom'); });
+    await pool.query(`DELETE FROM otp_codes WHERE phone=$1`, [phone]);
+    assert.equal((await call('POST', '/auth/request-code', { phone })).status, 502);
+    assert.equal((await pool.query(`SELECT 1 FROM otp_codes WHERE phone=$1`, [phone])).rowCount, 0);
+    // non-Haiti numbers never get a code
+    assert.equal((await call('POST', '/auth/request-code', { phone: '+14155550100' })).status, 400);
+  } finally {
+    setSender(null);
+    config.smsProvider = 'mock';
+  }
 });

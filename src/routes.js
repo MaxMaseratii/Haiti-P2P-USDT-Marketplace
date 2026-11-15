@@ -1,7 +1,8 @@
 import express from 'express';
 import { q, tx } from './db.js';
-import { config, isMock } from './config.js';
-import { auth, needRole, makeToken, checkOtp, checkPhone } from './auth.js';
+import { config, isMock, isMockSms } from './config.js';
+import { auth, needRole, makeToken, checkPhone } from './auth.js';
+import * as otp from './services/otp.js';
 import { bad, forbidden, notFound } from './errors.js';
 import * as users from './services/users.js';
 import * as wallet from './services/wallet.js';
@@ -19,19 +20,29 @@ api.get('/config', (_req, res) => res.json({
   pay_window_min: config.payWindowMin,
   pay_grace_min: config.payGraceMin,
   fee_rate: config.feeRate,
-  mock_otp: isMock() ? '000000' : null,
+  mock_otp: isMockSms() ? '000000' : null,
 }));
 
 // ---------- auth ----------
+api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
+  const { phone } = req.body || {};
+  checkPhone(phone);
+  return otp.requestCode(phone);
+}));
+
+// Signup proves the phone is yours with an SMS code (in test mode the code is not checked).
 api.post('/auth/signup', wrap(async (req) => {
-  const u = await users.signup(req.body || {});
+  const { phone, full_name, code } = req.body || {};
+  checkPhone(phone);
+  if (!isMockSms() || code !== undefined) await otp.verifyCode(phone, code);
+  const u = await users.signup({ phone, full_name });
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
 api.post('/auth/login', wrap(async (req) => {
   const { phone, code } = req.body || {};
   checkPhone(phone);
-  checkOtp(code);
+  await otp.verifyCode(phone, code);
   const u = await users.findByPhone(phone);
   if (!u) throw notFound('No account for this phone.');
   if (u.banned) throw forbidden('Account is frozen or banned.');
@@ -81,6 +92,14 @@ api.get('/orders/:id/chat', wrap(async (req) => orders.getChat(req.user, req.par
 api.post('/orders/:id/chat', wrap(async (req) => orders.postChat(req.user, req.params.id, req.body?.body)));
 api.post('/orders/:id/rate', wrap(async (req) => orders.rate(req.user, req.params.id, req.body?.stars)));
 api.post('/orders/:id/evidence', wrap(async (req) => disputes.addEvidence(req.user, req.params.id, req.body || {})));
+api.post('/orders/:id/evidence/upload', wrap(async (req) => disputes.addUpload(req.user, req.params.id, req.body || {})));
+api.get('/evidence/:id/file', async (req, res, next) => {
+  try {
+    const f = await disputes.openUpload(req.user, req.params.id);
+    res.set({ 'Content-Type': f.mime, 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline', 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; sandbox" });
+    res.sendFile(f.file);
+  } catch (e) { next(e); }
+});
 
 // ---------- staff ----------
 const staff = express.Router();

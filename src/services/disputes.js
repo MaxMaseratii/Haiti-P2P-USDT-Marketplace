@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { tx, q } from '../db.js';
 import { config } from '../config.js';
 import { bad, conflict, forbidden, notFound } from '../errors.js';
@@ -31,7 +34,7 @@ export async function detail(id) {
   const d = (await q('SELECT * FROM disputes WHERE id=$1', [id])).rows[0];
   if (!d) throw notFound();
   const [ev, votes, chat, order] = await Promise.all([
-    q('SELECT * FROM evidence WHERE dispute_id=$1 ORDER BY created_at', [id]),
+    q('SELECT id, uploaded_by, kind, file_ref, mime, orig_name, created_at FROM evidence WHERE dispute_id=$1 ORDER BY created_at', [id]),
     q('SELECT agent_id, decision, note, fake_proof, penalize, created_at FROM dispute_votes WHERE dispute_id=$1', [id]),
     q('SELECT sender_id, body, created_at FROM chat_messages WHERE order_id=$1 ORDER BY id', [d.order_id]),
     q('SELECT * FROM orders WHERE id=$1', [d.order_id]),
@@ -97,4 +100,57 @@ async function strike(c, userId, fake) {
   const u = (await c.query('UPDATE users SET strikes = strikes + 1 WHERE id=$1 RETURNING *', [userId])).rows[0];
   if (fake || u.strikes >= 3) { await banAndBlock(c, u, fake ? 'Fake payment proof' : 'Three strikes'); return; }
   if (u.strikes === 2) await c.query(`UPDATE users SET suspended_until = now() + interval '30 days' WHERE id=$1`, [userId]);
+}
+
+// ---------- proof files ----------
+// Check the real file type from its first bytes. Never trust the name or the type the browser says.
+function sniff(buf) {
+  if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mime: 'image/png', ext: 'png' };
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { mime: 'image/jpeg', ext: 'jpg' };
+  if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return { mime: 'image/webp', ext: 'webp' };
+  if (buf.length > 5 && buf.subarray(0, 5).toString() === '%PDF-') return { mime: 'application/pdf', ext: 'pdf' };
+  return null;
+}
+
+export async function addUpload(user, orderId, { kind, filename, data, note }) {
+  if (!['RECEIPT', 'STATEMENT', 'CHAT_EXPORT', 'OTHER'].includes(kind)) throw bad('Kind must be RECEIPT, STATEMENT, CHAT_EXPORT or OTHER.');
+  if (typeof data !== 'string' || !data) throw bad('No file data.');
+  const buf = Buffer.from(data, 'base64');
+  if (buf.length === 0) throw bad('Empty file.');
+  if (buf.length > config.maxUploadBytes) throw bad(`File is too big. Max ${Math.floor(config.maxUploadBytes / 1024 / 1024)} MB.`, 'TOO_BIG');
+  const type = sniff(buf);
+  if (!type) throw bad('Only PNG, JPG, WEBP or PDF files.', 'FILE_TYPE');
+
+  const d = (await q(
+    `SELECT d.*, o.buyer_id, o.seller_id FROM disputes d JOIN orders o ON o.id=d.order_id WHERE d.order_id=$1`, [orderId])).rows[0];
+  if (!d) throw notFound('No dispute on this order.');
+  if (d.buyer_id !== user.id && d.seller_id !== user.id) throw forbidden();
+  if (d.status !== 'OPEN') throw conflict('Dispute is closed.');
+  if (new Date(d.evidence_due) < new Date()) throw conflict('Evidence time is over.', 'LATE');
+  const count = (await q('SELECT COUNT(*)::int n FROM evidence WHERE dispute_id=$1 AND uploaded_by=$2', [d.id, user.id])).rows[0].n;
+  if (count >= 10) throw conflict('Too many files (max 10).', 'LIMIT');
+
+  const id = crypto.randomUUID();
+  fs.mkdirSync(config.uploadDir, { recursive: true });
+  fs.writeFileSync(path.join(config.uploadDir, `${id}.${type.ext}`), buf, { flag: 'wx' });
+  const name = String(filename || 'file').replace(/[^\w.\- ]/g, '_').slice(0, 80);
+  const r = await q(
+    `INSERT INTO evidence (id, dispute_id, uploaded_by, kind, file_ref, mime, orig_name)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, kind, file_ref, mime, orig_name, created_at`,
+    [id, d.id, user.id, kind, note ? `upload:${id} | ${String(note).slice(0, 200)}` : `upload:${id}`, type.mime, name]);
+  return r.rows[0];
+}
+
+// Only the two sides of the trade and staff may open a stored proof file.
+export async function openUpload(user, evidenceId) {
+  const e = (await q(
+    `SELECT e.*, o.buyer_id, o.seller_id FROM evidence e
+     JOIN disputes d ON d.id=e.dispute_id JOIN orders o ON o.id=d.order_id WHERE e.id=$1`, [evidenceId])).rows[0];
+  if (!e || !e.mime) throw notFound();
+  const staff = ['AGENT', 'ADMIN'].includes(user.role);
+  if (!staff && e.buyer_id !== user.id && e.seller_id !== user.id) throw notFound();
+  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'application/pdf': 'pdf' }[e.mime];
+  const file = path.join(config.uploadDir, `${e.id}.${ext}`);
+  if (!fs.existsSync(file)) throw notFound();
+  return { file: path.resolve(file), mime: e.mime, name: e.orig_name };
 }

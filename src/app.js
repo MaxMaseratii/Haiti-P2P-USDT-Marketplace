@@ -8,6 +8,7 @@ import { HttpError } from './errors.js';
 export function buildApp() {
   const app = express();
   app.disable('x-powered-by');
+  app.use('/api/orders/:id/evidence/upload', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', geoGuard, api);
   app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')));

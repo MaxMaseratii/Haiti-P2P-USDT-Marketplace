@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { config, isMock } from './config.js';
+import { config } from './config.js';
 import { q } from './db.js';
 import { unauth, forbidden, bad, HttpError } from './errors.js';
 
@@ -33,12 +33,6 @@ export function geoGuard(req, _res, next) {
   const c = String(req.headers[config.countryHeader] || '').toUpperCase();
   if (c !== 'HT') return next(new HttpError(403, 'This service is for Haiti only.', 'GEO'));
   next();
-}
-
-// Real SMS codes are not built yet. Mock mode accepts 000000.
-export function checkOtp(code) {
-  if (!isMock()) throw new HttpError(501, 'SMS login is not set up. Add an SMS provider in src/auth.js.', 'NO_OTP');
-  if (code !== '000000') throw bad('Wrong code.', 'OTP');
 }
 
 export async function auth(req, _res, next) {

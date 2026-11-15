@@ -3,7 +3,7 @@ import { bad, conflict, forbidden, notFound } from '../errors.js';
 import { checkPhone } from '../auth.js';
 import { isBlocked, screenUser, addBlock } from './screening.js';
 import { namesMatch } from './names.js';
-import { isMock } from '../config.js';
+import { isMock, config } from '../config.js';
 import * as evm from '../escrow-evm.js';
 
 export async function signup({ phone, full_name }) {
@@ -14,7 +14,10 @@ export async function signup({ phone, full_name }) {
     if (await isBlocked(c, 'NAME', full_name.trim().toLowerCase())) throw forbidden('This name is blocked.');
     const ex = await c.query('SELECT 1 FROM users WHERE phone=$1', [phone]);
     if (ex.rowCount) throw conflict('Phone already has an account.', 'EXISTS');
-    const r = await c.query('INSERT INTO users (phone, full_name) VALUES ($1,$2) RETURNING *', [phone, full_name.trim()]);
+    // Owner phones (ADMIN_PHONES) become ADMIN with full limits. They still must prove the phone with the SMS code.
+    const isAdmin = config.adminPhones.includes(phone);
+    const r = await c.query('INSERT INTO users (phone, full_name, role, tier) VALUES ($1,$2,$3,$4) RETURNING *',
+      [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0]);
     await screenUser(c, r.rows[0].id, full_name);
     return (await c.query('SELECT * FROM users WHERE id=$1', [r.rows[0].id])).rows[0];
   });

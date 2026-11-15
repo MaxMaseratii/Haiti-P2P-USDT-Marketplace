@@ -103,6 +103,26 @@ function authView(app) {
       h('div', {},
         h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.trim(), code: code.value.trim() }))) }, t('Log in')),
         h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up'))))));
+  publicAds(app);
+}
+
+// Home page for visitors: live ads from sellers, with different prices. Read only.
+async function publicAds(app) {
+  const wrap = h('div', { class: 'card' }, h('h2', {}, 'Live ads'), h('p', { class: 'mute' }, 'Prices are in gourdes (HTG) for 1 USDT. Log in to trade.'));
+  app.append(wrap);
+  const need = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); toast('Log in or sign up to trade.'); };
+  const list = (title, ads, verb, cls) => h('div', {}, h('h3', {}, title),
+    ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
+      h('div', { class: 'who' }, h('div', { class: 'avatar' }, a.owner[0].toUpperCase()),
+        h('div', {}, h('strong', {}, a.owner), h('div', { class: 'mute' }, `${a.trades} trades` + (a.rating ? ` · ${a.rating}★` : '')))),
+      h('div', {}, h('div', { class: 'lab' }, 'Price'), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
+      h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'), h('div', {}, usd(a.remaining) + ' ' + a.asset),
+        h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`), h('span', { class: 'chip' }, a.pay_type)),
+      h('button', { class: 'btn sm ' + cls, onclick: need }, verb)))) : h('p', { class: 'mute' }, 'No ads yet.'));
+  try {
+    const [sell, buy] = await Promise.all([api('GET', '/public/ads?side=SELL'), api('GET', '/public/ads?side=BUY')]);
+    wrap.append(list('Buy USDT (sellers, lowest price first)', sell, t('Buy USDT'), 'good'), list('Sell USDT (buyers, highest price first)', buy, t('Sell USDT'), 'danger'));
+  } catch (e) { wrap.append(h('p', { class: 'mute' }, 'Could not load ads.')); }
 }
 
 // ---------- market ----------

@@ -52,6 +52,14 @@ api.post('/auth/login', wrap(async (req) => {
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
+// The market is public to look at (so the home page can show live ads). Names are shortened.
+api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.side === 'BUY' ? 'BUY' : 'SELL' })).map((a) => {
+  const [first, ...rest] = String(a.owner_name).trim().split(/\s+/);
+  return { side: a.side, asset: a.asset, price_htg: a.price_htg, remaining: a.remaining, min_order_htg: a.min_order_htg,
+    max_order_htg: a.max_order_htg, pay_type: a.pay_type, trades: a.trades, rating: a.rating,
+    owner: rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
+})));
+
 // Everything below needs login.
 api.use(auth);
 

@@ -15,7 +15,16 @@ This is an MVP built from the "Haiti P2P USDT Marketplace Spec". It runs on **fa
 > - **Get a written opinion from a Haitian lawyer** before launch (BRH approval, UCREF reporting, who may hold the dispute keys). The spec has the checklist.
 > - ID checks, SMS codes and sanctions screening are **simple stand-ins** (see "What is real, what is a stand-in").
 
-## Run it
+## Put it online (test server, about 5 minutes)
+
+1. Open <https://render.com/deploy?repo=https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace> and sign in (free plan is fine for a test).
+2. When asked for `ADMIN_PHONES`, type your phone, like `+50937001234`. You become admin when you sign up with it.
+3. Press Deploy. You get a web address. Open it: the home page already shows example sellers with different prices.
+4. Sign up with your phone (code `000000` in test mode), then open **Staff** to approve the ID checks of your testers.
+
+This is fake money (`ESCROW_MODE=MOCK`). Anyone with the address can sign up, so share it only with testers.
+
+## Run it on your own computer
 
 You need Node 20+ and PostgreSQL 16 (or Docker).
 

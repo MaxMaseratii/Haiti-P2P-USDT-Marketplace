@@ -4,7 +4,7 @@ import { config } from './config.js';
 // Return numeric columns as strings. No float math on money.
 pg.types.setTypeParser(1700, (v) => v);
 
-export const pool = new pg.Pool({ connectionString: config.databaseUrl });
+export const pool = new pg.Pool({ connectionString: config.databaseUrl, ...(config.pgSsl ? { ssl: { rejectUnauthorized: false } } : {}) });
 
 export const q = (text, params) => pool.query(text, params);
 

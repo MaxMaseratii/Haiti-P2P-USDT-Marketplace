@@ -1,0 +1,27 @@
+# One-click test server on Render: https://render.com/deploy?repo=https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace
+services:
+  - type: web
+    name: haiti-p2p
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: haiti-p2p-db, property: connectionString }
+      - key: TOKEN_SECRET
+        generateValue: true
+      - key: ESCROW_MODE
+        value: MOCK            # fake money. Do not change until the contract is audited
+      - key: SMS_PROVIDER
+        value: mock            # login code 000000. Change to twilio when ready
+      - key: DEMO_SEED
+        value: "true"          # example sellers on the home page
+      - key: ADMIN_PHONES
+        sync: false            # YOUR phone, like +50937001234. You become admin when you sign up
+      - key: PGSSL
+        value: "false"
+databases:
+  - name: haiti-p2p-db
+    plan: free

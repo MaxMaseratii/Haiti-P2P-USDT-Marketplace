@@ -79,21 +79,30 @@ function renderNav() {
 function authView(app) {
   const phone = h('input', { placeholder: '+50937001234', inputmode: 'tel' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
-  const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code' });
+  const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code', inputmode: 'numeric' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('market'); route(); };
-  app.append(h('div', { class: 'card' },
-    h('h2', {}, t('Log in') + ' / ' + t('Sign up')),
-    h('p', { class: 'mute' }, 'Haiti only. Phone numbers start with +509.'),
-    h('label', {}, t('Phone')), phone,
-    h('label', {}, t('Full name (as on your ID)') + ' (sign up only)'), name,
-    h('label', {}, 'Code'), code,
-    h('button', { class: 'btn alt', onclick: act(async () => {
-      const r = await api('POST', '/auth/request-code', { phone: phone.value.trim() });
-      toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
-    }) }, 'Send me a code'),
-    h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.trim(), code: code.value.trim() }))) }, t('Log in')),
-    h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up')),
-  ));
+  const pt = (txt) => h('li', {}, h('span', { class: 'ic' }, '✓'), h('span', {}, txt));
+  app.append(h('div', { class: 'hero' },
+    h('div', {},
+      h('h1', {}, 'Buy and sell ', h('em', {}, 'USDT'), ' with gourdes. Safely.'),
+      h('p', { class: 'lead' }, 'Pay MonCash, NatCash or bank straight to a real person. The crypto is locked first, so nobody runs with your money.'),
+      h('ul', { class: 'points' },
+        pt('The seller\'s USDT is locked before you pay'),
+        pt('We never hold your gourdes'),
+        pt('A staff agent reads the proof if there is a problem'),
+        pt('Haiti only. ID checked. Phones start with +509'))),
+    h('div', { class: 'card' },
+      h('h2', {}, t('Log in') + ' / ' + t('Sign up')),
+      h('label', {}, t('Phone')), phone,
+      h('label', {}, t('Full name (as on your ID)') + ' (sign up only)'), name,
+      h('label', {}, 'Code'), code,
+      h('button', { class: 'btn alt', onclick: act(async () => {
+        const r = await api('POST', '/auth/request-code', { phone: phone.value.trim() });
+        toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+      }) }, 'Send me a code'),
+      h('div', {},
+        h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.trim(), code: code.value.trim() }))) }, t('Log in')),
+        h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.trim(), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up'))))));
 }
 
 // ---------- market ----------
@@ -107,22 +116,21 @@ async function marketView(app) {
     if (asset.value) qs.set('asset', asset.value);
     if (pay.value) qs.set('pay_type', pay.value);
     const ads = await api('GET', '/ads?' + qs);
-    box.replaceChildren(ads.length ? h('table', {},
-      h('thead', {}, h('tr', {}, ['Trader', t('Price'), t('Available'), t('Limits'), 'Pay by', ''].map((x) => h('th', {}, x)))),
-      h('tbody', {}, ads.map((a) => h('tr', {},
-        h('td', {}, a.owner_name, h('div', { class: 'mute' }, `${a.trades} trades` + (a.rating ? ` · ${a.rating}★` : ''))),
-        h('td', {}, money(a.price_htg) + ' HTG'),
-        h('td', {}, usd(a.remaining) + ' ' + a.asset),
-        h('td', {}, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`),
-        h('td', {}, a.pay_type),
-        h('td', {}, a.owner_id === me.user.id ? h('span', { class: 'mute' }, 'yours') : h('button', { class: 'btn', onclick: () => takeAd(a) }, marketSide === 'SELL' ? t('Buy USDT') : t('Sell USDT'))))))) : h('p', { class: 'mute' }, 'No ads yet.'));
+    box.replaceChildren(ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
+      h('div', { class: 'who' }, h('div', { class: 'avatar' }, (a.owner_name || '?').trim()[0].toUpperCase()),
+        h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, `${a.trades} trades` + (a.rating ? ` · ${a.rating}★` : '')))),
+      h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
+      h('div', {}, h('div', { class: 'lab' }, t('Available') + ' · ' + t('Limits')),
+        h('div', {}, usd(a.remaining) + ' ' + a.asset), h('div', { class: 'mute' }, `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`),
+        h('span', { class: 'chip' }, a.pay_type)),
+      a.owner_id === me.user.id ? h('span', { class: 'mute' }, 'your ad') : h('button', { class: 'btn sm ' + (marketSide === 'SELL' ? 'good' : 'danger'), onclick: () => takeAd(a) }, (marketSide === 'SELL' ? t('Buy USDT') : t('Sell USDT')))))) : h('p', { class: 'mute' }, 'No ads yet.'));
   });
   [asset, pay].forEach((s) => s.addEventListener('change', load));
   app.append(h('div', { class: 'card' },
     h('h2', {}, t('Market')),
-    h('div', {},
-      h('button', { class: 'btn' + (marketSide === 'SELL' ? '' : ' alt'), onclick: () => { marketSide = 'SELL'; route(); } }, t('Buy USDT')),
-      h('button', { class: 'btn' + (marketSide === 'BUY' ? '' : ' alt'), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
+    h('div', { class: 'seg' },
+      h('button', { class: 'buy' + (marketSide === 'SELL' ? ' on' : ''), onclick: () => { marketSide = 'SELL'; route(); } }, t('Buy USDT')),
+      h('button', { class: 'sell' + (marketSide === 'BUY' ? ' on' : ''), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
     h('div', { class: 'row' }, asset, pay), box));
   load();
 }
@@ -184,6 +192,13 @@ const STATE_TEXT = {
 };
 const statePill = (s) => h('span', { class: 'pill ' + STATE_TEXT[s][1] }, t(STATE_TEXT[s][0]));
 
+function stepper(s) {
+  const at = { ORDER_CREATED: 0, AWAITING_PAYMENT: 1, PAID_CLAIMED: 2, DISPUTED: 2, RELEASING: 3, COMPLETED: 4, REFUNDING: 3, REFUNDED: 4, CANCELLED_TIMEOUT: 4 }[s];
+  const bad = ['DISPUTED', 'REFUNDING', 'REFUNDED', 'CANCELLED_TIMEOUT'].includes(s);
+  const names = ['Locked', 'Pay', 'Seller checks', 'Release', 'Done'];
+  return h('div', { class: 'steps' }, names.map((n, i) => h('div', { class: 'step' + (i < at ? ' done' : i === at ? (bad ? ' bad' : ' now') : '') }, i === 3 && ['REFUNDING', 'REFUNDED'].includes(s) ? 'Refund' : n)));
+}
+
 async function ordersView(app) {
   const list = await api('GET', '/orders');
   app.append(h('div', { class: 'card scroll' }, h('h2', {}, t('My orders')), list.length ? h('table', {},
@@ -238,10 +253,10 @@ function renderOrder(card, v) {
   if ((role === 'BUYER' || role === 'SELLER') && s === 'PAID_CLAIMED') {
     buttons.push(h('button', { class: 'btn danger', onclick: act(async () => { const r = prompt('What is wrong?'); if (r) { await api('POST', `/orders/${o.id}/dispute`, { reason: r }); reload(); } }) }, t('Open dispute')));
   }
-  const pay = v.payment ? h('div', { class: 'card' }, h('h3', {}, 'Pay to'),
+  const pay = v.payment ? h('div', { class: 'card payto' }, h('h3', {}, 'Pay to'),
     h('div', {}, `${v.payment.type}: ${v.payment.account_ref}`), h('div', {}, 'Account name: ' + v.payment.account_name),
     role === 'BUYER' ? h('p', { class: 'mute' }, 'Pay exactly this amount. Put this code in the payment note:') : h('p', { class: 'mute' }, 'Buyer must put this code in the payment note:'),
-    h('div', { class: 'code' }, o.pay_reference)) : null;
+    h('div', { class: 'code' }, o.pay_reference, h('button', { onclick: () => { navigator.clipboard?.writeText(o.pay_reference); toast('Code copied.'); } }, 'Copy'))) : null;
   const rate = s === 'COMPLETED' && role !== 'STAFF' ? h('div', {}, h('span', { class: 'mute' }, 'Rate the other side: '),
     [1, 2, 3, 4, 5].map((n) => h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks.'); }) }, n + '★'))) : null;
   const dispute = v.dispute ? h('div', { class: 'card' }, h('h3', {}, 'Dispute: ' + v.dispute.status), h('div', {}, v.dispute.reason),
@@ -253,6 +268,7 @@ function renderOrder(card, v) {
         h('div', {}, h('div', { class: 'mute' }, role === 'BUYER' ? 'You buy' : role === 'SELLER' ? 'You sell' : 'Order'), h('div', { class: 'big' }, usd(o.amount) + ' ' + o.asset)),
         h('div', {}, h('div', { class: 'mute' }, 'Total in gourdes'), h('div', { class: 'big' }, money(o.total_htg) + ' HTG')),
         h('div', {}, h('div', { class: 'mute' }, t('Time left')), h('div', { class: 'big', id: 'clock' }, '–'))),
+      stepper(s),
       h('p', {}, statePill(s), o.refund_reason ? h('span', { class: 'mute' }, ' (' + o.refund_reason + ')') : null),
       h('div', { class: 'mute' }, `${t('Price')} ${money(o.price_htg)} HTG · ${t('Buyer')}: ${v.buyer.full_name} · ${t('Seller')}: ${v.seller.full_name} · Fee ${usd(o.fee_amount)} ${o.asset} (paid by seller)`),
       buttons, rate),

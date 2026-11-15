@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haiti P2P: buy and sell USDT with gourdes</title>
+<meta name="description" content="A Haiti-only peer-to-peer marketplace. The seller's USDT is locked first. Pay MonCash, NatCash or bank. We never hold gourdes.">
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#0c1a36;--mute:#5b6784;--line:#e3e8f2;--soft:#eef2fa;--brand:#0a3fd1;--brand-soft:#e7eeff;--good:#0d8a5f;--good-soft:#dff6ec;--warn:#a85a00;--warn-soft:#fff0d6;--bad:#c3213a;--shadow:0 1px 2px rgba(12,26,54,.06),0 18px 50px rgba(12,26,54,.12)}
+@media(prefers-color-scheme:dark){:root{--bg:#0a1020;--card:#111a30;--ink:#ecf1ff;--mute:#9aa8c9;--line:#22304f;--soft:#18233f;--brand:#6f9bff;--brand-soft:#16264d;--good:#4fd7a2;--good-soft:#0f2f27;--warn:#f3b45a;--warn-soft:#33260f;--bad:#ff8c9b;--shadow:0 1px 2px rgba(0,0,0,.3),0 18px 50px rgba(0,0,0,.4)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font:17px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+body::before{content:"";display:block;height:5px;background:linear-gradient(90deg,#00209f 50%,#d21034 50%)}
+a{color:var(--brand)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+nav.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.01em}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#0a3fd1,#0c1a36);display:grid;place-items:center;color:#fff}
+.btn{display:inline-block;padding:13px 22px;border-radius:13px;font-weight:700;text-decoration:none;font-size:16px;transition:.15s}
+.btn.p{background:var(--brand);color:#fff}.btn.p:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn.s{background:var(--card);color:var(--ink);border:1px solid var(--line)}.btn.s:hover{background:var(--soft)}
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:36px 0 70px}
+.tag{display:inline-block;background:var(--warn-soft);color:var(--warn);font-weight:700;font-size:13px;padding:6px 14px;border-radius:99px;margin-bottom:18px}
+h1{font-size:clamp(36px,5.4vw,60px);line-height:1.04;letter-spacing:-.04em;margin:0 0 18px}
+h1 em{font-style:normal;color:var(--brand)}
+.lead{font-size:20px;color:var(--mute);max-width:30em;margin:0 0 28px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.shot{border-radius:18px;border:1px solid var(--line);box-shadow:var(--shadow);width:100%;display:block;background:var(--card)}
+.phones{display:flex;gap:16px;align-items:flex-start;justify-content:center}
+.phones img{width:46%;border-radius:22px;border:6px solid var(--ink);box-shadow:var(--shadow)}
+.phones img:nth-child(2){margin-top:34px}
+section{padding:64px 0}
+h2{font-size:clamp(28px,3.6vw,40px);letter-spacing:-.03em;margin:0 0 10px;line-height:1.1}
+.sub{color:var(--mute);margin:0 0 36px;max-width:36em;font-size:18px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:s}
+.step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;counter-increment:s}
+.step::before{content:counter(s);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-weight:800;margin-bottom:12px}
+.step b{display:block;font-size:18px;margin-bottom:4px}.step span{color:var(--mute);font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px}
+.feat i{font-style:normal;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--good-soft);margin-bottom:14px;font-size:20px}
+.feat b{display:block;font-size:18px;margin-bottom:6px}.feat span{color:var(--mute);font-size:15px}
+.band{background:var(--card);border-block:1px solid var(--line)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:center}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;font-size:15px}
+th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}tr:last-child td{border:0}
+.ok{color:var(--good);font-weight:800}.no{color:var(--bad);font-weight:800}.mid{color:var(--warn);font-weight:800}
+pre{background:#0c1a36;color:#dbe6ff;padding:22px;border-radius:16px;overflow:auto;font-size:14px;line-height:1.7}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:16px;padding:18px 22px;font-weight:600;font-size:16px}
+footer{padding:40px 0 60px;color:var(--mute);font-size:14px;text-align:center}
+@media(max-width:860px){.hero,.split{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.lead{font-size:18px}}
+@media(max-width:480px){.steps{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>Haiti P2P</div>
+    <a class="btn s" href="https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace">View code on GitHub</a>
+  </nav>
+
+  <div class="hero">
+    <div>
+      <span class="tag">Test version. Fake money. Not open to the public yet.</span>
+      <h1>Buy and sell <em>USDT</em> with gourdes. Safely.</h1>
+      <p class="lead">Pay by MonCash, NatCash or bank, straight to a real person in Haiti. The crypto is locked first, so nobody can take your gourdes and run.</p>
+      <div class="cta">
+        <a class="btn p" href="#how">See how it works</a>
+        <a class="btn s" href="#run">Run it yourself</a>
+      </div>
+    </div>
+    <img class="shot" src="site/img/market.png" alt="The market: a list of sellers with price, amount and payment type">
+  </div>
+</div>
+
+<div class="band"><div class="wrap"><section id="how">
+  <h2>How a trade works</h2>
+  <p class="sub">Four steps. The platform never touches gourdes.</p>
+  <div class="steps">
+    <div class="step"><b>Pick an ad</b><span>Choose a seller by price, limits and how they want to be paid.</span></div>
+    <div class="step"><b>USDT is locked</b><span>The seller's crypto goes into escrow before you send anything.</span></div>
+    <div class="step"><b>You pay the seller</b><span>Send HTG by MonCash, NatCash or bank. Put the code in the note. Press "I paid".</span></div>
+    <div class="step"><b>Seller confirms</b><span>They check their own app. The USDT is released to you. Problem? A staff agent decides.</span></div>
+  </div>
+</section></div></div>
+
+<div class="wrap">
+  <section>
+    <div class="split">
+      <div class="phones">
+        <img src="site/img/order-m.png" alt="An order on a phone: progress steps, amount, time left">
+        <img src="site/img/market-m.png" alt="The market on a phone">
+      </div>
+      <div>
+        <h2>Made for phones. Made for Haiti.</h2>
+        <p class="sub">Big buttons, a clear progress bar and a live timer. Menus in English, French and Haitian Creole.</p>
+        <p class="sub" style="margin:0">Haiti only: phone numbers start with +509, every user passes an ID check, and the name on the payment account must match the ID.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Built to stop the usual scams</h2>
+    <p class="sub">The rules are enforced by the database, not just by the screen.</p>
+    <div class="grid">
+      <div class="feat"><i>🔒</i><b>Locked first</b><span>Sell ads hold the USDT up front. A seller cannot take the gourdes and disappear.</span></div>
+      <div class="feat"><i>⏱️</i><b>Timers, never auto-release</b><span>Unpaid orders refund. A silent seller opens a dispute. Money is never released by a timer.</span></div>
+      <div class="feat"><i>⚖️</i><b>Real disputes</b><span>Staff read the proof. Big orders need two agents. Fake proof means a ban.</span></div>
+      <div class="feat"><i>🪪</i><b>ID and name match</b><span>Payment accounts must be in the same name as the ID. Third-party payments are blocked.</span></div>
+      <div class="feat"><i>📈</i><b>Limits that grow with trust</b><span>New accounts start small. Limits rise with tier and clean history.</span></div>
+      <div class="feat"><i>🧾</i><b>Full audit trail</b><span>Every state change is logged in an append-only table. Illegal moves are blocked by the database.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What is real today</h2>
+    <p class="sub">Honest status, so nobody is surprised.</p>
+    <table>
+      <tr><th>Part</th><th>Status</th></tr>
+      <tr><td>Order flow, timers, disputes, strikes, limits, fees</td><td><span class="ok">Built and tested</span></td></tr>
+      <tr><td>Proof upload for disputes</td><td><span class="ok">Built and tested</span></td></tr>
+      <tr><td>SMS login</td><td><span class="mid">Built. Tested with a fake provider. Not tested on Digicel or Natcom yet</span></td></tr>
+      <tr><td>Smart-contract escrow</td><td><span class="mid">Built and tested on a local test chain. Not audited. Never run on a public network</span></td></tr>
+      <tr><td>Browser wallet screens</td><td><span class="mid">Written. Not tested with a real wallet</span></td></tr>
+      <tr><td>ID check, sanctions screening</td><td><span class="no">Simple stand-ins. Need a real vendor</span></td></tr>
+    </table>
+    <p class="note" style="margin-top:20px">Do not put real money through this before an outside audit and a written opinion from a Haitian lawyer.</p>
+  </section>
+
+  <section id="run">
+    <h2>Run it yourself</h2>
+    <p class="sub">Needs Node 20+ and PostgreSQL 16. Test mode uses fake money. The login code is always 000000.</p>
+<pre>git clone https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace
+cd Haiti-P2P-USDT-Marketplace
+cp .env.example .env
+npm install
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/haiti_p2p
+npm run migrate
+npm start        # http://localhost:3000</pre>
+    <p style="margin-top:20px"><a class="btn p" href="https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace#readme">Read the full guide</a></p>
+  </section>
+</div>
+<footer>Haiti P2P. Test version. The platform never holds gourdes.</footer>
+</body>
+</html>

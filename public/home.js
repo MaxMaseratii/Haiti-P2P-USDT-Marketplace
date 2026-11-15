@@ -4,57 +4,6 @@
 const HL = () => (['en', 'fr', 'ht'].includes(lang) ? lang : 'en');
 const tx3 = (o) => o[HL()] || o.en;
 
-// ---------- "How it works" film: a short silent film made of HTML, with captions ----------
-const FILM = [
-  { at: 'start', cap: { en: 'Meet Rose (buyer) and Jean (seller). Rose wants 100 USDT.', fr: 'Voici Rose (acheteuse) et Jean (vendeur). Rose veut 100 USDT.', ht: 'Men Rose (achtè) ak Jean (vandè). Rose bezwen 100 USDT.' } },
-  { at: 'lock', cap: { en: 'Step 1. We lock Jean\'s 100 USDT. From now on, Jean cannot touch it.', fr: 'Étape 1. Nous verrouillons les 100 USDT de Jean. Jean ne peut plus y toucher.', ht: 'Etap 1. Nou kadnase 100 USDT Jean yo. Depi kounye a, Jean pa ka manyen yo.' } },
-  { at: 'pay', cap: { en: 'Step 2. Rose sends 14,000 HTG by MonCash, straight to Jean. We never touch the gourdes.', fr: 'Étape 2. Rose envoie 14 000 HTG par MonCash, directement à Jean. Nous ne touchons jamais aux gourdes.', ht: 'Etap 2. Rose voye 14 000 goud pa MonCash, dirèk bay Jean. Nou pa janm manyen goud yo.' } },
-  { at: 'paid', cap: { en: 'Step 3. Rose confirms: "I sent the money".', fr: 'Étape 3. Rose confirme : « J\'ai envoyé l\'argent ».', ht: 'Etap 3. Rose konfime: « Mwen voye lajan an ».' } },
-  { at: 'check', cap: { en: 'Step 4. Jean checks his MonCash. The money is there. He confirms he received it.', fr: 'Étape 4. Jean vérifie son MonCash. L\'argent est là. Il confirme l\'avoir reçu.', ht: 'Etap 4. Jean tcheke MonCash li. Lajan an la. Li konfime li resevwa l.' } },
-  { at: 'release', cap: { en: 'Step 5. We unlock the 100 USDT and it goes to Rose. Done in minutes.', fr: 'Étape 5. Nous libérons les 100 USDT et ils vont à Rose. Fini en quelques minutes.', ht: 'Etap 5. Nou dekadnase 100 USDT yo epi yo ale jwenn Rose. Fini nan kèk minit.' } },
-  { at: 'shield', cap: { en: 'A problem? The crypto stays locked. Our team checks the proof and decides. Nobody can run away with the money.', fr: 'Un problème ? La crypto reste verrouillée. Notre équipe vérifie les preuves et décide. Personne ne peut fuir avec l\'argent.', ht: 'Gen pwoblèm? Kripto a rete kadnase. Ekip nou an gade prèv yo epi deside. Pèsonn pa ka kouri ak lajan an.' } },
-];
-
-function howFilm() {
-  const coin = h('div', { class: 'f-coin' }, '₮ 100');
-  const note = h('div', { class: 'f-note' }, 'G 14,000');
-  const W = { buy: { en: 'Buy 100 USDT', fr: 'Acheter 100 USDT', ht: 'Achte 100 USDT' }, paid: { en: 'I sent the money', fr: 'J\'ai envoyé', ht: 'Mwen voye lajan an' },
-    bal: { en: 'Balance', fr: 'Solde', ht: 'Balans' }, rel: { en: 'I received it', fr: 'J\'ai reçu', ht: 'Mwen resevwa l' }, lock: { en: 'Locked', fr: 'Verrouillé', ht: 'Kadnase' },
-    buyer: { en: 'buyer', fr: 'acheteuse', ht: 'achtè' }, seller: { en: 'seller', fr: 'vendeur', ht: 'vandè' }, team: { en: 'Team checks', fr: 'L\'équipe vérifie', ht: 'Ekip la tcheke' } };
-  const buyerScreen = h('div', { class: 'f-screen' }, h('div', { class: 'f-app' }, 'Haiti P2P'), h('div', { class: 'f-line' }, tx3(W.buy)), h('div', { class: 'f-bal' }, '0 USDT'), h('div', { class: 'f-btn' }, tx3(W.paid)));
-  const sellerScreen = h('div', { class: 'f-screen' }, h('div', { class: 'f-app mc' }, 'MonCash'), h('div', { class: 'f-line' }, tx3(W.bal)), h('div', { class: 'f-bal' }, '2,500 HTG'), h('div', { class: 'f-btn' }, tx3(W.rel)));
-  const vault = h('div', { class: 'f-vault' }, h('div', { class: 'f-door' }, h('span', { class: 'f-lock' }, '🔒')), h('div', { class: 'f-vlab' }, tx3(W.lock)));
-  const shield = h('div', { class: 'f-shield' }, '🛡️', h('small', {}, tx3(W.team)));
-  const stage = h('div', { class: 'f-stage' },
-    h('div', { class: 'f-person f-left' }, h('div', { class: 'f-phone' }, buyerScreen), h('b', {}, 'Rose'), h('span', {}, tx3(W.buyer))),
-    vault, shield,
-    h('div', { class: 'f-person f-right' }, h('div', { class: 'f-phone' }, sellerScreen), h('b', {}, 'Jean'), h('span', {}, tx3(W.seller))),
-    coin, note);
-  const cap = h('div', { class: 'f-cap' });
-  const dots = h('div', { class: 'f-dots' }, FILM.map((_, i) => h('button', { type: 'button', 'aria-label': 'Scene ' + (i + 1), onclick: () => { show(i); restart(); } })));
-  const bar = h('div', { class: 'f-bar' }, h('i'));
-  const play = h('button', { class: 'f-play', type: 'button', 'aria-label': 'Play or pause' }, '❚❚');
-  let i = 0, timer = null, playing = true;
-  const SCENE_MS = 4600;
-  function show(n) {
-    i = n; stage.dataset.at = FILM[n].at; cap.textContent = tx3(FILM[n].cap);
-    dots.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === n));
-    buyerScreen.querySelector('.f-bal').textContent = ['release', 'shield'].includes(FILM[n].at) ? '100 USDT' : '0 USDT';
-    sellerScreen.querySelector('.f-bal').textContent = ['check', 'release', 'shield', 'paid'].includes(FILM[n].at) ? '16,500 HTG' : '2,500 HTG';
-    bar.firstChild.style.animation = 'none'; void bar.offsetWidth; bar.firstChild.style.animation = playing ? `fbar ${SCENE_MS}ms linear forwards` : 'none';
-  }
-  function restart() { clearInterval(timer); timer = null; if (playing) timer = setInterval(() => show((i + 1) % FILM.length), SCENE_MS); }
-  play.onclick = () => { playing = !playing; play.textContent = playing ? '❚❚' : '▶'; show(i); restart(); };
-  const box = h('div', { class: 'film' }, stage, h('div', { class: 'f-ctl' }, play, dots), bar, cap);
-  show(0);
-  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) { playing = false; play.textContent = '▶'; show(0); } else if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((es) => { if (es[0].isIntersecting && playing && !timer) restart(); if (!es[0].isIntersecting) { clearInterval(timer); timer = null; } }, { threshold: 0.4 });
-    setTimeout(() => io.observe(box), 0);
-  } else restart();
-  return box;
-}
-
 // ---------- the old way vs the new way ----------
 function oldWay() {
   const C = {
@@ -87,15 +36,19 @@ function oldWay() {
       h('p', { class: 'ow-end ok' }, tx3(C.neuEnd))));
 }
 
-// ---------- the two short videos (vertical, like a phone story) ----------
-function videoRow() {
-  const L = HL() === 'ht' ? 'ht' : 'en'; // the films exist in Kreyòl and English
-  const vid = (name, title) => h('figure', { class: 'vfig' },
-    h('video', { src: `video/${name}_${L}.mp4`, poster: `video/${name}_${L}.jpg`, controls: true, playsinline: true, preload: 'none' }),
-    h('figcaption', {}, tx3(title)));
-  return h('div', { class: 'vrow' },
-    vid('problem', { en: 'The problem we solve (45 s)', fr: 'Le problème que nous réglons (45 s)', ht: 'Pwoblèm nou rezoud (45 s)' }),
-    vid('how', { en: 'How it works, step by step (70 s)', fr: 'Comment ça marche, étape par étape (70 s)', ht: 'Kijan sa mache, etap pa etap (70 s)' }));
+// ---------- real screens from the app, in phone frames ----------
+function appShots(sec) {
+  const L = HL();
+  const shot = (name, cap) => h('figure', { class: 'ashot' },
+    h('div', { class: 'aframe' }, h('img', { src: `img/app/${name}-${L}.jpg`, alt: tx3(cap), loading: 'lazy', decoding: 'async', width: '390', height: '844' })),
+    h('figcaption', {}, tx3(cap)));
+  return sec('screens', { en: 'The app', fr: 'L\'application', ht: 'Aplikasyon an' }, { en: 'Like your bank account, in your pocket.', fr: 'Comme votre compte bancaire, dans votre poche.', ht: 'Tankou kont labank ou, nan pòch ou.' },
+    { en: 'Real screens from Haiti P2P. Your balance, the market, every order step by step, and your ID check.', fr: 'De vrais écrans de Haiti P2P : votre solde, le marché, chaque commande étape par étape, et votre vérification.', ht: 'Vrè ekran Haiti P2P: balans ou, mache a, chak kòmand etap pa etap, ak verifikasyon idantite w.' },
+    h('div', { class: 'ashots' },
+      shot('home', { en: 'Your account: balance, buy, sell', fr: 'Votre compte : solde, achat, vente', ht: 'Kont ou: balans, achte, vann' }),
+      shot('market', { en: 'The market: best price first', fr: 'Le marché : meilleur prix d\'abord', ht: 'Mache a: pi bon pri an premye' }),
+      shot('order', { en: 'An order: clear steps and chat', fr: 'Une commande : étapes claires et chat', ht: 'Yon kòmand: etap klè ak chat' }),
+      shot('id', { en: 'ID check: photo and video', fr: 'Vérification : photo et vidéo', ht: 'Verifikasyon: foto ak videyo' })));
 }
 
 // ---------- page ----------
@@ -123,18 +76,14 @@ function homeView(app, loginCard, quickTest, adsBox) {
           h('div', {}, h('b', {}, '⚖️'), h('span', {}, tx3({ en: 'Our team settles problems', fr: 'Notre équipe règle les problèmes', ht: 'Ekip nou an rezoud pwoblèm' }))))),
       h('div', { class: 'hh-right', id: 'join' }, loginCard)),
     quickTest,
-    sec('videos', { en: 'Videos', fr: 'Vidéos', ht: 'Videyo' }, { en: 'Watch: how it works, and why it is safe.', fr: 'Regardez : comment ça marche, et pourquoi c\'est sûr.', ht: 'Gade: kijan sa mache, ak poukisa li an sekirite.' }, null,
-      h('div', { class: 'vids' },
-        h('div', { class: 'vid' }, h('video', { src: 'video/haiti-p2p-why-ht.mp4', poster: 'video/why-poster.jpg', controls: true, preload: 'none', playsinline: true }), h('p', {}, tx3({ en: 'Why Haiti P2P? The problem we solve', fr: 'Pourquoi Haiti P2P ?', ht: 'Poukisa Haiti P2P? Pwoblèm nou rezoud' }))),
-        h('div', { class: 'vid' }, h('video', { src: 'video/haiti-p2p-how-ht.mp4', poster: 'video/how-poster.jpg', controls: true, preload: 'none', playsinline: true }), h('p', {}, tx3({ en: 'How it works, step by step', fr: 'Comment ça marche, étape par étape', ht: 'Kijan sa mache, etap pa etap' })))),
-      h('p', { class: 'mute', style: 'font-size:12px;margin-top:8px' }, 'Temporary voice: Piper fr_FR-siwis (SIWIS dataset, CC BY 4.0).')),
-    sec('how', { en: 'How it works', fr: 'Comment ça marche', ht: 'Kijan sa mache' }, { en: 'We lock it. You pay. We unlock it.', fr: 'On verrouille. Vous payez. On libère.', ht: 'Nou kadnase l. Ou peye. Nou dekadnase l.' },
-      { en: 'Every swap on Haiti P2P, in 30 seconds. Change the language at the top: Kreyòl, Français, English.', fr: 'Chaque échange sur Haiti P2P, en 30 secondes. Changez la langue en haut.', ht: 'Chak echanj sou Haiti P2P, nan 30 segonn. Chanje lang lan anwo a: Kreyòl, Français, English.' }, howFilm(), videoRow()),
+    sec('how', { en: 'How it works', fr: 'Comment ça marche', ht: 'Kijan li mache' }, { en: 'We lock it. You pay. We unlock it.', fr: 'On verrouille. Vous payez. On libère.', ht: 'Nou kadnase l. Ou peye. Nou dekadnase l.' },
+      { en: 'A real swap, step by step, with real numbers. Press any step, or drag the bar. Change the language at the top: Kreyòl, Français, English.', fr: 'Un vrai échange, étape par étape, avec de vrais chiffres. Touchez une étape ou glissez la barre.', ht: 'Yon vrè echanj, etap pa etap, ak vrè chif. Peze nenpòt etap, oswa glise ba a. Chanje lang lan anwo a: Kreyòl, Français, English.' }, filmHow()),
+    appShots(sec),
     sec('problem', { en: 'The problem we solve', fr: 'Le problème que nous réglons', ht: 'Pwoblèm nou rezoud' },
       { en: 'No more sending money to strangers and praying.', fr: 'Fini d\'envoyer de l\'argent à des inconnus en priant.', ht: 'Pa voye lajan bay moun ou pa konnen ankò, epi priye.' },
       { en: 'Today, to buy crypto in Haiti you ask in every WhatsApp group, send MonCash first, and hope. Too many people never get their crypto, and the seller stops answering.',
         fr: 'Aujourd\'hui, pour acheter de la crypto en Haïti, on demande dans chaque groupe WhatsApp, on envoie MonCash d\'abord, et on espère. Trop de gens ne reçoivent jamais leur crypto.',
-        ht: 'Jodi a, pou achte kripto ann Ayiti, ou mande nan tout gwoup WhatsApp, ou voye MonCash anvan, epi ou espere. Twòp moun pa janm resevwa kripto yo, epi vandè a pa reponn ankò.' }, oldWay()),
+        ht: 'Jodi a, pou achte kripto ann Ayiti, ou mande nan tout gwoup WhatsApp, ou voye MonCash anvan, epi ou espere. Twòp moun pa janm resevwa kripto yo, epi vandè a pa reponn ankò.' }, filmWhy(), h('div', { style: 'height:20px' }), oldWay()),
     sec('lock', { en: 'How we lock the crypto', fr: 'Comment nous verrouillons la crypto', ht: 'Kijan nou kadnase kripto a' },
       { en: 'Both sides are protected.', fr: 'Les deux côtés sont protégés.', ht: 'Toude bò yo pwoteje.' },
       { en: 'We lock the amount of crypto the person is selling. You send them the money and confirm you sent it. They confirm they received it. Then we unlock the crypto and it goes to you. While it is locked, nobody can touch it until the order is cancelled or confirmed.',

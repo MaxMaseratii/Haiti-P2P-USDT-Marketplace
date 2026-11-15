@@ -161,20 +161,37 @@ async function marketView(app) {
 }
 
 function takeAd(a) {
-  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset, value: cfg.demo ? '10' : '' });
+  const minU = Math.ceil(Number(a.min_order_htg) / Number(a.price_htg)), maxU = Math.min(Number(a.remaining), Math.floor(Number(a.max_order_htg) / Number(a.price_htg)));
+  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset, value: cfg.demo ? String(Math.min(minU + 2, maxU)) : '' });
   const total = h('div', { class: 'big' }, '0 HTG');
   const upd = () => { total.textContent = money(Number(amount.value || 0) * Number(a.price_htg)) + ' HTG'; };
   amount.addEventListener('input', upd); upd();
-  const pm = h('select', {}, (me.payment_methods || []).filter((p) => p.type === a.pay_type && p.verified).map((p) => h('option', { value: p.id }, `${p.type} ${p.account_ref}`)));
-  const body = [h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
-    h('p', { class: 'mute' }, `Limits ${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG. Pay by ${a.pay_type}.`),
-    h('label', {}, t('Amount')), amount, total];
-  if (a.side === 'BUY') body.push(h('label', {}, t('Payment account') + ' (where you get paid)'), pm);
-  body.push(h('button', { class: 'btn', onclick: act(async () => {
+  const mine = (me.payment_methods || []).filter((p) => p.type === a.pay_type && p.verified);
+  const pm = h('select', {}, mine.map((p) => h('option', { value: p.id }, `${p.type} · ${p.account_ref} · ${p.account_name}`)));
+  const nm = h('input', { value: me.user.full_name }), nr = h('input', { inputmode: 'numeric', placeholder: a.pay_type === 'BANK' ? 'Bank account number' : a.pay_type + ' phone number' });
+  const addBox = h('div', { class: 'addacc' + (mine.length ? ' hidden' : '') },
+    h('p', { class: 'mute' }, mine.length ? 'Add another ' + a.pay_type + ' account.' : `You have no ${a.pay_type} account yet. Add one. The name must match your ID.`),
+    h('label', {}, 'Name on the account'), nm, h('label', {}, a.pay_type === 'BANK' ? 'Account number' : 'Phone number'), nr,
+    h('button', { class: 'btn alt sm', onclick: act(async () => {
+      const r = await api('POST', '/payment-methods', { type: a.pay_type, account_name: nm.value.trim(), account_ref: nr.value.trim() });
+      me = await api('GET', '/me');
+      if (!r.verified) { toast('Saved, but the name does not match your ID yet. Staff must approve it.', true); }
+      takeAd(a);
+    }) }, 'Save account'));
+  const body = [h('button', { class: 'back', onclick: route }, '← Back to market'),
+    h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
+    h('div', { class: 'kv' }, kv([['Available', usd(a.remaining) + ' ' + a.asset], ['Limits per order', `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`], ['Pay by', a.pay_type]])),
+    h('label', {}, 'How many ' + a.asset + '? (not gourdes)'), amount, h('div', { class: 'mute' }, `You can trade from ${minU} to ${maxU} ${a.asset}.`), h('div', { class: 'mute' }, 'You ' + (a.side === 'SELL' ? 'pay' : 'receive')), total];
+  if (a.side === 'BUY') {
+    body.push(h('label', {}, 'Where do you want to get paid?'), mine.length ? pm : null,
+      mine.length ? h('button', { class: 'linkbtn', onclick: () => addBox.classList.toggle('hidden') }, '+ Add another number or account') : null, addBox);
+  }
+  body.push(h('button', { class: 'btn big-btn', onclick: act(async () => {
+    if (a.side === 'BUY' && !mine.length) throw new Error('Add your ' + a.pay_type + ' account first.');
     const o = await api('POST', '/orders', { ad_id: a.id, amount: amount.value.trim(), payment_method_id: a.side === 'BUY' ? pm.value : undefined });
     go('order/' + o.id);
-  }) }, t('Trade')));
-  const app = $('#app'); app.replaceChildren(h('div', { class: 'card' }, body, h('button', { class: 'btn alt', onclick: route }, 'Back')));
+  }) }, 'Continue'));
+  $('#app').replaceChildren(h('div', { class: 'card narrow' }, body));
 }
 
 // ---------- my ads ----------
@@ -383,6 +400,8 @@ function renderOrder(col, v) {
       h('h2', {}, g.title),
       g.steps ? h('ol', { class: 'gsteps' }, g.steps.map((x) => h('li', {}, x))) : h('p', { class: 'gtext' }, g.text),
       rate, h('div', { class: 'gactions' }, g.actions)),
+    ['ORDER_CREATED', 'AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED', 'RELEASING'].includes(o.state)
+      ? h('div', { class: 'escrow' }, h('b', {}, '🔒 ' + usd(o.amount) + ' ' + o.asset + ' is held in escrow'), h('span', {}, 'The seller cannot take it back. The buyer cannot touch it until the seller confirms the money, or staff decide.')) : null,
     pay, dispute,
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Order details'),
       kv([['Price', money(o.price_htg) + ' HTG per ' + o.asset], ['You ' + (r === 'SELLER' ? 'sell' : 'buy'), usd(o.amount) + ' ' + o.asset], ['Total', money(o.total_htg) + ' HTG'],

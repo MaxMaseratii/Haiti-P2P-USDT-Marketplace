@@ -68,6 +68,12 @@ export async function ensureTestAccounts() {
       if (who === 'seller') await ads.createAd(u, { side: 'SELL', pay_type: type, price_htg: '140.10', amount: '300', min_order_htg: '500', max_order_htg: '10000', payment_method_id: pm.id });
       else await ads.createAd(u, { side: 'BUY', pay_type: type, price_htg: '138.20', amount: '200', min_order_htg: '500', max_order_htg: '10000' });
     }
+    // every test account gets one account of each type, so any ad can be tested
+    const extra = who === 'buyer' ? [['NATCASH', '38990003'], ['BANK', '38990005']] : [['MONCASH', '38990004'], ['BANK', '38990006']];
+    for (const [t2, r2] of extra) {
+      const has = (await q('SELECT 1 FROM payment_methods WHERE user_id=$1 AND type=$2', [u.id, t2])).rows[0];
+      if (!has) await q(`INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified) VALUES ($1,$2,$3,$4,true) ON CONFLICT DO NOTHING`, [u.id, t2, name, r2]);
+    }
     out[who] = u;
   }
   return out;

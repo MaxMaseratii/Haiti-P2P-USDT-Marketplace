@@ -1,13 +1,13 @@
 /* Haiti P2P. Calm, trustworthy, built for phones first. */
 :root {
-  --bg:#f4f6fb; --card:#ffffff; --ink:#0c1a36; --mute:#5b6784; --line:#e3e8f2; --soft:#eef2fa;
-  --brand:#0a3fd1; --brand-ink:#ffffff; --brand-soft:#e7eeff;
+  --bg:#f6f5f1; --card:#ffffff; --ink:#14171a; --mute:#646b73; --line:#e6e4dd; --soft:#f1efe9;
+  --brand:#0f6b4f; --brand-ink:#ffffff; --brand-soft:#e1f2ea;
   --good:#0d8a5f; --good-soft:#dff6ec; --warn:#a85a00; --warn-soft:#fff0d6; --bad:#c3213a; --bad-soft:#fde4e8;
   --shadow:0 1px 2px rgba(12,26,54,.06), 0 8px 24px rgba(12,26,54,.06); --r:16px;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg:#0a1020; --card:#111a30; --ink:#ecf1ff; --mute:#9aa8c9; --line:#22304f; --soft:#18233f;
-    --brand:#6f9bff; --brand-ink:#06122e; --brand-soft:#16264d;
+  :root { --bg:#111312; --card:#1a1d1b; --ink:#f2f3f1; --mute:#9aa19b; --line:#2b302d; --soft:#222623;
+    --brand:#3ddc97; --brand-ink:#06150e; --brand-soft:#16301f;
     --good:#4fd7a2; --good-soft:#0f2f27; --warn:#f3b45a; --warn-soft:#33260f; --bad:#ff8c9b; --bad-soft:#35151c;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); }
 }
@@ -19,7 +19,7 @@ body::before { content:""; display:block; height:4px; background:linear-gradient
 header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:10px 20px;
   background:color-mix(in srgb, var(--card) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); flex-wrap:wrap; }
 .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px; letter-spacing:-.01em; }
-.logo { width:32px; height:32px; border-radius:10px; background:linear-gradient(135deg,#0a3fd1,#0c1a36); display:grid; place-items:center; color:#fff; flex:none; }
+.logo { width:32px; height:32px; border-radius:10px; background:#0f6b4f; display:grid; place-items:center; color:#fff; flex:none; }
 nav { display:flex; gap:2px; flex-wrap:wrap; flex:1; }
 nav button { background:none; border:0; color:var(--mute); padding:8px 12px; border-radius:10px; cursor:pointer; font:inherit; font-weight:600; font-size:14px; transition:.15s; }
 nav button:hover { background:var(--soft); color:var(--ink); }
@@ -148,3 +148,11 @@ tr:last-child td { border-bottom:0; }
 .compose{display:flex;gap:8px;padding:12px 14px}.compose input{flex:1;min-width:0}
 .safe{font-size:12px;color:var(--mute);padding:0 14px 12px}
 .drop b,.drop span{display:block}
+
+.narrow{max-width:520px;margin:0 auto}
+.back{background:none;border:0;color:var(--mute);cursor:pointer;font:inherit;padding:0 0 10px}
+.linkbtn{background:none;border:0;color:var(--brand);cursor:pointer;font:inherit;font-weight:600;padding:8px 0}
+.addacc{background:var(--soft);border-radius:12px;padding:12px;margin:6px 0}
+.big-btn{width:100%;margin-top:14px;padding:14px;font-size:16px}
+.escrow{display:flex;flex-direction:column;gap:2px;background:var(--brand-soft);color:var(--ink);border:1px solid var(--brand);border-radius:14px;padding:12px 14px;font-size:14px}
+.escrow span{color:var(--mute);font-size:13px}

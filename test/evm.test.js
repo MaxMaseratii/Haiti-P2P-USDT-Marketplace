@@ -59,7 +59,11 @@ async function linkWallet(key, signer = key, walletOf = key) {
   return call('PUT', '/me/wallet-address', { wallet_addr: addr(walletOf), signature: sig }, tk(key));
 }
 async function kyc(key) {
-  const k = await ok('POST', '/kyc', { name_on_id: U[key].name, id_doc_ref: 'img://' + key }, tk(key));
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 1)]);
+  const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(400, 2)]);
+  for (const [kind, buf] of [['FRONT', PNG], ['VIDEO', WEBM]])
+    await fetch(`${url}/api/kyc/file/${kind}`, { method: 'POST', headers: { authorization: 'Bearer ' + tk(key), 'content-type': 'application/octet-stream' }, body: buf });
+  const k = await ok('POST', '/kyc', { id_type: 'PASSPORT', name_on_id: U[key].name, id_number: 'HT' + key.length + '0001' }, tk(key));
   await ok('POST', `/staff/kyc/${k.id}/decision`, { approve: true }, tk('admin'));
 }
 async function sellerSig(orderId, who = 'seller') {

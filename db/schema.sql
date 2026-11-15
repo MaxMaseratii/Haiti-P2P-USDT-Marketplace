@@ -27,6 +27,7 @@ CREATE TABLE users (
   bio           text,
   avatar        bytea,
   avatar_mime   text,
+  kyc_challenge text,                   -- code the person must say in their ID video
   binance_uid   text,                   -- where to receive crypto by Binance internal transfer
   payout_network text,
   payout_addr   text,
@@ -39,10 +40,27 @@ CREATE TABLE kyc (
   status        kyc_status NOT NULL DEFAULT 'PENDING',
   id_doc_ref    text NOT NULL,          -- pointer to the stored ID image, not the image
   name_on_id    text NOT NULL,
+  id_type       text,                   -- NATIONAL_ID, PASSPORT or DRIVER_LICENSE
+  id_number     text,
+  challenge     text,                   -- the words the person had to say in their video
   reviewed_by   uuid REFERENCES users(id),
   reviewed_at   timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- ID photos and the video. Drafts (kyc_id NULL) until the person presses Send.
+CREATE TABLE kyc_files (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users(id),
+  kyc_id     uuid REFERENCES kyc(id),
+  kind       text NOT NULL CHECK (kind IN ('FRONT', 'BACK', 'VIDEO')),
+  mime       text NOT NULL,
+  size       int NOT NULL,
+  data       bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX kyc_files_draft ON kyc_files (user_id, kind) WHERE kyc_id IS NULL;
+CREATE INDEX kyc_files_kyc ON kyc_files (kyc_id);
 
 CREATE TABLE payment_methods (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),

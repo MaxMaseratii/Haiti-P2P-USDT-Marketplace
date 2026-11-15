@@ -97,6 +97,8 @@ api.get('/me/wallet-link-message', wrap(async (req) => ({ message: evm.linkMessa
 api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.user, req.body?.wallet_addr, req.body?.signature); return { ok: true }; }));
 
 // ---------- KYC + payment accounts ----------
+api.get('/kyc/me', wrap(async (req) => users.kycState(req.user)));
+api.post('/kyc/file/:kind', wrap(async (req) => users.addKycFile(req.user, String(req.params.kind).toUpperCase(), req.body)));
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
@@ -151,6 +153,10 @@ api.get('/evidence/:id/file', async (req, res, next) => {
 const staff = express.Router();
 staff.use(needRole('AGENT', 'ADMIN'));
 staff.get('/kyc', wrap(async (req) => users.listKyc(req.query.status || 'PENDING')));
+staff.get('/kyc/:id/file/:kind', wrap(async (req, res) => {
+  const f = await users.kycFile(req.params.id, String(req.params.kind).toUpperCase());
+  res.set('Content-Type', f.mime).set('Cache-Control', 'private, no-store').send(f.data);
+}));
 staff.post('/kyc/:id/decision', wrap(async (req) => users.decideKyc(req.user, req.params.id, !!req.body?.approve)));
 staff.post('/payment-methods/:id/verify', wrap(async (req) => users.setPaymentVerified(req.params.id, req.body?.verified !== false)));
 staff.get('/disputes', wrap(async (req) => disputes.queue(req.query.status || 'OPEN')));

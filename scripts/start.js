@@ -17,6 +17,12 @@ for (const sql of [
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_uid text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_network text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_addr text',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea',
   'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_types text[]', 'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_methods uuid[]',
+  'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_type text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_number text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS challenge text',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_challenge text',
+  `CREATE TABLE IF NOT EXISTS kyc_files (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id), kyc_id uuid REFERENCES kyc(id),
+     kind text NOT NULL CHECK (kind IN ('FRONT','BACK','VIDEO')), mime text NOT NULL, size int NOT NULL, data bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS kyc_files_draft ON kyc_files (user_id, kind) WHERE kyc_id IS NULL',
+  'CREATE INDEX IF NOT EXISTS kyc_files_kyc ON kyc_files (kyc_id)',
   "UPDATE ads SET pay_types = ARRAY[pay_type::text] WHERE pay_types IS NULL",
   "UPDATE ads SET pay_methods = ARRAY[payment_method_id] WHERE pay_methods IS NULL AND payment_method_id IS NOT NULL"]) await client.query(sql);
 // Login tokens are signed with TOKEN_SECRET. A missing or weak one would let anyone fake a login,

@@ -659,9 +659,139 @@ function shrinkPhoto(file) {
   });
 }
 
+// ---------- ID check: phone, ID type, photos, name + number, a short video, send ----------
+// Send a photo or video as raw bytes, with a progress bar.
+function sendFile(kind, blob, onProgress) {
+  return new Promise((ok, no) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', '/api/kyc/file/' + kind);
+    x.setRequestHeader('authorization', 'Bearer ' + token); x.setRequestHeader('content-type', 'application/octet-stream');
+    x.upload.onprogress = (e) => e.lengthComputable && onProgress && onProgress(e.loaded / e.total);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? ok(j) : no(new Error(j.error || 'Upload failed.')); };
+    x.onerror = () => no(new Error('Upload failed. Check your internet and try again.'));
+    x.send(blob);
+  });
+}
+// Make an ID photo smaller (max 1600 px) but still sharp enough to read.
+function shrinkId(file) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? ok(b) : no(new Error('Could not read that photo.'))), 'image/jpeg', 0.9);
+    };
+    img.onerror = () => no(new Error('Could not read that photo. Use JPG or PNG.')); img.src = url;
+  });
+}
+
+async function idCheckCard() {
+  const st = await api('GET', '/kyc/me');
+  if (st.last && st.last.status === 'PENDING') return h('div', { class: 'card kyc' }, h('div', { class: 'kdone' }, h('div', { class: 'kicon' }, '⏳'),
+    h('div', {}, h('h2', {}, 'We are checking your ID'), h('p', { class: 'mute' }, `Sent ${new Date(st.last.created_at).toLocaleString()}. A staff member looks at your photos and video, usually within a few hours. You can trade as soon as it is approved.`))));
+  const have = new Set(st.drafts.map((d) => d.kind));
+  let idType = null;
+  const card = h('div', { class: 'card kyc' });
+  const step = (n, title, sub, body, done) => h('div', { class: 'kstep' + (done ? ' ok' : '') }, h('div', { class: 'knum' }, done ? '✓' : n),
+    h('div', { class: 'kbody' }, h('h3', {}, title), sub ? h('p', { class: 'mute' }, sub) : null, body));
+  // photo tile
+  const photoTile = (kind, label) => {
+    const input = h('input', { type: 'file', accept: 'image/*', capture: 'environment', class: 'hidden' });
+    const status = h('div', { class: 'mute' }, have.has(kind) ? '✓ Uploaded. Tap to change.' : 'Tap to take a photo');
+    const tile = h('label', { class: 'ptile' + (have.has(kind) ? ' ok' : '') }, input, h('div', { class: 'pic' }, '📷'), h('b', {}, label), status);
+    input.addEventListener('change', act(async () => {
+      const f = input.files[0]; if (!f) return;
+      const blob = await shrinkId(f);
+      tile.querySelector('.pic').replaceChildren(h('img', { src: URL.createObjectURL(blob), alt: '' }));
+      status.textContent = 'Uploading…';
+      await sendFile(kind, blob, (p) => { status.textContent = 'Uploading ' + Math.round(p * 100) + '%'; });
+      have.add(kind); tile.classList.add('ok'); status.textContent = '✓ Uploaded. Tap to change.'; paint();
+    }));
+    return tile;
+  };
+  const front = photoTile('FRONT', 'Front of the ID'), back = photoTile('BACK', 'Back of the ID');
+  const types = h('div', { class: 'idtypes' }, Object.entries(st.id_types).map(([k, label]) => h('button', { type: 'button', class: 'idt', onclick: (e) => {
+    idType = k; types.querySelectorAll('.idt').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); paint();
+  } }, h('span', {}, { NATIONAL_ID: '🪪', PASSPORT: '🛂', DRIVER_LICENSE: '🚗' }[k]), label)));
+  const nameIn = h('input', { value: st.full_name }), numIn = h('input', { placeholder: 'The number printed on your ID' });
+
+  // ---- video ----
+  const vStatus = h('div', { class: 'mute' }, have.has('VIDEO') ? '✓ Video uploaded. You can record again.' : '');
+  const vBox = h('div', { class: 'vbox hidden' });
+  const vFile = h('input', { type: 'file', accept: 'video/*', capture: 'user', class: 'hidden' });
+  const uploadVideo = async (blob) => {
+    vStatus.textContent = 'Uploading video…';
+    await sendFile('VIDEO', blob, (p) => { vStatus.textContent = 'Uploading video ' + Math.round(p * 100) + '%'; });
+    have.add('VIDEO'); vStatus.textContent = '✓ Video uploaded. You can record again.'; paint();
+  };
+  vFile.addEventListener('change', act(async () => {
+    const f = vFile.files[0]; if (!f) return;
+    vBox.classList.remove('hidden'); vBox.replaceChildren(h('video', { src: URL.createObjectURL(f), controls: true, playsinline: true }));
+    await uploadVideo(f);
+  }));
+  const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  const record = act(async () => {
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: true }); }
+    catch { throw new Error('Camera blocked. Allow the camera and microphone, or use "Upload a video".'); }
+    const live = h('video', { autoplay: true, muted: true, playsinline: true }); live.srcObject = stream;
+    const clock = h('span', { class: 'rec' }, '● 0s');
+    const stop = h('button', { class: 'btn danger', type: 'button' }, 'Stop');
+    vBox.classList.remove('hidden'); vBox.replaceChildren(live, h('div', { class: 'vbar' }, clock, stop));
+    const mime = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 700000 } : undefined);
+    const parts = []; rec.ondataavailable = (e) => e.data.size && parts.push(e.data);
+    let secs = 0; const tick = setInterval(() => { clock.textContent = '● ' + (++secs) + 's'; if (secs >= 25) rec.stop(); }, 1000);
+    rec.onstop = act(async () => {
+      clearInterval(tick); stream.getTracks().forEach((tr) => tr.stop());
+      const blob = new Blob(parts, { type: rec.mimeType || 'video/webm' });
+      vBox.replaceChildren(h('video', { src: URL.createObjectURL(blob), controls: true, playsinline: true }));
+      if (secs < 3) throw new Error('Too short. Say the whole sentence.');
+      await uploadVideo(blob);
+    });
+    stop.onclick = () => rec.state !== 'inactive' && rec.stop();
+    rec.start(1000);
+  });
+
+  const send = h('button', { class: 'btn big-btn', type: 'button', onclick: act(async () => {
+    if (!idType) throw new Error('Pick your ID type (step 2).');
+    await api('POST', '/kyc', { id_type: idType, name_on_id: nameIn.value, id_number: numIn.value });
+    toast('Sent. We will check it soon.'); route();
+  }) }, 'Send for review');
+  const checklist = h('div', { class: 'mute center' });
+  function paint() {
+    const needBack = idType && idType !== 'PASSPORT';
+    back.classList.toggle('hidden', !needBack);
+    const miss = [];
+    if (!idType) miss.push('ID type'); if (!have.has('FRONT')) miss.push('front photo'); if (needBack && !have.has('BACK')) miss.push('back photo'); if (!have.has('VIDEO')) miss.push('video');
+    checklist.textContent = miss.length ? 'Still needed: ' + miss.join(', ') + '.' : 'All ready. Press Send.';
+    send.disabled = miss.length > 0;
+    card.querySelectorAll('[data-k]').forEach((el) => el.classList.toggle('ok', { type: !!idType, photos: have.has('FRONT') && (!needBack || have.has('BACK')), video: have.has('VIDEO') }[el.dataset.k]));
+  }
+  const s2 = step(2, 'Choose your ID', 'Use a real, valid ID with your photo.', types); s2.dataset.k = 'type';
+  const s3 = step(3, 'Take photos of your ID', 'Put the ID on a table. All 4 corners visible. No light reflection. Text must be easy to read.', h('div', { class: 'ptiles' }, front, back)); s3.dataset.k = 'photos';
+  const s5 = step(5, 'Record a short video', 'Look at the camera. Hold your ID next to your face. Read this sentence out loud:',
+    h('div', {}, h('div', { class: 'script' }, '"' + st.script + '"'),
+      h('div', { class: 'gactions' }, canRecord ? h('button', { class: 'btn', type: 'button', onclick: record }, '🎥 Record now') : null,
+        h('label', { class: 'btn alt filebtn' }, vFile, canRecord ? 'Upload a video' : '🎥 Record or upload a video')),
+      vBox, vStatus)); s5.dataset.k = 'video';
+  card.append(...[
+    h('h2', {}, 'Verify your identity'),
+    h('p', { class: 'mute' }, 'Everybody who trades here is a real, checked person. This keeps scammers out. It takes about 3 minutes.'),
+    st.last && st.last.status === 'REJECTED' ? h('p', { class: 'warn-note' }, 'Your last ID was not accepted. Please try again with clear photos and a clear video.') : null,
+    step(1, 'Phone number confirmed', `${st.phone} — we sent you a code by SMS when you made your account.`, null, true),
+    s2, s3,
+    step(4, 'Your name and ID number', 'Exactly as written on the ID.', h('div', {}, h('label', {}, 'Name on the ID'), nameIn, h('label', {}, 'ID number'), numIn)),
+    s5,
+    h('div', { class: 'kfoot' }, checklist, send),
+    h('p', { class: 'mute center' }, '🔒 Only our staff can see your ID and video. We never show them to other users.')].filter(Boolean));
+  paint();
+  return card;
+}
+
 async function profileView(app) {
   const u = me.user;
-  const nm = h('input', { value: u.full_name }); const doc = h('input', { placeholder: 'Link or file name of your ID photo', value: cfg.demo ? 'test-id-photo' : '' });
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
   const bank = bankPicker(), bankRow = h('div', { class: 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
   type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
@@ -683,9 +813,8 @@ async function profileView(app) {
     h('div', { class: 'card' }, h('h2', {}, t('Profile')),
       h('div', { class: 'pfhead' }, prev, h('div', {}, h('b', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, u.display_name ? 'ID name: ' + u.full_name + ' (private)' : u.phone),
         h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + u.tier), u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null)),
-      u.tier < 1 ? [h('h3', {}, 'ID check'), h('p', { class: 'mute' }, 'Send your ID details. Staff will review. You cannot trade before this.'),
-        h('label', {}, 'Name on ID'), nm, h('label', {}, 'ID photo reference'), doc,
-        h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/kyc', { name_on_id: nm.value, id_doc_ref: doc.value }); toast('Sent. Wait for staff.'); }) }, 'Send for review')] : h('p', { class: 'mute' }, '✓ ID check done.')),
+      u.tier >= 1 ? h('p', { class: 'mute' }, '✓ ID check done.') : null),
+    u.tier < 1 ? await idCheckCard() : null,
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'What other people see'),
       h('p', { class: 'mute' }, 'Add a photo and a public name so buyers and sellers trust you. Your real name stays private if you use a company name.'),
       h('label', {}, 'Photo'), h('div', {}, h('label', { class: 'btn alt sm filebtn' }, file, 'Choose a photo'), h('span', { class: 'mute' }, ' Any picture. We make it small.')),
@@ -703,6 +832,28 @@ async function profileView(app) {
 }
 
 // ---------- staff ----------
+const ID_NAME = { NATIONAL_ID: 'National ID card', PASSPORT: 'Passport', DRIVER_LICENSE: "Driver's license" };
+// One ID check for staff: details, photos, the video, and what the person had to say.
+function kycReview(k) {
+  const media = h('div', { class: 'kmedia' });
+  ['FRONT', 'BACK', 'VIDEO'].filter((x) => (k.files || []).includes(x)).forEach((kind) => {
+    const slot = h('div', { class: 'kslot' }, h('div', { class: 'mute' }, { FRONT: 'Front', BACK: 'Back', VIDEO: 'Video' }[kind]), h('div', { class: 'mute' }, 'Loading…'));
+    media.append(slot);
+    fetch(`/api/staff/kyc/${k.id}/file/${kind}`, { headers: { authorization: 'Bearer ' + token } }).then((r) => r.blob()).then((b) => {
+      const src = URL.createObjectURL(b);
+      slot.lastChild.replaceWith(kind === 'VIDEO' ? h('video', { src, controls: true, playsinline: true }) : h('a', { href: src, target: '_blank' }, h('img', { src, alt: kind })));
+    }).catch(() => { slot.lastChild.textContent = 'Could not load.'; });
+  });
+  const same = String(k.name_on_id).trim().toLowerCase() === String(k.full_name).trim().toLowerCase();
+  return h('div', { class: 'kitem' },
+    kv([['Account name', k.full_name], ['Name on ID', k.name_on_id + (same ? ' ✓' : ' ⚠ different')], ['ID', (ID_NAME[k.id_type] || k.id_type || 'old form') + (k.id_number ? ' · ' + k.id_number : '')],
+      ['Phone', k.phone], k.challenge ? ['Must say', `"My name is ${k.full_name}. My phone number is ${k.phone}. My code is ${k.challenge}."`] : null, ['Sent', new Date(k.created_at).toLocaleString()]]),
+    media,
+    h('p', { class: 'mute' }, 'Check: the face in the video is the face on the ID · they say the right name, phone and code · the ID looks real and not expired.'),
+    h('div', { class: 'gactions' }, h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: true }); route(); }) }, 'Approve'),
+      h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: false }); route(); }) }, 'Reject')));
+}
+
 async function staffView(app) {
   const [kyc, disputes, hits] = await Promise.all([api('GET', '/staff/kyc'), api('GET', '/staff/disputes'), api('GET', '/staff/screening-hits')]);
   app.append(
@@ -710,11 +861,7 @@ async function staffView(app) {
       h('thead', {}, h('tr', {}, ['Opened', 'Reason', 'HTG', 'Votes', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, disputes.map((d) => h('tr', {}, h('td', {}, new Date(d.created_at).toLocaleString()), h('td', {}, d.reason), h('td', {}, money(d.total_htg)), h('td', {}, d.votes),
         h('td', {}, h('button', { class: 'btn', onclick: () => go('dispute/' + d.id) }, 'Open')))))) : h('p', { class: 'mute' }, 'Queue is empty.')),
-    h('div', { class: 'card scroll' }, h('h2', {}, 'ID checks waiting'), kyc.length ? h('table', {}, h('tbody', {}, kyc.map((k) => h('tr', {},
-      h('td', {}, k.phone), h('td', {}, 'Account: ' + k.full_name), h('td', {}, 'ID: ' + k.name_on_id), h('td', {}, k.id_doc_ref),
-      h('td', {}, h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: true }); route(); }) }, 'Approve'),
-        h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: false }); route(); }) }, 'Reject'))))))
-      : h('p', { class: 'mute' }, 'None waiting.')),
+    h('div', { class: 'card' }, h('h2', {}, 'ID checks waiting'), kyc.length ? h('div', { class: 'kreview' }, kyc.map(kycReview)) : h('p', { class: 'mute' }, 'None waiting.')),
     h('div', { class: 'card' }, h('h2', {}, 'Sanctions hits'), hits.length ? h('table', {}, h('tbody', {}, hits.map((x) => h('tr', {}, h('td', {}, x.phone), h('td', {}, x.full_name), h('td', {}, 'matched ' + x.matched_name),
       h('td', {}, me.user.role === 'ADMIN' ? [h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/admin/screening-hits/${x.id}/resolve`, { clear: true }); route(); }) }, 'Cleared'),
         h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', `/admin/screening-hits/${x.id}/resolve`, { clear: false }); route(); }) }, 'Confirm hit')] : 'Admin decides'))))) : h('p', { class: 'mute' }, 'No open hits.')));

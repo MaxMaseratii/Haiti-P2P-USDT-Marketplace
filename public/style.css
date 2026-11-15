@@ -183,3 +183,54 @@ a{color:var(--brand);font-weight:600}
 .tick{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:400}
 .tick input{width:18px;height:18px;margin:0}
 .tick{margin:0}
+
+/* ID check */
+.kyc h2{margin-top:0}
+.kstep{display:flex;gap:14px;padding:16px 0;border-top:1px solid var(--line)}
+.knum{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:700;color:var(--mute)}
+.kstep.ok .knum{background:var(--good);border-color:var(--good);color:#fff}
+.kbody{flex:1;min-width:0}.kbody h3{margin:3px 0 4px;font-size:16px}.kbody p{margin:0 0 10px}
+.idtypes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.idt{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer;text-align:center}
+.idt span{font-size:26px}.idt.on{border-color:var(--brand);background:var(--brand-soft)}
+.ptiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ptile{display:flex;flex-direction:column;align-items:center;gap:4px;border:2px dashed var(--line);border-radius:12px;padding:14px;cursor:pointer;text-align:center;font-weight:400;margin:0}
+.ptile.ok{border-style:solid;border-color:var(--good)}
+.ptile .pic{width:100%;aspect-ratio:1.58;display:grid;place-items:center;font-size:30px;background:var(--soft);border-radius:8px;overflow:hidden}
+.ptile .pic img{width:100%;height:100%;object-fit:cover}
+.script{font-size:18px;line-height:1.5;font-weight:600;background:var(--brand-soft);border-left:4px solid var(--brand);padding:14px 16px;border-radius:8px;margin-bottom:12px}
+.vbox{margin-top:12px}.vbox video{width:100%;max-height:360px;border-radius:12px;background:#000}
+.vbar{display:flex;justify-content:space-between;align-items:center;margin-top:8px}.rec{color:var(--bad);font-weight:700}
+.kfoot{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:8px}
+.kdone{display:flex;gap:16px;align-items:flex-start}.kicon{font-size:34px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.kreview{display:flex;flex-direction:column;gap:16px}.kitem{border:1px solid var(--line);border-radius:12px;padding:14px}
+.kmedia{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+.kslot img,.kslot video{width:100%;border-radius:8px;display:block;background:#000;max-height:260px;object-fit:contain}
+@media(max-width:600px){.idtypes{grid-template-columns:1fr}.ptiles{grid-template-columns:1fr}}
+.gactions label.btn{margin:0;display:inline-flex;align-items:center;justify-content:center;flex:1;min-width:150px}
+
+/* ---- Clean look, same family as the maxmaserati.com admin: hairline lines, small corners, serif titles, mono numbers ---- */
+:root { --r:8px; --serif:"Source Serif 4", Georgia, serif; --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --bg:#f7f6f2; --line:#e3e1d9; --shadow:none; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0b0f12; --card:#10161a; --soft:#131b20; --line:#22303a; --ink:#e9eef1; --mute:#93a1ab;
+    --brand:#3ddc97; --brand-soft:rgba(61,220,151,.1); --good:#4fd39a; --good-soft:rgba(79,211,154,.1);
+    --warn:#f0b341; --warn-soft:rgba(240,179,65,.1); --bad:#f2736a; --bad-soft:rgba(242,115,106,.1); }
+}
+.card { box-shadow:none; border-radius:var(--r); }
+h2, .kyc h2, .guide h2, .modal h2 { font-family:var(--serif); font-weight:700; letter-spacing:-.005em; }
+.big, .price, .tnum, .code, .kpi b, td.num { font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+.big { font-weight:700; } .price { font-weight:700; }
+label { text-transform:uppercase; letter-spacing:.06em; font-size:11.5px; }
+.tick, .ptile, .gactions label.btn { text-transform:none; letter-spacing:0; font-size:14px; }
+input, select, textarea { border-radius:6px; }
+button.btn { border-radius:6px; font-weight:600; }
+button.btn:hover { transform:none; }
+.ad { border-radius:var(--r); } .ad:hover { box-shadow:none; }
+.chip { border-radius:4px; font-family:var(--mono); font-weight:600; font-size:11.5px; }
+.pill { border-radius:4px; font-size:12.5px; font-weight:600; }
+.seg { border-radius:8px; } .seg button { border-radius:6px; }
+nav button { border-radius:6px; } .logo { border-radius:8px; }
+.idt, .ptile, .tick, .kitem, .addacc, .tcard, .escrow, .acc, .urow { border-radius:var(--r); }
+th { font-size:11px; letter-spacing:.06em; }

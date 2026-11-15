@@ -24,8 +24,8 @@ export function buildApp() {
   app.use((req, res, next) => {
     res.set({
       'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()', // camera: ID photo and video
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     });
     if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
@@ -42,6 +42,7 @@ export function buildApp() {
   });
   app.use('/api', apiLimit);
   app.use('/api/orders/:id/evidence/upload', express.json({ limit: '8mb' }));
+  app.use('/api/kyc/file', express.raw({ type: () => true, limit: '26mb' })); // ID photos and video arrive as raw bytes
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', geoGuard, api);
   app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')));

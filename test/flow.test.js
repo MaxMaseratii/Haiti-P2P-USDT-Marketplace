@@ -64,8 +64,13 @@ async function signup(key, phone, name, role) {
   U[key] = { token: r.token, id: r.user.id, name };
   if (role) await pool.query('UPDATE users SET role=$2, tier=3 WHERE id=$1', [U[key].id, role]);
 }
+// Fake ID photo (PNG bytes) and fake video (WEBM bytes): enough for the type check.
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 1)]);
+const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(400, 2)]);
+const upload = (kind, buf, token) => fetch(`${url}/api/kyc/file/${kind}`, { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/octet-stream' }, body: buf });
 async function kyc(key) {
-  const k = await ok('POST', '/kyc', { name_on_id: U[key].name, id_doc_ref: 'img://' + key }, tk(key));
+  for (const [kind, buf] of [['FRONT', PNG], ['BACK', PNG], ['VIDEO', WEBM]]) assert.equal((await upload(kind, buf, tk(key))).status, 200);
+  const k = await ok('POST', '/kyc', { id_type: 'NATIONAL_ID', name_on_id: U[key].name, id_number: '001-234-567-8' }, tk(key));
   await ok('POST', `/staff/kyc/${k.id}/decision`, { approve: true }, tk('admin'));
 }
 const bal = async (key, asset = 'USDT') =>
@@ -462,4 +467,31 @@ test('owner dashboard: overview, orders, ads, stop any ad, CORS for maxmaserati.
   assert.equal(pre.status, 204); assert.equal(pre.headers.get('access-control-allow-origin'), 'https://www.maxmaserati.com');
   const evil = await fetch(url + '/api/config', { headers: { Origin: 'https://evil.example' } });
   assert.equal(evil.headers.get('access-control-allow-origin'), null);
+});
+
+test('ID check: needs the right files, a real ID type, and staff can see the video', async () => {
+  await signup('idc', '+50937000333', 'Idris Charles');
+  const st = await ok('GET', '/kyc/me', null, tk('idc'));
+  assert.match(st.script, /My name is Idris Charles\. My phone number is \+50937000333\. My code is \d \d \d \d\./);
+  // nothing uploaded yet
+  assert.equal((await call('POST', '/kyc', { id_type: 'PASSPORT', name_on_id: 'Idris Charles', id_number: 'HT123456' }, tk('idc'))).status, 400);
+  // a photo is not a video, a video is not a photo
+  assert.equal((await upload('VIDEO', PNG, tk('idc'))).status, 400);
+  assert.equal((await upload('FRONT', WEBM, tk('idc'))).status, 400);
+  assert.equal((await upload('FRONT', PNG, tk('idc'))).status, 200);
+  // passport needs no back side, but needs the video
+  assert.equal((await call('POST', '/kyc', { id_type: 'PASSPORT', name_on_id: 'Idris Charles', id_number: 'HT123456' }, tk('idc'))).status, 400);
+  assert.equal((await upload('VIDEO', WEBM, tk('idc'))).status, 200);
+  assert.equal((await call('POST', '/kyc', { id_type: 'BUS_TICKET', name_on_id: 'Idris Charles', id_number: 'HT123456' }, tk('idc'))).status, 400);
+  const k = await ok('POST', '/kyc', { id_type: 'PASSPORT', name_on_id: 'Idris Charles', id_number: 'HT123456' }, tk('idc'));
+  assert.equal(k.challenge, st.challenge);
+  assert.equal((await call('POST', '/kyc', { id_type: 'PASSPORT', name_on_id: 'Idris Charles', id_number: 'HT123456' }, tk('idc'))).status, 409);
+  const q2 = await ok('GET', '/staff/kyc', null, tk('admin'));
+  const row = q2.find((x) => x.id === k.id);
+  assert.deepEqual([...row.files].sort(), ['FRONT', 'VIDEO']); assert.equal(row.id_type, 'PASSPORT');
+  const v = await fetch(`${url}/api/staff/kyc/${k.id}/file/VIDEO`, { headers: { authorization: 'Bearer ' + tk('admin') } });
+  assert.equal(v.status, 200); assert.equal(v.headers.get('content-type'), 'video/webm');
+  assert.equal((await fetch(`${url}/api/staff/kyc/${k.id}/file/VIDEO`, { headers: { authorization: 'Bearer ' + tk('idc') } })).status, 403);
+  // a new code is made for any later attempt
+  assert.notEqual((await ok('GET', '/kyc/me', null, tk('idc'))).challenge, st.challenge);
 });

@@ -23,6 +23,10 @@ CREATE TABLE users (
   strikes       smallint NOT NULL DEFAULT 0,
   wallet_addr   text,
   suspended_until timestamptz,
+  display_name  text,                   -- optional public name, e.g. a company
+  bio           text,
+  avatar        bytea,
+  avatar_mime   text,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -44,6 +48,7 @@ CREATE TABLE payment_methods (
   account_name  text NOT NULL,          -- must match name_on_id
   account_ref   text NOT NULL,          -- MonCash/NatCash number or bank account
   verified      boolean NOT NULL DEFAULT false,
+  bank_name     text,                   -- for BANK accounts: which bank
   created_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (type, account_ref)
 );

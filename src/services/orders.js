@@ -291,9 +291,9 @@ export async function getOrderView(user, id) {
   if (!party && !staff) throw notFound('Order not found.');
 
   const [buyer, seller, pm, events, escrowTxs, dispute] = await Promise.all([
-    q('SELECT id, full_name, tier FROM users WHERE id=$1', [o.buyer_id]),
-    q('SELECT id, full_name, tier FROM users WHERE id=$1', [o.seller_id]),
-    q('SELECT type, account_name, account_ref FROM payment_methods WHERE id=$1', [o.payment_method_id]),
+    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.buyer_id]),
+    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.seller_id]),
+    q('SELECT type, account_name, account_ref, bank_name FROM payment_methods WHERE id=$1', [o.payment_method_id]),
     q('SELECT created_at, from_state, to_state, note, actor_id FROM order_events WHERE order_id=$1 ORDER BY id', [id]),
     q('SELECT kind, status, tx_hash, attempts, created_at, confirmed_at FROM escrow_txs WHERE order_id=$1 ORDER BY created_at', [id]),
     q('SELECT * FROM disputes WHERE order_id=$1', [id]),

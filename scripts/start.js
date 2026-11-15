@@ -10,6 +10,11 @@ if (!(await client.query("SELECT to_regclass('public.orders') AS t")).rows[0].t)
   await client.query(fs.readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'));
   console.log('Schema created.');
 }
+// Small upgrades for databases made by an older version.
+for (const sql of [
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar bytea', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime text',
+  'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text']) await client.query(sql);
 await client.end();
 
 if (config.demoSeed && config.escrowMode === 'MOCK') {

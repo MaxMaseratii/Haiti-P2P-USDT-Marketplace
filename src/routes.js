@@ -69,9 +69,16 @@ api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.
   const [first, ...rest] = String(a.owner_name).trim().split(/\s+/);
   return { side: a.side, asset: a.asset, price_htg: a.price_htg, remaining: a.remaining, min_order_htg: a.min_order_htg,
     max_order_htg: a.max_order_htg, pay_type: a.pay_type, trades: a.trades, rating: a.rating,
-    id_verified: a.id_verified, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
-    owner: rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
+    id_verified: a.id_verified, has_avatar: a.has_avatar, is_business: a.is_business, id: a.owner_id, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
+    owner: a.is_business ? a.owner_name : rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
 })));
+
+// Profile pictures are public (they are shown on ads).
+api.get('/avatar/:id', wrap(async (req, res) => {
+  const a = /^[0-9a-f-]{36}$/.test(req.params.id) ? await users.getAvatar(req.params.id) : null;
+  if (!a) { res.status(404).end(); return; }
+  res.set('Content-Type', a.avatar_mime).set('Cache-Control', 'public, max-age=300').send(a.avatar);
+}));
 
 // Everything below needs login.
 api.use(auth);
@@ -86,6 +93,7 @@ api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.us
 
 // ---------- KYC + payment accounts ----------
 api.post('/kyc', wrap(async (req) => users.submitKyc(req.user, req.body || {})));
+api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));
 api.get('/payment-methods', wrap(async (req) => users.myPaymentMethods(req.user.id)));
 

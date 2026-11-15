@@ -33,7 +33,33 @@ export async function findByPhone(phone) {
 export const publicUser = (u) => ({
   id: u.id, phone: u.phone, full_name: u.full_name, role: u.role, tier: u.tier,
   strikes: u.strikes, wallet_addr: u.wallet_addr,
+  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime,
 });
+
+const NO_CONTACT = /(https?:|www\.|@|\+?\d[\d\s().-]{6,}\d)/i;
+export async function setProfile(user, { display_name, bio, avatar }) {
+  const dn = String(display_name ?? '').trim(), b = String(bio ?? '').trim();
+  if (dn && (dn.length < 2 || dn.length > 40)) throw bad('Public name must be 2 to 40 letters.');
+  if (b.length > 160) throw bad('About text is too long (max 160).');
+  if (NO_CONTACT.test(dn) || NO_CONTACT.test(b)) throw bad('No links, emails or phone numbers in your profile. Keep trades in the app.');
+  let buf = null, mime = null;
+  if (avatar) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(avatar));
+    if (!m) throw bad('Photo must be a JPG, PNG or WEBP image.');
+    buf = Buffer.from(m[2], 'base64'); mime = m[1];
+    if (buf.length > 200 * 1024) throw bad('Photo is too big.');
+  }
+  if (avatar === null) await q('UPDATE users SET avatar=NULL, avatar_mime=NULL WHERE id=$1', [user.id]);
+  else if (buf) await q('UPDATE users SET avatar=$2, avatar_mime=$3 WHERE id=$1', [user.id, buf, mime]);
+  await q('UPDATE users SET display_name=$2, bio=$3 WHERE id=$1', [user.id, dn || null, b || null]);
+  return { ok: true };
+}
+export async function getAvatar(id) {
+  const r = await q('SELECT avatar, avatar_mime FROM users WHERE id=$1 AND avatar IS NOT NULL', [id]);
+  return r.rows[0];
+}
+
+export const BANKS = ['Sogebank', 'Unibank', 'BNC', 'BUH', 'Capital Bank', 'Sogebel', 'Other'];
 
 export async function setWallet(user, addr, signature) {
   if (!addr || addr.length < 20) throw bad('Wallet address looks wrong.');
@@ -91,9 +117,11 @@ export async function decideKyc(staff, id, approve) {
 }
 
 // ---- Payment methods ----
-export async function addPaymentMethod(user, { type, account_name, account_ref }) {
+export async function addPaymentMethod(user, { type, account_name, account_ref, bank_name }) {
   if (!['MONCASH', 'NATCASH', 'BANK'].includes(type)) throw bad('Type must be MONCASH, NATCASH or BANK.');
   if (!account_name || !account_ref) throw bad('Need account name and account number.');
+  bank_name = type === 'BANK' ? String(bank_name || '').trim() : null;
+  if (type === 'BANK' && (bank_name.length < 2 || bank_name.length > 40)) throw bad('Say which bank this account is in.');
   return tx(async (c) => {
     if (await isBlocked(c, 'PAY_ACCOUNT', account_ref)) throw forbidden('This payment account is blocked.');
     const k = (await c.query(
@@ -102,8 +130,8 @@ export async function addPaymentMethod(user, { type, account_name, account_ref }
     const verified = !!k && namesMatch(k.name_on_id, account_name);
     try {
       const r = await c.query(
-        `INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`, [user.id, type, account_name.trim(), account_ref.trim(), verified]);
+        `INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`, [user.id, type, account_name.trim(), account_ref.trim(), verified, bank_name]);
       return r.rows[0];
     } catch (e) {
       if (e.code === '23505') throw conflict('This payment account is already used.', 'DUP_ACCOUNT');

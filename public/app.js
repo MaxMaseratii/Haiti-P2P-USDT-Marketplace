@@ -118,7 +118,7 @@ async function publicAds(app) {
   const need = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); toast('Log in or sign up to trade.'); };
   const list = (title, ads, verb, cls) => h('div', {}, h('h3', {}, title),
     ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
-      h('div', { class: 'who' }, h('div', { class: 'avatar' }, a.owner[0].toUpperCase()),
+      h('div', { class: 'who' }, avatarEl(a.id, a.owner, a.has_avatar),
         h('div', {}, h('strong', {}, a.owner), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, 'Price'), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'), h('div', {}, usd(a.remaining) + ' ' + a.asset),
@@ -142,7 +142,7 @@ async function marketView(app) {
     if (pay.value) qs.set('pay_type', pay.value);
     const ads = await api('GET', '/ads?' + qs);
     box.replaceChildren(ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
-      h('div', { class: 'who' }, h('div', { class: 'avatar' }, (a.owner_name || '?').trim()[0].toUpperCase()),
+      h('div', { class: 'who' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
         h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, t('Available') + ' · ' + t('Limits')),
@@ -163,6 +163,7 @@ async function marketView(app) {
 // Trust badges for a trader. Real numbers only: a new trader is shown as new, never with a made-up score.
 function repBadges(a) {
   const out = [];
+  if (a.is_business) out.push(h('span', { class: 'badge' }, '🏢 Business'));
   if (a.id_verified) out.push(h('span', { class: 'badge ok' }, '✓ ID checked'));
   if (a.trades > 0 && a.completion_pct != null) out.push(h('span', { class: 'badge' }, a.completion_pct + '% completed'));
   if (a.avg_release_min != null) out.push(h('span', { class: 'badge' }, '⏱ releases in ~' + (a.avg_release_min < 1 ? '1' : a.avg_release_min) + ' min'));
@@ -195,6 +196,14 @@ function safetyView(app) {
     h('button', { class: 'btn big-btn', onclick: () => go('market') }, 'Go to the market')));
 }
 
+const BANKS = ['Sogebank', 'Unibank', 'BNC', 'BUH', 'Capital Bank', 'Sogebel', 'Other'];
+// Bank name picker. Returns the element and a function that gives the chosen name.
+function bankPicker() {
+  const sel = h('select', {}, BANKS.map((b) => h('option', {}, b))), other = h('input', { placeholder: 'Bank name', class: 'hidden' });
+  sel.addEventListener('change', () => other.classList.toggle('hidden', sel.value !== 'Other'));
+  return { el: h('div', {}, sel, other), value: () => (sel.value === 'Other' ? other.value.trim() : sel.value) };
+}
+
 function takeAd(a) {
   const minU = Math.ceil(Number(a.min_order_htg) / Number(a.price_htg)), maxU = Math.min(Number(a.remaining), Math.floor(Number(a.max_order_htg) / Number(a.price_htg)));
   const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount in ' + a.asset, value: cfg.demo ? String(Math.min(minU + 2, maxU)) : '' });
@@ -202,21 +211,23 @@ function takeAd(a) {
   const upd = () => { total.textContent = money(Number(amount.value || 0) * Number(a.price_htg)) + ' HTG'; };
   amount.addEventListener('input', upd); upd();
   const mine = (me.payment_methods || []).filter((p) => p.type === a.pay_type && p.verified);
-  const pm = h('select', {}, mine.map((p) => h('option', { value: p.id }, `${p.type} · ${p.account_ref} · ${p.account_name}`)));
+  const pm = h('select', {}, mine.map((p) => h('option', { value: p.id }, `${p.bank_name ? p.bank_name : p.type} · ${p.account_ref} · ${p.account_name}`)));
   const nm = h('input', { value: me.user.full_name }), nr = h('input', { inputmode: 'numeric', placeholder: a.pay_type === 'BANK' ? 'Bank account number' : a.pay_type + ' phone number' });
+  const bank = a.pay_type === 'BANK' ? bankPicker() : null;
   const addBox = h('div', { class: 'addacc' + (mine.length ? ' hidden' : '') },
     h('p', { class: 'mute' }, mine.length ? 'Add another ' + a.pay_type + ' account.' : `You have no ${a.pay_type} account yet. Add one. The name must match your ID.`),
+    bank ? [h('label', {}, 'Which bank?'), bank.el] : null,
     h('label', {}, 'Name on the account'), nm, h('label', {}, a.pay_type === 'BANK' ? 'Account number' : 'Phone number'), nr,
     h('button', { class: 'btn alt sm', onclick: act(async () => {
-      const r = await api('POST', '/payment-methods', { type: a.pay_type, account_name: nm.value.trim(), account_ref: nr.value.trim() });
+      const r = await api('POST', '/payment-methods', { type: a.pay_type, account_name: nm.value.trim(), account_ref: nr.value.trim(), bank_name: bank ? bank.value() : undefined });
       me = await api('GET', '/me');
       if (!r.verified) { toast('Saved, but the name does not match your ID yet. Staff must approve it.', true); }
       takeAd(a);
     }) }, 'Save account'));
   const body = [h('button', { class: 'back', onclick: route }, '← Back to market'),
     h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
-    h('div', { class: 'tcard' }, h('div', { class: 'avatar' }, (a.owner_name || '?').trim()[0].toUpperCase()),
-      h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), repBadges(a))),
+    h('div', { class: 'tcard' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
+      h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), a.bio ? h('div', { class: 'bio' }, a.bio) : null, repBadges(a))),
     h('div', { class: 'kv' }, kv([['Available', usd(a.remaining) + ' ' + a.asset], ['Limits per order', `${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`], ['Pay by', a.pay_type]])),
     h('label', {}, 'How many ' + a.asset + '? (not gourdes)'), amount, h('div', { class: 'mute' }, `You can trade from ${minU} to ${maxU} ${a.asset}.`), h('div', { class: 'mute' }, 'You ' + (a.side === 'SELL' ? 'pay' : 'receive')), total];
   if (a.side === 'BUY') {
@@ -248,7 +259,7 @@ async function adsView(app) {
       h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal', value: cfg.demo ? '100' : '' }))),
       h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '500' : '' }))),
       h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '10000' : '' })))),
-    field('payment_method_id', 'Payment account (sell ads: where you get paid)', h('select', {}, pms.map((p) => h('option', { value: p.id }, `${p.type} ${p.account_ref} (${p.account_name})`)))),
+    field('payment_method_id', 'Payment account (sell ads: where you get paid)', h('select', {}, pms.map((p) => h('option', { value: p.id }, `${p.bank_name || p.type} ${p.account_ref} (${p.account_name})`)))),
     h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
     h('button', { class: 'btn', onclick: act(async () => {
       const b = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value]));
@@ -333,6 +344,13 @@ function tickClock(v) {
   el.textContent = txt;
 }
 
+// Profile picture if the person has one, otherwise their first letter.
+function avatarEl(id, name, has, cls = '') {
+  const l = (name || '?').trim()[0].toUpperCase();
+  const d = h('div', { class: 'avatar ' + cls }, l);
+  if (has && id) { const img = h('img', { src: '/api/avatar/' + id, alt: '' }); img.onerror = () => img.remove(); d.append(img); }
+  return d;
+}
 const initial = (name) => (name || '?').trim()[0].toUpperCase();
 const hm = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const kv = (rows) => h('div', { class: 'kv' }, rows.filter(Boolean).map(([k, v]) => h('div', { class: 'kvrow' }, h('span', {}, k), h('b', {}, v))));
@@ -398,7 +416,7 @@ function guide(v) {
   const dispBtn = h('button', { class: 'btn alt sm', onclick: () => openDisputeWindow(v) }, buyer ? 'Problem? Open a dispute' : 'Not received? Open a dispute');
   if (r === 'STAFF') return { tone: '', title: 'Staff view', text: 'You are reading this order as staff.', actions: [] };
   if (buyer && s === 'AWAITING_PAYMENT') return { tone: 'go', title: `Pay ${money(o.total_htg)} HTG now`, steps: [
-      `Open your ${v.payment ? v.payment.type : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
+      `Open your ${v.payment ? (v.payment.bank_name || v.payment.type) : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
       `Write the code ${o.pay_reference} in the payment note.`, 'Come back and press "I have paid".'],
     actions: [h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/orders/${o.id}/paid`); route(); }) }, 'I have paid'),
       h('button', { class: 'btn alt', onclick: () => openCancelWindow(v) }, 'Cancel order')] };
@@ -421,7 +439,7 @@ function renderOrder(col, v) {
   const rate = g.rate && r !== 'STAFF' ? h('div', { class: 'rate' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'star', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks for your rating.'); }) }, '★' + n))) : null;
   const pay = v.payment && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'card ' + (r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? 'payto' : '') },
     h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : 'Your receiving account'),
-    kv([[v.payment.type, v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
+    kv([v.payment.bank_name ? ['Bank', v.payment.bank_name] : null, [v.payment.type === 'BANK' ? 'Account number' : v.payment.type + ' number', v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
     h('div', { class: 'mute', style: 'margin-top:10px' }, r === 'BUYER' ? 'Write this code in the payment note:' : 'The buyer must write this code in the note:'),
     h('div', { class: 'code' }, o.pay_reference, h('button', { onclick: () => { navigator.clipboard?.writeText(o.pay_reference); toast('Code copied.'); } }, 'Copy'))) : null;
 
@@ -432,7 +450,7 @@ function renderOrder(col, v) {
         h('div', {}, h('div', { class: 'mute' }, r === 'BUYER' ? 'You buy' : r === 'SELLER' ? 'You sell' : 'Order'), h('div', { class: 'big' }, usd(o.amount) + ' ' + o.asset)),
         h('div', { class: 'timer' }, h('div', { class: 'lab' }, t('Time left')), h('div', { class: 'tnum', id: 'clock' }, '–'))),
       stepper(o.state),
-      h('div', { class: 'cp' }, h('div', { class: 'avatar' }, initial(other.full_name)),
+      h('div', { class: 'cp' }, avatarEl(other.id, other.full_name, other.has_avatar),
         h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, r === 'BUYER' ? 'Seller' : 'Buyer', ' · ID checked ✓')), statePill(o.state))),
     h('div', { class: 'card guide ' + g.tone },
       h('h2', {}, g.title),
@@ -499,7 +517,7 @@ function renderChat(col, v, msgs) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
   const quick = v.role === 'BUYER' ? ['I have paid. Please check.', 'Thank you!', 'Please confirm when you see it.'] : v.role === 'SELLER' ? ['Checking now.', 'I do not see it yet.', 'Received. Thank you!'] : [];
   col.replaceChildren(h('div', { class: 'card chat' },
-    h('div', { class: 'chead' }, h('div', { class: 'avatar' }, initial(other.full_name)), h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, 'Order chat'))),
+    h('div', { class: 'chead' }, avatarEl(other.id, other.full_name, other.has_avatar), h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, 'Order chat'))),
     log,
     closed ? h('p', { class: 'mute', style: 'text-align:center' }, 'This chat is closed.') : [
       quick.length ? h('div', { class: 'quick' }, quick.map((q) => h('button', { onclick: act(() => sendText(q)) }, q))) : null,
@@ -574,22 +592,60 @@ async function walletView(app) {
 }
 
 // ---------- profile ----------
+// Shrink a chosen photo to a small square JPEG in the browser, so uploads stay tiny.
+function shrinkPhoto(file) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+      const m = Math.min(img.width, img.height), sx = (img.width - m) / 2, sy = (img.height - m) / 2;
+      c.getContext('2d').drawImage(img, sx, sy, m, m, 0, 0, S, S); URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => no(new Error('Could not read that picture.')); img.src = url;
+  });
+}
+
 async function profileView(app) {
-  const nm = h('input', { value: me.user.full_name }); const doc = h('input', { placeholder: 'Link or file name of your ID photo', value: cfg.demo ? 'test-id-photo' : '' });
+  const u = me.user;
+  const nm = h('input', { value: u.full_name }); const doc = h('input', { placeholder: 'Link or file name of your ID photo', value: cfg.demo ? 'test-id-photo' : '' });
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
-  const an = h('input', { placeholder: 'Name on the account (must match your ID)', value: cfg.demo ? me.user.full_name : '' }); const ar = h('input', { placeholder: 'MonCash / NatCash number or bank account', value: cfg.demo ? '37' + String(Math.floor(Math.random() * 1e6)).padStart(6, '0') : '' });
+  const bank = bankPicker(), bankRow = h('div', { class: 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
+  type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
+  const an = h('input', { placeholder: 'Name on the account (must match your ID)', value: cfg.demo ? u.full_name : '' });
+  const ar = h('input', { placeholder: 'Phone number or bank account number', value: cfg.demo ? '37' + String(Math.floor(Math.random() * 1e6)).padStart(6, '0') : '' });
+  // public profile
+  const pub = h('input', { value: u.display_name || '', placeholder: 'Optional. A company or trading name', maxlength: 40 });
+  const bio = h('textarea', { rows: 2, maxlength: 160, placeholder: 'Optional. One line about you. No phone numbers or links.' }, u.bio || '');
+  let photo;
+  const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden' });
+  const prev = h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl'));
+  file.addEventListener('change', act(async () => {
+    if (!file.files[0]) return; photo = await shrinkPhoto(file.files[0]);
+    prev.replaceChildren(h('div', { class: 'avatar xl' }, h('img', { src: photo, alt: '' })));
+  }));
+  const save = act(async () => { await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo }); me = await api('GET', '/me'); toast('Profile saved.'); route(); });
+  const methods = me.payment_methods;
   app.append(
-    h('div', { class: 'card' }, h('h2', {}, t('Profile')), h('div', {}, `${me.user.full_name} · ${me.user.phone}`),
-      h('p', {}, h('span', { class: 'pill ' + (me.user.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + me.user.tier), me.user.strikes ? h('span', { class: 'pill bad' }, me.user.strikes + ' strike(s)') : null),
-      me.user.tier < 1 ? [h('h3', {}, 'ID check'), h('p', { class: 'mute' }, 'Send your ID details. Staff will review. You cannot trade before this.'),
+    h('div', { class: 'card' }, h('h2', {}, t('Profile')),
+      h('div', { class: 'pfhead' }, prev, h('div', {}, h('b', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, u.display_name ? 'ID name: ' + u.full_name + ' (private)' : u.phone),
+        h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + u.tier), u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null)),
+      u.tier < 1 ? [h('h3', {}, 'ID check'), h('p', { class: 'mute' }, 'Send your ID details. Staff will review. You cannot trade before this.'),
         h('label', {}, 'Name on ID'), nm, h('label', {}, 'ID photo reference'), doc,
-        h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/kyc', { name_on_id: nm.value, id_doc_ref: doc.value }); toast('Sent. Wait for staff.'); }) }, 'Send for review')] : h('p', { class: 'mute' }, 'ID check done.')),
-    h('div', { class: 'card scroll' }, h('h3', {}, 'Payment accounts'),
-      me.payment_methods.length ? h('table', {}, h('tbody', {}, me.payment_methods.map((p) => h('tr', {}, h('td', {}, p.type), h('td', {}, p.account_ref), h('td', {}, p.account_name),
-        h('td', {}, h('span', { class: 'pill ' + (p.verified ? 'good' : 'warn') }, p.verified ? 'verified' : 'name does not match ID'))))))
+        h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/kyc', { name_on_id: nm.value, id_doc_ref: doc.value }); toast('Sent. Wait for staff.'); }) }, 'Send for review')] : h('p', { class: 'mute' }, '✓ ID check done.')),
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'What other people see'),
+      h('p', { class: 'mute' }, 'Add a photo and a public name so buyers and sellers trust you. Your real name stays private if you use a company name.'),
+      h('label', {}, 'Photo'), h('div', {}, h('label', { class: 'btn alt sm filebtn' }, file, 'Choose a photo'), h('span', { class: 'mute' }, ' Any picture. We make it small.')),
+      h('label', {}, 'Public name or company'), pub, h('label', {}, 'About you'), bio,
+      h('button', { class: 'btn', style: 'margin-top:12px', onclick: save }, 'Save profile')),
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My payment accounts'),
+      h('p', { class: 'mute' }, 'You can add MonCash, NatCash and bank accounts, and as many numbers as you want. The name on each one must match your ID.'),
+      methods.length ? h('div', { class: 'accs' }, methods.map((p) => h('div', { class: 'acc' },
+        h('div', {}, h('b', {}, p.bank_name ? p.bank_name : p.type), h('div', { class: 'mute' }, `${p.type === 'BANK' ? 'Account' : p.type} ${p.account_ref} · ${p.account_name}`)),
+        h('span', { class: 'pill ' + (p.verified ? 'good' : 'warn') }, p.verified ? 'verified' : 'name does not match ID'))))
         : h('p', { class: 'mute' }, 'None yet. Add one after your ID check is approved.'),
-      h('div', { class: 'row' }, type, an, ar),
-      h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/payment-methods', { type: type.value, account_name: an.value, account_ref: ar.value }); route(); }) }, 'Add account')));
+      h('h3', { class: 'ct', style: 'margin-top:16px' }, 'Add an account'),
+      h('label', {}, 'Type'), type, bankRow, h('label', {}, 'Name on the account'), an, h('label', {}, 'Number'), ar,
+      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => { await api('POST', '/payment-methods', { type: type.value, account_name: an.value, account_ref: ar.value, bank_name: type.value === 'BANK' ? bank.value() : undefined }); me = await api('GET', '/me'); route(); }) }, 'Add account')));
 }
 
 // ---------- staff ----------

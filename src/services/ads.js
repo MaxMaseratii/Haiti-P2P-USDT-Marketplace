@@ -71,7 +71,7 @@ export async function listAds({ side, asset, pay_type, min_htg } = {}) {
   const order = side === 'BUY' ? 'a.price_htg DESC' : 'a.price_htg ASC';
   const r = await q(
     `SELECT a.id, a.side, a.asset, a.price_htg, a.remaining, a.min_order_htg, a.max_order_htg, a.pay_type, a.created_at,
-            u.id AS owner_id, u.full_name AS owner_name,
+            u.id AS owner_id, COALESCE(u.display_name, u.full_name) AS owner_name, (u.display_name IS NOT NULL) AS is_business, (u.avatar_mime IS NOT NULL) AS has_avatar, u.bio,
             (SELECT COUNT(*)::int FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state='COMPLETED') AS trades,
             (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating,
             u.created_at AS member_since,

@@ -365,3 +365,18 @@ test('payment account added before ID approval is verified when the ID is approv
   const row = (await pool.query('SELECT verified FROM payment_methods WHERE id=$1', [pm.id])).rows[0];
   assert.equal(row.verified, true);
 });
+
+test('profile: public name, photo, bank name, no contact info', async () => {
+  await signup('prof', '+50937000088', 'Prof User');
+  await kyc('prof');
+  const px = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
+  await ok('PUT', '/me/profile', { display_name: 'Prof Exchange', bio: 'Fast and honest.', avatar: px }, tk('prof'));
+  const me = await ok('GET', '/me', null, tk('prof'));
+  assert.equal(me.user.display_name, 'Prof Exchange'); assert.equal(me.user.has_avatar, true);
+  const img = await fetch(`${url}/api/avatar/${me.user.id}`);
+  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/jpeg');
+  assert.equal((await call('PUT', '/me/profile', { bio: 'call me +509 3700 0088' }, tk('prof'))).status, 400);
+  assert.equal((await call('POST', '/payment-methods', { type: 'BANK', account_name: 'Prof User', account_ref: '1234567' }, tk('prof'))).status, 400);
+  const b = await ok('POST', '/payment-methods', { type: 'BANK', account_name: 'Prof User', account_ref: '1234567', bank_name: 'Sogebank' }, tk('prof'));
+  assert.equal(b.bank_name, 'Sogebank');
+});

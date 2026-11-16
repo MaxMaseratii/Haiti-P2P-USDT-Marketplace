@@ -51,6 +51,11 @@ services:
         sync: false            # flat fee the person withdrawing pays (covers the network cost). Default 1
       - key: LOCK_FEE_USDT
         sync: false            # flat fee the buyer pays per order (covers lock and unlock network cost). Default 0.25
+      # ---- login codes by email (SMS_PROVIDER=email) ----
+      - key: BREVO_API_KEY
+        sync: false            # Brevo -> SMTP & API -> API keys
+      - key: MAIL_FROM
+        sync: false            # a sender email verified in Brevo
       # ---- real SMS (Twilio) ----
       - key: TWILIO_ACCOUNT_SID
         sync: false

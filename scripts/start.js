@@ -32,6 +32,8 @@ for (const sql of [
   'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_token_hash text', 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_said text',
   'ALTER TABLE orders ADD COLUMN IF NOT EXISTS receiver_at timestamptz',
   'ALTER TABLE orders ADD COLUMN IF NOT EXISTS lock_fee numeric(18,6) NOT NULL DEFAULT 0',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS email text', 'ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS email text',
+  'CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users (lower(email)) WHERE email IS NOT NULL',
   `CREATE TABLE IF NOT EXISTS account_links (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL REFERENCES users(id), member_id uuid NOT NULL REFERENCES users(id),
      payment_method_id uuid, status text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','ENDED')), paid_until timestamptz, created_at timestamptz NOT NULL DEFAULT now(), CHECK (owner_id <> member_id))`,
   "CREATE UNIQUE INDEX IF NOT EXISTS account_links_open ON account_links (owner_id, member_id) WHERE status <> 'ENDED'",

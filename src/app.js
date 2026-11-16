@@ -28,6 +28,11 @@ export function buildApp() {
       'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     });
     if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+    // Owner tools may be shown inside the owner dashboard on maxmaserati.com (and nowhere else).
+    if (req.path === '/owner.html' || req.path === '/owner.js') {
+      res.removeHeader('X-Frame-Options');
+      res.set('Content-Security-Policy', res.get('Content-Security-Policy').replace("frame-ancestors 'none'", "frame-ancestors 'self' https://www.maxmaserati.com https://maxmaserati.com"));
+    }
     next();
   });
   // Let the admin dashboard on maxmaserati.com call the API. Logins still need the owner code.

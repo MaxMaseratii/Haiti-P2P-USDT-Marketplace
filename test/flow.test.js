@@ -585,3 +585,33 @@ test('buyer lock fee: the buyer gets the amount minus the fee; a small last bit 
     assert.equal((await ad(a.id)).status, 'SOLD_OUT');
   } finally { config.lockFee = '0'; }
 });
+
+test('email codes (Brevo): sign up with email, log in by phone, code goes to the saved email', async () => {
+  const { config } = await import('../src/config.js');
+  const { setMailer } = await import('../src/sms.js');
+  const mails = [];
+  config.smsProvider = 'email';
+  setMailer(async (to, subject, text) => { mails.push({ to, text }); });
+  try {
+    const phone = '+50938444555';
+    assert.equal((await call('POST', '/auth/request-code', { phone })).status, 400, 'a new person must give an email');
+    assert.equal((await call('POST', '/auth/request-code', { phone, email: 'not-an-email' })).status, 400);
+    const r = await ok('POST', '/auth/request-code', { phone, email: 'Rose.Pierre@Gmail.com' });
+    assert.equal(r.to, 'ro***@gmail.com');
+    assert.equal(mails[0].to, 'rose.pierre@gmail.com');
+    const code = mails[0].text.match(/\b(\d{6})\b/)[1];
+    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Rose Pierre', code: '000000' })).status, 400, 'no 000000 in email mode');
+    const s = await ok('POST', '/auth/signup', { phone, full_name: 'Rose Pierre', code });
+    assert.equal(s.user.email, 'rose.pierre@gmail.com');
+    // log in later: only the phone, the code goes to the saved email (a different typed email is ignored)
+    await pool.query("UPDATE otp_codes SET created_at = now() - interval '5 minutes' WHERE phone=$1", [phone]);
+    await ok('POST', '/auth/request-code', { phone, email: 'thief@evil.com' });
+    assert.equal(mails[1].to, 'rose.pierre@gmail.com');
+    const code2 = mails[1].text.match(/\b(\d{6})\b/)[1];
+    const l = await ok('POST', '/auth/login', { phone, code: code2 });
+    assert.equal(l.user.id, s.user.id);
+    // one email, one account
+    assert.equal((await call('POST', '/auth/request-code', { phone: '+50938444556', email: 'rose.pierre@gmail.com' })).status, 400);
+    assert.equal((await ok('GET', '/config')).code_channel, 'email');
+  } finally { config.smsProvider = 'mock'; setMailer(null); }
+});

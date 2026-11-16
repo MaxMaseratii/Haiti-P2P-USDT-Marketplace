@@ -8,7 +8,7 @@ import { namesMatch } from './names.js';
 import { isMock, config } from '../config.js';
 import * as evm from '../escrow-evm.js';
 
-export async function signup({ phone, full_name }) {
+export async function signup({ phone, full_name, email = null }) {
   checkPhone(phone);
   if (!full_name || full_name.trim().length < 3) throw bad('Enter your full name as on your ID.', 'NAME');
   return tx(async (c) => {
@@ -18,8 +18,9 @@ export async function signup({ phone, full_name }) {
     if (ex.rowCount) throw conflict('Phone already has an account.', 'EXISTS');
     // Owner phones (ADMIN_PHONES) become ADMIN with full limits. They still must prove the phone with the SMS code.
     const isAdmin = config.adminPhones.includes(phone);
-    const r = await c.query('INSERT INTO users (phone, full_name, role, tier) VALUES ($1,$2,$3,$4) RETURNING *',
-      [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0]);
+    if (email && (await c.query('SELECT 1 FROM users WHERE lower(email)=lower($1)', [email])).rowCount) throw conflict('This email is already used by another account.', 'EMAIL_USED');
+    const r = await c.query('INSERT INTO users (phone, full_name, role, tier, email) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0, email]);
     if (isAdmin) // owner accounts skip the ID queue: their ID check is approved right away
       await c.query(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','owner',$2,now())`, [r.rows[0].id, full_name.trim()]);
     await screenUser(c, r.rows[0].id, full_name);
@@ -36,7 +37,7 @@ export const publicUser = (u) => ({
   id: u.id, phone: u.phone, full_name: u.full_name, role: u.role, tier: u.tier,
   strikes: u.strikes, wallet_addr: u.wallet_addr,
   binance_uid: u.binance_uid || null, payout_network: u.payout_network || null, payout_addr: u.payout_addr || null,
-  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime,
+  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, email: u.email || null,
 });
 
 const NO_CONTACT = /(https?:|www\.|@|\+?\d[\d\s().-]{6,}\d)/i;

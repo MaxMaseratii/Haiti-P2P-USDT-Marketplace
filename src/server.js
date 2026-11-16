@@ -10,7 +10,8 @@ if (!['MOCK', 'EVM'].includes(config.escrowMode)) {
 const TESTNETS = new Set([421614, 11155111, 84532, 80002, 1337, 31337]);
 if (config.escrowMode === 'EVM' && !TESTNETS.has(config.evmChainId)) {
   const stop = [];
-  if (config.smsProvider === 'mock') stop.push("SMS_PROVIDER is mock (everyone's code is 000000). Set SMS_PROVIDER=twilio and the TWILIO_* values.");
+  if (config.smsProvider === 'mock') stop.push("SMS_PROVIDER is mock (everyone's code is 000000). Set SMS_PROVIDER=email (BREVO_API_KEY, MAIL_FROM) or SMS_PROVIDER=twilio (TWILIO_* values).");
+  if (config.smsProvider === 'email' && (!config.brevoKey || !config.mailFrom)) stop.push('Email codes need BREVO_API_KEY and MAIL_FROM (a sender email verified in Brevo).');
   if (config.smsProvider === 'twilio' && (!config.twilioSid || !config.twilioToken || !(config.twilioFrom || config.twilioMessagingService)))
     stop.push('Twilio values are missing: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (or TWILIO_MESSAGING_SERVICE_SID).');
   if (config.demoSeed) stop.push('DEMO_SEED must be false with real money.');

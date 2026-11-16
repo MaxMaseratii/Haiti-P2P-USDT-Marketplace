@@ -351,3 +351,7 @@ CREATE TABLE chain_events (
 CREATE TABLE chain_state (key text PRIMARY KEY, value text NOT NULL);
 -- The buyer's flat lock fee (comes out of the USDT the buyer gets; goes to the platform).
 ALTER TABLE orders ADD COLUMN lock_fee numeric(18,6) NOT NULL DEFAULT 0;
+-- Login codes by email (SMS_PROVIDER=email).
+ALTER TABLE users ADD COLUMN email text;
+ALTER TABLE otp_codes ADD COLUMN email text;
+CREATE UNIQUE INDEX users_email_unique ON users (lower(email)) WHERE email IS NOT NULL;

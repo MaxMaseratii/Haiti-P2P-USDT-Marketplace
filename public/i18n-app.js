@@ -142,6 +142,12 @@
     'Order': ['Kòmand', 'Commande'], 'Time left': ['Tan ki rete', 'Temps restant'],
     'Nobody can touch it until the seller confirms the money arrived, the order is cancelled, or our team decides.': ['Pèsonn pa ka manyen l jiskaske vandè a konfime lajan an rive, kòmand lan anile, oswa ekip nou an deside.', 'Personne ne peut y toucher avant que le vendeur confirme l\'arrivée de l\'argent, que la commande soit annulée, ou que notre équipe décide.'],
     'Lock fee': ['Frè kadna', 'Frais de verrouillage'], 'Buyer gets': ['Achtè a resevwa', 'L\'acheteur reçoit'],
+    'Email — sign up only. Your code goes there.': ['Imel — sèlman pou kreye kont. Kòd ou ap vin la.', 'E-mail — inscription seulement. Votre code arrive là.'],
+    'Email code': ['Kòd imel la', 'Code reçu par e-mail'],
+    'We send a code to your email. Then you verify your ID with photos and a short video.': ['Nou voye yon kòd nan imel ou. Apre sa, ou verifye ID ou ak foto ak yon ti videyo.', 'Nous envoyons un code à votre e-mail. Ensuite, vous vérifiez votre pièce d\'identité avec des photos et une courte vidéo.'],
+    'Enter your email to get your code.': ['Mete imel ou pou w resevwa kòd ou.', 'Entrez votre e-mail pour recevoir votre code.'],
+    'This email is already used by another account.': ['Imel sa a deja sou yon lòt kont.', 'Cet e-mail est déjà utilisé par un autre compte.'],
+    'Could not send the email. Try again soon.': ['Nou pa t ka voye imel la. Eseye ankò talè.', 'Impossible d\'envoyer l\'e-mail. Réessayez bientôt.'],
     'Order details': ['Detay kòmand lan', 'Détails de la commande'], 'Total': ['Total', 'Total'], 'Platform fee': ['Frè platfòm', 'Frais de la plateforme'],
     'Order number': ['Nimewo kòmand', 'Numéro de commande'], 'History': ['Istwa', 'Historique'],
     'In review': ['Ap egzamine', 'En examen'], 'Decided for the buyer': ['Deside pou achtè a', 'Décidé pour l\'acheteur'], 'Decided for the seller': ['Deside pou vandè a', 'Décidé pour le vendeur'],
@@ -332,6 +338,7 @@
 
   // Text that has numbers or names inside. [English pattern, Kreyòl, Français]. $1, $2 … are the parts that change.
   const P = [
+    ['^Code sent to (.+)\. Check your email \(and spam\)\.$', 'Nou voye kòd la bay $1. Gade imel ou (ak spam).', 'Code envoyé à $1. Regardez vos e-mails (et les spams).'],
     ['^You get: (.+)$', 'Ou resevwa: $1', 'Vous recevez : $1'],
     ['^You sell: (.+)$', 'Ou vann: $1', 'Vous vendez : $1'],
     ['^\\((.+) − (.+) lock fee\\)$', '($1 − $2 frè kadna)', '($1 − $2 frais de verrouillage)'],

@@ -294,5 +294,6 @@ test('gasless withdraw: buyer signs in the app, app key pays gas, fee goes to th
   // the same signature cannot be sent again
   assert.equal((await call('POST', '/wallet/withdraw-gasless', { asset: 'USDT', amount: '10', to, deadline: td.value.deadline, signature: sig }, tk('buyer'))).status, 400);
   const rc = await reconcile();
-  assert.equal(rc.ok, true, JSON.stringify(rc));
+  assert.equal(rc.ok, true, JSON.stringify(rc));  const st = await evm.chainStatus();
+  assert.equal(st.paused, false); assert.equal(st.app_wallet_matches, true); assert.ok(Number(st.fees_waiting.USDT) >= 1);
 });

@@ -31,7 +31,10 @@ export const config = {
   publicUrl: str('PUBLIC_URL', process.env.RENDER_EXTERNAL_URL || ''),
   adminOrigins: str('ADMIN_ORIGINS', 'https://www.maxmaserati.com,https://maxmaserati.com').split(',').map((x) => x.trim()).filter(Boolean),
   adminLoginCode: str('ADMIN_LOGIN_CODE', ''),
-  smsProvider: str('SMS_PROVIDER', 'mock'),
+  smsProvider: str('SMS_PROVIDER', 'mock'),           // mock | twilio | email (codes by email through Brevo, free up to 300 a day)
+  brevoKey: str('BREVO_API_KEY', ''),
+  mailFrom: str('MAIL_FROM', ''),                      // a sender email verified in Brevo
+  mailFromName: str('MAIL_FROM_NAME', 'Haiti P2P'),
   twilioSid: str('TWILIO_ACCOUNT_SID', ''),
   twilioToken: str('TWILIO_AUTH_TOKEN', ''),
   twilioFrom: str('TWILIO_FROM', ''),

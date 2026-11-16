@@ -90,20 +90,23 @@ function renderNav() {
 function authView(app) {
   const phone = h('input', { placeholder: '+509 3700 1234  or  +1 305 555 1234', inputmode: 'tel' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
-  const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code', inputmode: 'numeric' });
+  const byEmail = cfg.code_channel === 'email';
+  const email = h('input', { type: 'email', placeholder: 'you@gmail.com', autocomplete: 'email' });
+  const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
   const loginCard = h('div', { class: 'card logincard' },
     h('h2', {}, 'Log in / Sign up'),
     h('label', {}, 'Phone (with country code)'), phone,
     h('label', {}, 'Full name (as on your ID) — sign up only'), name,
+    byEmail ? h('label', {}, 'Email — sign up only. Your code goes there.') : null, byEmail ? email : null,
     h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, h('button', { class: 'btn alt', onclick: act(async () => {
-      const r = await api('POST', '/auth/request-code', { phone: phone.value.replace(/[\s()\-.]/g, '') });
-      toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+      const r = await api('POST', '/auth/request-code', { phone: phone.value.replace(/[\s()\-.]/g, ''), email: byEmail ? email.value.trim() || undefined : undefined });
+      toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
     }) }, 'Send code')),
     h('div', { class: 'gactions', style: 'margin-top:12px' },
       h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.replace(/[\s()\-.]/g, ''), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up')),
       h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.replace(/[\s()\-.]/g, ''), code: code.value.trim() }))) }, t('Log in'))),
-    h('p', { class: 'mute', style: 'margin:10px 0 0;font-size:12.5px' }, 'We send a code by SMS to confirm your phone. Then you verify your ID with photos and a short video.'));
+    h('p', { class: 'mute', style: 'margin:10px 0 0;font-size:12.5px' }, byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video.' : 'We send a code by SMS to confirm your phone. Then you verify your ID with photos and a short video.'));
   const quickTest = cfg.demo ? h('div', { class: 'quicktest' },
     h('div', {}, h('b', {}, 'Test mode'), h('span', { class: 'mute' }, ' · fake money · ready-made accounts with 1,000 fake USDT')),
     h('div', { class: 'gactions' },

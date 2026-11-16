@@ -15,6 +15,9 @@ import { bad } from './errors.js';
 const ABI = [
   'function owner() view returns (address)',
   'function feeRecipient() view returns (address)',
+  'function operator() view returns (address)',
+  'function arbiter() view returns (address)',
+  'function paused() view returns (bool)',
   'function available(address token, address user) view returns (uint256)',
   'function reserved(address token, address user) view returns (uint256)',
   'function orders(bytes32) view returns (address token, address seller, address buyer, uint128 amount, uint128 fee, uint64 lockedAt, bool claimed, uint8 status)',
@@ -242,6 +245,19 @@ export const adapter = {
 // ---------- deposits and withdrawals ----------
 const getState = async (k) => (await q('SELECT value FROM chain_state WHERE key=$1', [k])).rows[0]?.value;
 const setState = (k, v) => q(`INSERT INTO chain_state (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2`, [k, String(v)]);
+
+// For the owner dashboard: is the contract healthy, does the app wallet have gas, how much fee is waiting.
+export async function chainStatus() {
+  const { provider, operator, base, tokens } = get();
+  const [owner, op, arb, feeTo, paused, eth] = await Promise.all([base.owner(), base.operator(), base.arbiter(), base.feeRecipient(), base.paused(), provider.getBalance(operator.address)]);
+  const fees = {};
+  for (const [asset, t] of Object.entries(tokens)) fees[asset] = human(await base.available(t, feeTo));
+  const ethLeft = Number(ethers.formatEther(eth));
+  return { chain_id: config.evmChainId, contract: config.evmContract, owner, arbiter: arb, fee_wallet: feeTo, paused,
+    app_wallet: operator.address, app_wallet_matches: op.toLowerCase() === operator.address.toLowerCase(),
+    app_wallet_eth: ethLeft.toFixed(6), app_wallet_low: ethLeft < 0.0008, fees_waiting: fees,
+    explorer: config.evmChainId === 42161 ? 'https://arbiscan.io/address/' + config.evmContract : config.evmChainId === 421614 ? 'https://sepolia.arbiscan.io/address/' + config.evmContract : null };
+}
 
 export async function scanChain() {
   const { provider, base, assetOf } = get();

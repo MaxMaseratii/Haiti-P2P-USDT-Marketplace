@@ -34,6 +34,7 @@ api.get('/config', (_req, res) => res.json({
   pay_grace_min: config.payGraceMin,
   fee_rate: config.feeRate,
   mock_otp: isMockSms() ? '000000' : null,
+  code_channel: config.smsProvider === 'email' ? 'email' : 'sms',
   demo: config.demoSeed && isMock(),
   network: config.escrowNetwork,
   // Official logo files, if you add them to public/img/pay/ (moncash.png, natcash.png, bank.png). Otherwise the name is shown.
@@ -48,9 +49,9 @@ api.get('/config', (_req, res) => res.json({
 
 // ---------- auth ----------
 api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
-  const { phone } = req.body || {};
+  const { phone, email } = req.body || {};
   checkPhone(phone);
-  return otp.requestCode(phone);
+  return otp.requestCode(phone, email);
 }));
 
 // Signup proves the phone is yours with an SMS code (in test mode the code is not checked).
@@ -58,8 +59,10 @@ api.post('/auth/signup', wrap(async (req) => {
   const { phone, full_name, code } = req.body || {};
   checkPhone(phone);
   const owner = config.adminPhones.includes(phone);
-  if (!isMockSms() || code !== undefined || owner) await otp.verifyCode(phone, code, owner);
-  const u = await users.signup({ phone, full_name });
+  let proof = null;
+  if (!isMockSms() || code !== undefined || owner) proof = await otp.verifyCode(phone, code, owner);
+  // Email codes: the email that got the code becomes the account's email.
+  const u = await users.signup({ phone, full_name, email: proof?.email || null });
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
@@ -247,6 +250,7 @@ admin.post('/screening-hits/:id/resolve', wrap(async (req) => {
   return { ok: true };
 }));
 admin.get('/reconcile', wrap(async () => (isMock() ? { mock: true } : evm.reconcile())));
+admin.get('/chain-status', wrap(async () => (isMock() ? { mock: true } : evm.chainStatus())));
 // ---- owner dashboard (maxmaserati.com/admin) ----
 const started = new Date();
 admin.get('/overview', wrap(async () => {

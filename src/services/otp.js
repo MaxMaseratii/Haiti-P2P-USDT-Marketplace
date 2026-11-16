@@ -13,7 +13,24 @@ const safeEq = (a, b) => {
 };
 
 // Ask for a code. Limits: one per minute and a few per hour for each phone.
-export async function requestCode(phone) {
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+export const isEmailCodes = () => config.smsProvider === 'email';
+export const maskEmail = (e) => { const [u, d] = String(e).split('@'); return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***') + '@' + d; };
+
+// In email mode a code goes to the account's email. A new person gives their email when they sign up.
+export async function requestCode(phone, email) {
+  let target = null;
+  if (isEmailCodes()) {
+    const u = (await q('SELECT email FROM users WHERE phone=$1', [phone])).rows[0];
+    if (u && u.email) target = u.email;
+    else {
+      email = String(email || '').trim().toLowerCase();
+      if (!EMAIL_RE.test(email)) throw bad(u ? 'Enter your email to get your code.' : 'Enter your email to get your code.', 'EMAIL');
+      const used = (await q('SELECT 1 FROM users WHERE lower(email)=$1 AND phone<>$2', [email, phone])).rowCount;
+      if (used) throw bad('This email is already used by another account.', 'EMAIL_USED');
+      target = email;
+    }
+  }
   const recent = (await q(
     `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour')::int AS hour,
             MAX(created_at) AS last FROM otp_codes WHERE phone=$1`, [phone])).rows[0];
@@ -24,16 +41,17 @@ export async function requestCode(phone) {
 
   const code = isMockSms() ? '000000' : String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   const id = (await q(
-    `INSERT INTO otp_codes (phone, code_hash, expires_at) VALUES ($1,$2, now() + make_interval(mins => $3)) RETURNING id`,
-    [phone, hash(phone, code), config.otpTtlMin])).rows[0].id;
+    `INSERT INTO otp_codes (phone, code_hash, expires_at, email) VALUES ($1,$2, now() + make_interval(mins => $3), $4) RETURNING id`,
+    [phone, hash(phone, code), config.otpTtlMin, target])).rows[0].id;
   try {
-    await sendSms(phone, `Haiti P2P code: ${code}. It works for ${config.otpTtlMin} minutes. Never share it with anyone.`);
+    if (target) await sendSms(phone, `Kòd Haiti P2P ou: ${code}\nYour Haiti P2P code: ${code}\n\nLi bon pou ${config.otpTtlMin} minit. Pa janm bay pèsonn li.\nIt works for ${config.otpTtlMin} minutes. Never share it with anyone.`, target);
+    else await sendSms(phone, `Haiti P2P code: ${code}. It works for ${config.otpTtlMin} minutes. Never share it with anyone.`);
   } catch (e) {
     await q('DELETE FROM otp_codes WHERE id=$1', [id]); // a code that was never sent should not count
-    console.error('sms failed:', e.message);
-    throw new HttpError(502, 'Could not send the SMS. Try again soon.', 'SMS_FAILED');
+    console.error('code send failed:', e.message);
+    throw new HttpError(502, target ? 'Could not send the email. Try again soon.' : 'Could not send the SMS. Try again soon.', 'SMS_FAILED');
   }
-  return { sent: true, expires_in_min: config.otpTtlMin };
+  return { sent: true, expires_in_min: config.otpTtlMin, ...(target ? { channel: 'email', to: maskEmail(target) } : {}) };
 }
 
 // Check a code. A code works once, expires, and dies after too many wrong tries.
@@ -70,6 +88,7 @@ export async function verifyCode(phone, code, privileged = false) {
   // Burn it. If two requests race with the same code, only one wins.
   const r = await q('UPDATE otp_codes SET used=true WHERE id=$1 AND NOT used', [row.id]);
   if (!r.rowCount) throw bad('Code is wrong or expired. Ask for a new one.', 'OTP');
+  return { email: row.email || null };
 }
 
 // Simple per-IP limit for code requests (one server only. Use a shared store if you run many).

@@ -640,11 +640,17 @@ async function chainDeposit(asset, amount) {
   await send(cfg.chain.contract, '0x47e7ef24' + pad(token) + pad(v));             // deposit(token, amount)
   toast('Deposit sent. It shows here after a few blocks.');
 }
-async function chainWithdraw(asset, amount) {
-  const account = await eth(); const token = cfg.chain.tokens[asset];
-  await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: account, to: cfg.chain.contract,
-    data: '0xf3fef3a3' + pad(token) + pad(toUnits(amount).toString(16)) }] });                // withdraw(token, amount)
-  toast('Withdraw sent. Your balance updates after a few blocks.');
+// Gasless withdraw: you sign in your wallet (free), the app sends it and pays the network cost.
+// A small flat fee (cfg.withdraw_fee) is taken from the amount. You need no ETH.
+async function chainWithdraw(asset, amount, to) {
+  const account = await eth();
+  const td = await api('GET', `/wallet/withdraw-typed-data?asset=${encodeURIComponent(asset)}&amount=${encodeURIComponent(amount)}&to=${encodeURIComponent(to)}`);
+  const data = { domain: td.domain, types: { EIP712Domain: [
+    { name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }],
+    ...td.types }, primaryType: 'Withdraw', message: td.value };
+  const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(data)] });
+  const r = await api('POST', '/wallet/withdraw-gasless', { asset, amount, to, deadline: td.value.deadline, signature });
+  toast(`Sent. ${r.receive} ${asset} is on the way. Your balance updates after a few blocks.`);
 }
 
 
@@ -677,6 +683,7 @@ async function walletView(app) {
   const asset = h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC'));
   const fakeAddr = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
   const addr = h('input', { value: me.user.wallet_addr || (cfg.demo ? fakeAddr() : ''), placeholder: 'Your USDT wallet address (for withdrawals when live)' });
+  const wto = h('input', { value: (me.user.payout_network === 'ARBITRUM' && me.user.payout_addr) || me.user.wallet_addr || '', placeholder: '0x… (your wallet, or your Binance USDT deposit address on Arbitrum)' });
   app.append(h('div', { class: 'card' }, h('h2', {}, t('Wallet')),
     w.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Asset', t('Available'), 'Locked'].map((x) => h('th', {}, x)))),
       h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
@@ -688,7 +695,10 @@ async function walletView(app) {
       h('button', { class: 'btn alt', onclick: act(async () => { await linkWalletWithSignature(); toast('Wallet linked.'); route(); }) }, 'Connect and link my wallet'),
       h('h3', {}, 'Deposit or withdraw'), h('div', { class: 'row' }, asset, amt),
       h('button', { class: 'btn', onclick: act(async () => chainDeposit(asset.value, amt.value)) }, t('Deposit')),
-      h('button', { class: 'btn alt', onclick: act(async () => chainWithdraw(asset.value, amt.value)) }, 'Withdraw')]
+      h('p', { class: 'mute' }, 'Deposit: your wallet pays a tiny network cost in ETH on Arbitrum (a few cents).'),
+      h('label', {}, 'Send my withdraw to (Arbitrum address)'), wto,
+      h('p', { class: 'mute' }, `Withdraw: you only sign. We pay the network cost. A flat ${cfg.withdraw_fee || '1'} ${'USDT/USDC'} network fee is taken from the amount. You need no ETH.`),
+      h('button', { class: 'btn alt', onclick: act(async () => { await chainWithdraw(asset.value, amt.value, wto.value.trim()); route(); }) }, 'Withdraw')]
     : [h('h3', {}, 'Wallet address'), addr,
       h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')]),
     payoutCard());

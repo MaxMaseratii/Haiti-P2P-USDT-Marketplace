@@ -263,3 +263,30 @@ test('disputes: seller wins by arbiter refund, buyer wins by arbiter release', {
   const r = await reconcile();
   assert.equal(r.ok, true, JSON.stringify(r));
 });
+
+test('gasless withdraw: buyer signs in the app, app key pays gas, fee goes to the platform, books stay equal', { skip: SKIP }, async () => {
+  assert.equal(await chainAvail('buyer'), '10.000000');
+  const to = addr('stranger');
+  const before = await usdt.balanceOf(to);
+  const ethBefore = await provider.getBalance(addr('buyer'));
+  const feeBefore = await chainAvail('fee');
+  // too small: must be above the 1 USDT fee
+  assert.equal((await call('GET', `/wallet/withdraw-typed-data?asset=USDT&amount=1&to=${to}`, null, tk('buyer'))).status, 400);
+  const td = await ok('GET', `/wallet/withdraw-typed-data?asset=USDT&amount=10&to=${to}`, null, tk('buyer'));
+  assert.equal(td.fee, '1');
+  const sig = await new ethers.Wallet(KEYS.buyer).signTypedData(td.domain, td.types, td.value);
+  // someone else's signature is refused
+  const wrong = await new ethers.Wallet(KEYS.seller).signTypedData(td.domain, td.types, td.value);
+  assert.equal((await call('POST', '/wallet/withdraw-gasless', { asset: 'USDT', amount: '10', to, deadline: td.value.deadline, signature: wrong }, tk('buyer'))).status, 400);
+  const r = await ok('POST', '/wallet/withdraw-gasless', { asset: 'USDT', amount: '10', to, deadline: td.value.deadline, signature: sig }, tk('buyer'));
+  assert.equal(r.receive, '9.0');
+  assert.equal(await usdt.balanceOf(to) - before, units(9));
+  assert.equal(await provider.getBalance(addr('buyer')), ethBefore, 'buyer paid no gas');
+  assert.equal(Number(await chainAvail('fee')) - Number(feeBefore), 1);
+  await sync();
+  assert.deepEqual(await dbBal('buyer'), { a: '0.000000', l: '0.000000' });
+  // the same signature cannot be sent again
+  assert.equal((await call('POST', '/wallet/withdraw-gasless', { asset: 'USDT', amount: '10', to, deadline: td.value.deadline, signature: sig }, tk('buyer'))).status, 400);
+  const rc = await reconcile();
+  assert.equal(rc.ok, true, JSON.stringify(rc));
+});

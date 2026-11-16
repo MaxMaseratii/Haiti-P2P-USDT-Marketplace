@@ -101,6 +101,7 @@ How it works:
 - Seller deposits USDT/USDC into `P2PEscrow`. When a sell ad is posted, the app key **reserves** that amount in the contract, so the seller cannot withdraw it while the ad is open.
 - A new order **locks** amount + fee inside the contract. When the buyer presses "I paid", the contract is told (`markClaimed`).
 - The seller releases by **signing a message with their wallet** (no gas). Anyone can send that signature (`releaseWithSig`). The buyer's and the fee's balances are credited inside the contract. The buyer withdraws to their own wallet.
+- **Gasless withdraw** (`withdrawWithSig`): the user signs a withdraw (token, amount, address, max fee, nonce, deadline) in their wallet. The app key sends it and pays the gas. A flat fee (`WITHDRAW_FEE_USDT`, default 1) is credited to `feeRecipient`. The app key cannot change the amount or the address, or reuse the signature. Users need no ETH to withdraw. Deposits still need a little ETH (the seller's own wallet).
 - Dispute decisions are carried out by the **arbiter** address.
 
 Who can move money (this is the important part):

@@ -204,3 +204,53 @@ test('solvency: contract token balance equals all internal balances at the end',
   // minus orders still locked (none are open now) -> all balances must match the contract's real token balance
   assert.equal(await usdc.balanceOf(await esc.getAddress()), sum);
 });
+
+// ---------- gasless withdraw ----------
+async function signWithdraw(i, token, amount, to, maxFee, deadline, nonce) {
+  const net = await provider.getNetwork();
+  const domain = { name: 'P2PEscrow', version: '1', chainId: net.chainId, verifyingContract: await esc.getAddress() };
+  const types = { Withdraw: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }, { name: 'to', type: 'address' }, { name: 'maxFee', type: 'uint256' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }] };
+  const n = nonce ?? await esc.nonces(await a(i));
+  return ethers.Signature.from(await W[i].signTypedData(domain, types, { token, amount, to, maxFee, nonce: n, deadline }));
+}
+
+test('gasless withdraw: user signs, operator sends, fee goes to feeRecipient, user pays no gas', async () => {
+  const tk = await usdc.getAddress();
+  await (await as(esc, BUYER).deposit(tk, U(50))).wait();
+  const start = await avail(usdc, BUYER);
+  const to = await a(STRANGER);
+  const toBefore = await usdc.balanceOf(to);
+  const dl = BigInt((await provider.getBlock('latest')).timestamp + 3600);
+  const buyerEthBefore = await provider.getBalance(await a(BUYER));
+  const feeBefore = await avail(usdc, FEE);
+  const sig = await signWithdraw(BUYER, tk, U(20), to, U(1), dl);
+  await (await as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(20), to, U(0.8), U(1), dl, sig.v, sig.r, sig.s)).wait();
+  assert.equal(start - await avail(usdc, BUYER), U(20));
+  assert.equal(await usdc.balanceOf(to) - toBefore, U(19.2));
+  assert.equal(await avail(usdc, FEE) - feeBefore, U(0.8));
+  assert.equal(await provider.getBalance(await a(BUYER)), buyerEthBefore, 'buyer spent no gas');
+  assert.equal(await esc.nonces(await a(BUYER)), 1n);
+  // the same signature cannot be used twice
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(20), to, U(0.8), U(1), dl, sig.v, sig.r, sig.s), 'bad signature');
+});
+
+test('gasless withdraw: refuses fee above maxFee, non-operator, wrong signer, changed address, expired, too much', async () => {
+  const tk = await usdc.getAddress();
+  const to = await a(STRANGER);
+  const start = await avail(usdc, BUYER);
+  const dl = BigInt((await provider.getBlock('latest')).timestamp + 3600);
+  const sig = await signWithdraw(BUYER, tk, U(10), to, U(1), dl);
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(10), to, U(1.5), U(1), dl, sig.v, sig.r, sig.s), 'bad fee');
+  await bad(as(esc, STRANGER).withdrawWithSig(await a(BUYER), tk, U(10), to, U(1), U(1), dl, sig.v, sig.r, sig.s), 'not operator');
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(10), await a(OP), U(1), U(1), dl, sig.v, sig.r, sig.s), 'bad signature');
+  await bad(as(esc, OP).withdrawWithSig(await a(SELLER), tk, U(10), to, U(1), U(1), dl, sig.v, sig.r, sig.s), 'bad signature');
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(11), to, U(1), U(1), dl, sig.v, sig.r, sig.s), 'bad signature');
+  const old = BigInt((await provider.getBlock('latest')).timestamp - 10);
+  const sig2 = await signWithdraw(BUYER, tk, U(10), to, U(1), old);
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(10), to, U(1), U(1), old, sig2.v, sig2.r, sig2.s), 'signature expired');
+  const sig3 = await signWithdraw(BUYER, tk, U(5000), to, U(1), dl);
+  await bad(as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(5000), to, U(1), U(1), dl, sig3.v, sig3.r, sig3.s), 'not enough free balance');
+  // and a good one still works after all the refusals
+  await (await as(esc, OP).withdrawWithSig(await a(BUYER), tk, U(10), to, U(1), U(1), dl, sig.v, sig.r, sig.s)).wait();
+  assert.equal(start - await avail(usdc, BUYER), U(10));
+});

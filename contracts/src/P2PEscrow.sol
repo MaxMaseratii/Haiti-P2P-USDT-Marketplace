@@ -5,7 +5,8 @@ pragma solidity ^0.8.24;
 /// @notice Holds stablecoins for a P2P marketplace. The contract never touches gourdes.
 ///
 /// Who can do what:
-///  - Seller/buyer: deposit and withdraw their own free balance.
+///  - Seller/buyer: deposit and withdraw their own free balance. They can also sign a withdraw
+///    and let the operator send it, so they need no ETH for gas (a small fee, capped by the user, goes to feeRecipient).
 ///  - Operator (the app server key): reserve funds for an ad, lock funds into an order,
 ///    mark that the buyer says "I paid", cancel an order that was NOT marked paid.
 ///    The operator can NEVER release funds to a buyer and can NEVER move funds to itself.
@@ -43,6 +44,9 @@ contract P2PEscrow {
 
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public constant RELEASE_TYPEHASH = keccak256("Release(bytes32 orderId,uint256 deadline)");
+    bytes32 public constant WITHDRAW_TYPEHASH =
+        keccak256("Withdraw(address token,uint256 amount,address to,uint256 maxFee,uint256 nonce,uint256 deadline)");
+    mapping(address => uint256) public nonces;   // one per user, so a signed withdraw can be used only once
 
     // ---------- events (the app reads these) ----------
     event Deposited(address indexed token, address indexed user, uint256 amount);
@@ -55,6 +59,7 @@ contract P2PEscrow {
     event Refunded(bytes32 indexed orderId, address by);
     event RolesChanged(address operator, address arbiter, address feeRecipient);
     event PausedSet(bool paused);
+    event WithdrawFee(address indexed token, address indexed user, uint256 fee);
 
     // ---------- guards ----------
     modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
@@ -99,6 +104,32 @@ contract P2PEscrow {
         available[token][msg.sender] -= amount;       // state first, then transfer
         _safeTransfer(token, msg.sender, amount);
         emit Withdrawn(token, msg.sender, amount);
+    }
+
+    /// Gasless withdraw. The user signs (token, amount, to, maxFee, nonce, deadline) in their wallet.
+    /// The operator sends it and pays the gas. The operator picks the fee, never above the signed maxFee.
+    /// The fee is credited to feeRecipient inside the contract. The rest goes to `to`.
+    /// The operator cannot change the token, the amount, where it goes, or use the signature twice.
+    function withdrawWithSig(address user, address token, uint256 amount, address to, uint256 fee,
+                             uint256 maxFee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        external nonReentrant onlyOperator
+    {
+        require(block.timestamp <= deadline, "signature expired");
+        require(to != address(0) && user != address(0), "zero address");
+        require(fee <= maxFee && fee < amount, "bad fee");
+        require(available[token][user] >= amount, "not enough free balance");
+        uint256 nonce = nonces[user];
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR,
+            keccak256(abi.encode(WITHDRAW_TYPEHASH, token, amount, to, maxFee, nonce, deadline))));
+        require(uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0, "bad s");
+        address signer = ecrecover(digest, v, r, s);
+        require(signer != address(0) && signer == user, "bad signature");
+        nonces[user] = nonce + 1;
+        available[token][user] -= amount;              // state first, then transfer
+        if (fee > 0) available[token][feeRecipient] += fee;
+        _safeTransfer(token, to, amount - fee);
+        emit Withdrawn(token, user, amount);
+        emit WithdrawFee(token, user, fee);
     }
 
     // ---------- operator: ads and orders ----------

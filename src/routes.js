@@ -40,6 +40,7 @@ api.get('/config', (_req, res) => res.json({
   pay_logos: payLogos(),
   link_fee: config.linkFeeUsdt,
   networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
+  withdraw_fee: config.withdrawFee,
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));
@@ -108,6 +109,19 @@ api.get('/me', wrap(async (req) => ({
   wallet: await wallet.balances({ query: q }, req.user.id),
   payment_methods: [...(await users.myPaymentMethods(req.user.id)).filter((p) => !p.is_receiver), ...(await links.linkedAccounts(req.user.id))],
 })));
+// Gasless withdraw on the real chain: get the message to sign, then send the signature. The app pays the gas.
+api.get('/wallet/withdraw-typed-data', wrap(async (req) => {
+  if (isMock()) throw bad('Only needed on a real chain.');
+  const asset = String(req.query.asset || 'USDT').toUpperCase();
+  if (!['USDT', 'USDC'].includes(asset)) throw bad('Asset must be USDT or USDC.');
+  return evm.withdrawPrep(req.user.id, asset, req.query.amount, req.query.to);
+}));
+api.post('/wallet/withdraw-gasless', wrap(async (req) => {
+  if (isMock()) throw bad('Only needed on a real chain.');
+  const b = req.body || {}, asset = String(b.asset || 'USDT').toUpperCase();
+  if (!['USDT', 'USDC'].includes(asset)) throw bad('Asset must be USDT or USDC.');
+  return evm.relayWithdraw(req.user.id, asset, String(b.amount), b.to, Number(b.deadline), String(b.signature || ''));
+}));
 api.get('/me/wallet-link-message', wrap(async (req) => ({ message: evm.linkMessage(req.user.id) })));
 api.put('/me/wallet-address', wrap(async (req) => { await users.setWallet(req.user, req.body?.wallet_addr, req.body?.signature); return { ok: true }; }));
 

@@ -322,6 +322,10 @@
     'File is too big.': ['Fichye a twò gwo.', 'Fichier trop gros.'],
     'MONCASH': ['MonCash', 'MonCash'], 'NATCASH': ['NatCash', 'NatCash'], 'BANK': ['Bank', 'Banque'],
     'Trademarks': ['Mak', 'Marques'],
+    'This withdraw request expired. Try again.': ['Demann retrè sa a ekspire. Eseye ankò.', 'Cette demande de retrait a expiré. Réessayez.'],
+    'Deposit: your wallet pays a tiny network cost in ETH on Arbitrum (a few cents).': ['Depo: pòtfèy ou peye yon ti frè rezo an ETH sou Arbitrum (kèk santim).', 'Dépôt : votre portefeuille paie un petit coût réseau en ETH sur Arbitrum (quelques centimes).'],
+    'Send my withdraw to (Arbitrum address)': ['Voye retrè m nan (adrès Arbitrum)', 'Envoyer mon retrait à (adresse Arbitrum)'],
+    '0x… (your wallet, or your Binance USDT deposit address on Arbitrum)': ['0x… (pòtfèy ou, oswa adrès depo USDT Binance ou sou Arbitrum)', '0x… (votre portefeuille, ou votre adresse de dépôt USDT Binance sur Arbitrum)'],
     'Deposit (fake money, test mode)': ['Depo (fo lajan, mòd tès)', 'Dépôt (faux argent, mode test)'],
   };
 
@@ -365,6 +369,9 @@
     ['^Dispute opened, but a file failed: (.+)$', 'Diskisyon an louvri, men yon fichye pa t pase: $1', 'Litige ouvert, mais un fichier a échoué : $1'],
     ['^You said: (.+)$', 'Ou te di: $1', 'Vous avez dit : $1'],
     ['^Hello, (.+)$', 'Bonjou, $1', 'Bonjour, $1'],
+    ['^Withdraw: you only sign\\. We pay the network cost\\. A flat (.+) USDT/USDC network fee is taken from the amount\\. You need no ETH\\.$', 'Retrè: ou siyen sèlman. Nou peye frè rezo a. Nou retire yon frè fiks $1 USDT/USDC sou kantite a. Ou pa bezwen ETH.', 'Retrait : vous signez seulement. Nous payons le coût réseau. Des frais fixes de $1 USDT/USDC sont retirés du montant. Pas besoin d\'ETH.'],
+    ['^Sent\\. (.+) (USDT|USDC) is on the way\\. Your balance updates after a few blocks\\.$', 'Voye. $1 $2 ap vini. Balans ou ap chanje apre kèk blòk.', 'Envoyé. $1 $2 arrivent. Votre solde se met à jour après quelques blocs.'],
+    ['^The amount must be more than the (.+) (USDT|USDC) network fee\\.$', 'Kantite a dwe plis pase frè rezo $1 $2 la.', 'Le montant doit dépasser les frais réseau de $1 $2.'],
     ['^🔒 (.+) (USDT|USDC) is locked$', '🔒 $1 $2 kadnase', '🔒 $1 $2 verrouillés'],
     ['^Account (\\d.*)$', 'Kont $1', 'Compte $1'],
     ['^"My name is (.+)\\. My phone number is (.+)\\. My code is (.+)\\."$', '"Mwen rele $1. Nimewo telefòn mwen se $2. Kòd mwen se $3."', '"Je m\'appelle $1. Mon numéro de téléphone est $2. Mon code est $3."'],

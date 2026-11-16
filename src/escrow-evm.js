@@ -27,6 +27,9 @@ const ABI = [
   'function refund(bytes32 orderId, bool toReserved)',
   'event Deposited(address indexed token, address indexed user, uint256 amount)',
   'event Withdrawn(address indexed token, address indexed user, uint256 amount)',
+  'event WithdrawFee(address indexed token, address indexed user, uint256 fee)',
+  'function nonces(address) view returns (uint256)',
+  'function withdrawWithSig(address user, address token, uint256 amount, address to, uint256 fee, uint256 maxFee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
 ];
 const ERC20 = ['function decimals() view returns (uint8)', 'function balanceOf(address) view returns (uint256)'];
 const LOCKED = 1n, RELEASED = 2n, REFUNDED = 3n;
@@ -119,6 +122,42 @@ export function verifyReleaseSig(order, sellerAddr, sig, deadline) {
   if (who.toLowerCase() !== sellerAddr.toLowerCase()) throw bad('The signature is not from the seller wallet.', 'SIG');
 }
 
+// ---------- gasless withdraw (EIP-712). The user signs, the app key sends and pays the gas. ----------
+const W_TYPES = { Withdraw: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }, { name: 'to', type: 'address' },
+  { name: 'maxFee', type: 'uint256' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }] };
+const wDomain = () => ({ name: 'P2PEscrow', version: '1', chainId: config.evmChainId, verifyingContract: config.evmContract });
+function checkWithdraw(asset, amount, to) {
+  let dest; try { dest = ethers.getAddress(String(to || '').trim()); } catch { throw bad('Wallet address looks wrong.'); }
+  if (!/^\d+(\.\d{1,6})?$/.test(String(amount)) || Number(amount) <= 0) throw bad('Amount must be a number above 0.');
+  const fee = units(config.withdrawFee);
+  if (units(amount) <= fee) throw bad(`The amount must be more than the ${config.withdrawFee} ${asset} network fee.`);
+  return { dest, fee };
+}
+export async function withdrawPrep(userId, asset, amount, to) {
+  const { base } = get();
+  const { dest, fee } = checkWithdraw(asset, amount, to);
+  const user = await addrOf(userId);
+  const nonce = await base.nonces(user);
+  const deadline = Math.floor(Date.now() / 1000) + 15 * 60;
+  return { domain: wDomain(), types: W_TYPES, primaryType: 'Withdraw', fee: config.withdrawFee,
+    value: { token: tokenOf(asset), amount: units(amount).toString(), to: dest, maxFee: fee.toString(), nonce: nonce.toString(), deadline } };
+}
+export async function relayWithdraw(userId, asset, amount, to, deadline, signature) {
+  const { op, base } = get();
+  const { dest, fee } = checkWithdraw(asset, amount, to);
+  const user = await addrOf(userId);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isInteger(deadline) || deadline < now || deadline > now + 3600) throw bad('This withdraw request expired. Try again.');
+  const free = (await q('SELECT available FROM wallet_balances WHERE user_id=$1 AND asset=$2', [userId, asset])).rows[0]?.available || '0';
+  if (units(free) < units(amount)) throw bad('Not enough balance.');
+  const value = { token: tokenOf(asset), amount: units(amount), to: dest, maxFee: fee, nonce: await base.nonces(user), deadline };
+  let who; try { who = ethers.verifyTypedData(wDomain(), W_TYPES, value, signature); } catch { throw bad('Bad signature.', 'SIG'); }
+  if (who.toLowerCase() !== user.toLowerCase()) throw bad('The signature does not match this wallet.', 'SIG');
+  const sg = ethers.Signature.from(signature);
+  const txHash = await send(op, 'withdrawWithSig', user, value.token, value.amount, dest, fee, fee, BigInt(deadline), sg.v, sg.r, sg.s);
+  return { txHash, fee: config.withdrawFee, receive: human(value.amount - fee) };
+}
+
 // ---------- order moves (safe to repeat) ----------
 export const adapter = {
   async lock(order) {
@@ -201,14 +240,20 @@ export async function scanChain() {
   let from = last === undefined ? config.evmStartBlock : Number(last) + 1;
   while (from <= safe) {
     const to = Math.min(from + 1999, safe);
-    const logs = [...await base.queryFilter(base.filters.Deposited(), from, to), ...await base.queryFilter(base.filters.Withdrawn(), from, to)];
+    const logs = [...await base.queryFilter(base.filters.Deposited(), from, to), ...await base.queryFilter(base.filters.Withdrawn(), from, to),
+      ...await base.queryFilter(base.filters.WithdrawFee(), from, to)];
+    const feeTo = logs.some((l) => l.fragment.name === 'WithdrawFee') ? await base.feeRecipient() : null;
     for (const l of logs) {
       const token = l.args.token.toLowerCase();
       if (!assetOf[token]) continue; // a token we do not trade
+      // A gasless withdraw fee stays in the contract, credited to feeRecipient (the platform account).
+      const isFee = l.fragment.name === 'WithdrawFee';
+      if (isFee && l.args.fee === 0n) continue;
       await q(
         `INSERT INTO chain_events (tx_hash, log_index, block_number, kind, token, address, amount)
          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
-        [l.transactionHash, l.index, l.blockNumber, l.fragment.name === 'Deposited' ? 'DEPOSIT' : 'WITHDRAW', token, l.args.user, human(l.args.amount)]);
+        [l.transactionHash, l.index, l.blockNumber, isFee || l.fragment.name === 'Deposited' ? 'DEPOSIT' : 'WITHDRAW', token,
+          isFee ? feeTo : l.args.user, human(isFee ? l.args.fee : l.args.amount)]);
     }
     await setState('last_block', to);
     from = to + 1;

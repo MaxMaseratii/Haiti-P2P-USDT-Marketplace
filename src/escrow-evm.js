@@ -86,6 +86,16 @@ export async function initEvm() {
     const d = await new ethers.Contract(t, ERC20, provider).decimals().catch(() => 6n);
     if (Number(d) !== 6) throw new Error(`${asset} has ${d} decimals. Only 6-decimal tokens are supported.`);
   }
+  // One database = one contract. Never mix test-mode (fake) balances or another contract's books with this one.
+  const bound = (await q(`SELECT value FROM chain_state WHERE key='escrow_contract'`)).rows[0]?.value;
+  if (bound && bound.toLowerCase() !== config.evmContract.toLowerCase())
+    throw new Error(`This database belongs to another contract (${bound}). Use a new, empty database for this contract.`);
+  if (!bound) {
+    const used = (await q(`SELECT (SELECT COUNT(*) FROM wallet_balances WHERE available > 0 OR locked > 0)
+      + (SELECT COUNT(*) FROM orders) AS n`)).rows[0].n;
+    if (Number(used) > 0) throw new Error('This database already has test-mode balances or orders. Real mode needs a new, empty database (Render: create a new PostgreSQL and point DATABASE_URL to it).');
+    await q(`INSERT INTO chain_state (key, value) VALUES ('escrow_contract', $1) ON CONFLICT (key) DO NOTHING`, [config.evmContract]);
+  }
   // Fees land on the contract under feeRecipient. Tie that address to the platform account.
   const fr = await base.feeRecipient();
   await q('UPDATE users SET wallet_addr=NULL WHERE lower(wallet_addr)=lower($1) AND id<>$2', [fr, config.platformUserId]);

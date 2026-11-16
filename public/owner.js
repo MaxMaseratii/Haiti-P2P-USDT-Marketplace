@@ -96,6 +96,18 @@
     renderEnv();
   }, 'deployLog');
 
+  // 4b. practice: mint test USDT to any wallet
+  act('mint', async () => {
+    await connect();
+    if (!deployed || deployed.net !== 'test') throw new Error('Only for the practice network, after step 4.');
+    const k = await contracts();
+    const t = new ethers.Contract(deployed.usdt, k.MockToken.abi, signer);
+    const to = addr($('mintTo').value, 'Wallet address');
+    say('mintLog', 'Confirm in your wallet…');
+    await (await t.mint(to, 1000n * 10n ** 6n)).wait();
+    say('mintLog', `Sent 1,000 test USDT to ${to}. In MetaMask, import the token ${deployed.usdt} to see it.`, 'ok');
+  }, 'mintLog');
+
   // 5. fund the app wallet
   act('fund', async () => {
     await connect();

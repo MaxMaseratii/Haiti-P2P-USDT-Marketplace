@@ -125,12 +125,13 @@
     if (!deployed) { $('env').textContent = 'Deploy first (step 4).'; return; }
     const N = NETS[deployed.net];
     const lines = [
-      'ESCROW_MODE=EVM', 'ESCROW_NETWORK=ARBITRUM', `EVM_RPC_URL=${N.rpc}`, `EVM_CHAIN_ID=${deployed.chainId}`, `EVM_ESCROW_ADDRESS=${deployed.address}`,
+      'ESCROW_MODE=EVM', 'ESCROW_NETWORK=ARBITRUM', `EVM_RPC_URL=${($('rpcUrl').value || '').trim() || N.rpc}`, `EVM_CHAIN_ID=${deployed.chainId}`, `EVM_ESCROW_ADDRESS=${deployed.address}`,
       `EVM_START_BLOCK=${deployed.block}`, 'EVM_CONFIRMATIONS=40', `TOKEN_USDT=${deployed.usdt}`, `TOKEN_USDC=${deployed.usdc}`,
       `OPERATOR_PRIVATE_KEY=${op ? op.privateKey : '(the app wallet secret key from step 3)'}`, 'WITHDRAW_FEE_USDT=1', 'LOCK_FEE_USDT=0.25', 'DEMO_SEED=false',
     ];
     $('env').textContent = lines.join('\n');
   }
+  $('rpcUrl').addEventListener('input', renderEnv);
   $('copyEnv').addEventListener('click', async () => { await navigator.clipboard.writeText($('env').textContent); $('copyEnv').textContent = 'Copied'; setTimeout(() => { $('copyEnv').textContent = 'Copy all'; }, 1500); });
 
   // ---- after launch ----

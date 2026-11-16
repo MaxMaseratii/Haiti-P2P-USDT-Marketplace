@@ -93,9 +93,9 @@ function authView(app) {
   const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : 'SMS code', inputmode: 'numeric' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
   const loginCard = h('div', { class: 'card logincard' },
-    h('h2', {}, t('Log in') + ' / ' + t('Sign up')),
-    h('label', {}, t('Phone') + ' (with country code)'), phone,
-    h('label', {}, t('Full name (as on your ID)') + ' — sign up only'), name,
+    h('h2', {}, 'Log in / Sign up'),
+    h('label', {}, 'Phone (with country code)'), phone,
+    h('label', {}, 'Full name (as on your ID) — sign up only'), name,
     h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, h('button', { class: 'btn alt', onclick: act(async () => {
       const r = await api('POST', '/auth/request-code', { phone: phone.value.replace(/[\s()\-.]/g, '') });
       toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
@@ -152,7 +152,7 @@ async function marketView(app) {
       h('div', { class: 'who' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
         h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
-      h('div', {}, h('div', { class: 'lab' }, t('Available') + ' · ' + t('Limits')),
+      h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'),
         h('div', {}, usd(a.remaining) + ' ' + a.asset, h('span', { class: 'mute' }, ` ≈ ${money(Number(a.remaining) * Number(a.price_htg), 0)} HTG`)),
         h('div', { class: 'mute' }, `Per order: ${money(a.min_order_htg, 0)} – ${money(a.max_order_htg, 0)} HTG`),
         payChips(a)),
@@ -204,12 +204,23 @@ function safetyView(app) {
     h('button', { class: 'btn big-btn', onclick: () => go('market') }, 'Go to the market')));
 }
 
-const BANKS = ['Sogebank', 'Unibank', 'BNC', 'BUH', 'Capital Bank', 'Sogebel', 'Other'];
-// Bank name picker. Returns the element and a function that gives the chosen name.
+// Banks on the BRH list (Banque de la République d'Haïti), with their official logos.
+const BANKS = [['Sogebank', 'sogebank'], ['Unibank', 'unibank'], ['BNC', 'bnc'], ['BUH', 'buh'], ['Capital Bank', 'capital'], ['Sogebel', 'sogebel'], ['BPH', 'bph'], ['BNDA', null], ['Other', null]];
+const bankLogo = (name) => { const b = BANKS.find(([n]) => n.toLowerCase() === String(name || '').trim().toLowerCase()); return b && b[1] ? 'img/bank/' + b[1] + '.png' : null; };
+// Small logo for an account: the bank's logo, or MonCash / NatCash.
+function accLogo(p) {
+  const src = p.type === 'BANK' ? (bankLogo(p.bank_name) || '').replace('.png', '-sq.png') || null : (cfg.pay_logos || {})[p.type];
+  return src ? h('img', { class: 'acclogo' + (p.type === 'BANK' ? ' bank' : ''), src, alt: '' }) : h('span', { class: 'acclogo none' }, p.type === 'BANK' ? '🏦' : '•');
+}
+// Bank picker: a grid of bank logos. Returns the element and a function that gives the chosen name.
 function bankPicker() {
-  const sel = h('select', {}, BANKS.map((b) => h('option', {}, b))), other = h('input', { placeholder: 'Bank name', class: 'hidden' });
-  sel.addEventListener('change', () => other.classList.toggle('hidden', sel.value !== 'Other'));
-  return { el: h('div', {}, sel, other), value: () => (sel.value === 'Other' ? other.value.trim() : sel.value) };
+  let cur = 'Sogebank';
+  const other = h('input', { placeholder: 'Bank name', class: 'hidden' });
+  const grid = h('div', { class: 'bgrid' });
+  grid.append(...BANKS.map(([n, k]) => h('button', { type: 'button', class: 'btile' + (n === cur ? ' on' : ''), 'data-n': n, onclick: () => {
+    cur = n; [...grid.children].forEach((c) => c.classList.toggle('on', c.dataset.n === n)); other.classList.toggle('hidden', n !== 'Other'); if (n === 'Other') other.focus();
+  } }, k ? h('img', { src: 'img/bank/' + k + '.png', alt: n }) : h('b', {}, n === 'Other' ? 'Other bank' : n), h('small', {}, n === 'Other' ? '' : n))));
+  return { el: h('div', {}, grid, other), value: () => (cur === 'Other' ? other.value.trim() : cur) };
 }
 
 const PAY_NAME = { MONCASH: 'MonCash', NATCASH: 'NatCash', BANK: 'Bank' };
@@ -478,7 +489,7 @@ function guide(v) {
   const dispBtn = h('button', { class: 'btn alt sm', onclick: () => openDisputeWindow(v) }, buyer ? 'Problem? Open a dispute' : 'Not received? Open a dispute');
   if (r === 'STAFF') return { tone: '', title: 'Staff view', text: 'You are reading this order as staff.', actions: [] };
   if (buyer && s === 'AWAITING_PAYMENT') return { tone: 'go', title: `Pay ${money(o.total_htg)} HTG now`, steps: [
-      `Open your ${v.payment ? (v.payment.bank_name || v.payment.type) : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
+      `Open your ${v.payment ? (v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type) : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
       `Write the code ${o.pay_reference} in the payment note.`, 'Come back and press "I have paid".'],
     actions: [h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/orders/${o.id}/paid`); route(); }) }, 'I have paid'),
       h('button', { class: 'btn alt', onclick: () => openCancelWindow(v) }, 'Cancel order')] };
@@ -488,7 +499,7 @@ function guide(v) {
     title: o.receiver_said === 'RECEIVED' ? `${v.payment.account_name} got the money ✓` : o.receiver_said === 'NOT_RECEIVED' ? `${v.payment.account_name} says it did NOT arrive` : `Waiting for ${v.payment.account_name} to confirm`,
     text: o.receiver_said === 'RECEIVED' ? 'The account owner confirmed in the app. Unlock the crypto to finish.' : o.receiver_said === 'NOT_RECEIVED' ? 'Check with them. If the money never came, open a dispute. Do not unlock.' : `${v.payment.account_name} owns the receiving account. We asked them to check and confirm in the app. You can also check with them and unlock yourself.`,
     actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Unlock the crypto'), dispBtn] };
-  if (seller && s === 'PAID_CLAIMED') return { tone: 'go', title: `Did ${money(o.total_htg)} HTG arrive in your account?`, text: `Check your ${v.payment ? v.payment.type : 'payment'} app or bank. Look for the code ${o.pay_reference}. Release only if you see the money.`,
+  if (seller && s === 'PAID_CLAIMED') return { tone: 'go', title: `Did ${money(o.total_htg)} HTG arrive in your account?`, text: `Check your ${v.payment ? (v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type) : 'payment'} app or bank. Look for the code ${o.pay_reference}. Release only if you see the money.`,
     actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, I received it. Unlock the crypto'), dispBtn] };
   if (s === 'DISPUTED') return { tone: 'bad', title: 'Dispute open. A staff agent is deciding', text: 'Add your proof below. Keep chatting here, politely. Do not send money outside the app.', actions: [] };
   if (s === 'RELEASING') return { tone: 'wait', title: 'Sending the USDT', text: 'This takes a moment.', actions: [] };
@@ -505,6 +516,7 @@ function renderOrder(col, v) {
   const rate = g.rate && r !== 'STAFF' ? h('div', { class: 'rate' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'star', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks for your rating.'); }) }, '★' + n))) : null;
   const pay = v.payment && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'card ' + (r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? 'payto' : '') },
     h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : v.payment.is_receiver ? 'Paid into a linked account' : 'Your receiving account'),
+    h('div', { class: 'payhead' }, accLogo(v.payment), h('b', {}, v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type)),
     v.payment.is_receiver && r === 'BUYER' ? h('p', { class: 'mute' }, `This account belongs to ${v.payment.account_name}, a verified user linked to the seller. Pay exactly this account.`) : null,
     kv([v.payment.bank_name ? ['Bank', v.payment.bank_name] : null, [v.payment.type === 'BANK' ? 'Account number' : (PAY_NAME[v.payment.type] || v.payment.type) + ' number', v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
     h('div', { class: 'mute', style: 'margin-top:10px' }, r === 'BUYER' ? 'Write this code in the payment note:' : 'The buyer must write this code in the note:'),
@@ -649,7 +661,7 @@ function payoutCard() {
   const evm = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
   return h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Where do I receive crypto?'),
     h('p', { class: 'mute' }, 'Binance UID is the easiest: a Binance to Binance transfer has no network fee. Or use a wallet.'),
-    h('label', {}, 'Binance UID'), uid,
+    h('label', { class: 'withlogo' }, h('img', { src: 'img/brand/binance.png', alt: '' }), 'Binance UID'), uid,
     h('label', {}, 'Or a wallet: choose the network'), net, hint,
     h('label', {}, 'Wallet address'), addr,
     h('div', { class: 'warn-note', style: 'margin-top:10px' }, 'Be careful. If you pick the wrong network, the money can be lost forever. Always check the network and the address.'),
@@ -668,7 +680,7 @@ async function walletView(app) {
   app.append(h('div', { class: 'card' }, h('h2', {}, t('Wallet')),
     w.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Asset', t('Available'), 'Locked'].map((x) => h('th', {}, x)))),
       h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
-    cfg.escrow_mode === 'MOCK' ? [h('h3', {}, t('Deposit') + ' (fake money, test mode)'), h('div', { class: 'row' }, asset, amt),
+    cfg.escrow_mode === 'MOCK' ? [h('h3', {}, 'Deposit (fake money, test mode)'), h('div', { class: 'row' }, asset, amt),
       h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/wallet/dev-deposit', { asset: asset.value, amount: amt.value }); route(); }) }, t('Deposit'))] : null,
     cfg.chain ? [
       h('p', { class: 'mute' }, 'Real chain mode. The contract is UNAUDITED. Use small amounts only.'),
@@ -965,7 +977,7 @@ async function profileView(app) {
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My payment accounts'),
       h('p', { class: 'mute' }, 'You can add MonCash, NatCash and bank accounts, and as many numbers as you want. The name on each one must match your ID.'),
       methods.length ? h('div', { class: 'accs' }, methods.map((p) => h('div', { class: 'acc' },
-        h('div', {}, h('b', {}, p.bank_name ? p.bank_name : p.type), h('div', { class: 'mute' }, `${p.type === 'BANK' ? 'Account' : p.type} ${p.account_ref} · ${p.account_name}`)),
+        h('div', { class: 'accrow' }, accLogo(p), h('div', {}, h('b', {}, p.bank_name ? p.bank_name : PAY_NAME[p.type] || p.type), h('div', { class: 'mute' }, `${p.type === 'BANK' ? 'Account' : PAY_NAME[p.type] || p.type} ${p.account_ref} · ${p.account_name}`))),
         h('span', { class: 'pill ' + (p.verified ? 'good' : 'warn') }, p.verified ? 'verified' : 'name does not match ID'))))
         : h('p', { class: 'mute' }, 'None yet. Add one after your ID check is approved.'),
       h('h3', { class: 'ct', style: 'margin-top:16px' }, 'Add an account'),

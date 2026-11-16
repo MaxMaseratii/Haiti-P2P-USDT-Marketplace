@@ -13,6 +13,7 @@ const LEGAL = {
       ['9. Sispansyon', 'Nou ka sispann oswa fèmen yon kont si gen fwod, fo prèv, vyolasyon tèm yo, oswa si lalwa mande l.'],
       ['10. Limit responsablite', 'Nou fè tout sa nou kapab pou platfòm nan an sekirite, men nou pa responsab pou aksyon yon itilizatè fè andeyò aplikasyon an, ni pou pwoblèm sou rezo MonCash, NatCash, bank oswa blockchain.'],
       ['11. Chanjman', 'Nou ka chanje tèm sa yo. N ap avèti w nan aplikasyon an anvan chanjman enpòtan.'],
+      ['12. Mak ak logo', 'MonCash (Digicel), NatCash (Natcom), Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Haiti P2P pa fè pati konpayi sa yo, e yo pa apwouve l.'],
     ]],
     en: ['Terms and Conditions', [
       ['1. Who we are', 'Haiti P2P is a platform that connects people who want to swap crypto (USDT, USDC) and gourdes. We are a facilitator. We are not a bank or a money transfer office.'],
@@ -26,6 +27,7 @@ const LEGAL = {
       ['9. Suspension', 'We may suspend or close an account for fraud, fake proof, breaking these terms, or when the law requires it.'],
       ['10. Liability', 'We do our best to keep the platform safe, but we are not responsible for what users do outside the app, or for problems on MonCash, NatCash, bank or blockchain networks.'],
       ['11. Changes', 'We may change these terms. We will tell you in the app before important changes.'],
+      ['12. Names and logos', 'MonCash (Digicel), NatCash (Natcom), Binance and the bank names and logos belong to their owners. We show them only to say which payment methods people use. Haiti P2P is not part of, or approved by, these companies.'],
     ]],
   },
   privacy: {

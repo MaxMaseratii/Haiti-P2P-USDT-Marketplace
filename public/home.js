@@ -126,5 +126,8 @@ function homeView(app, loginCard, quickTest, adsBox) {
       h('button', { class: 'btn', onclick: go2('join') }, tx3(join))),
     h('footer', { class: 'hfoot' }, h('span', {}, '© ' + new Date().getFullYear() + ' Haiti P2P'), h('a', { href: '#safety' }, tx3({ en: 'Safety', fr: 'Sécurité', ht: 'Sekirite' })),
       h('span', { class: 'mute' }, tx3({ en: 'Crypto prices move. Only swap what you can afford.', fr: 'Le prix de la crypto bouge.', ht: 'Pri kripto a ka chanje. Pa riske lajan ou pa ka pèdi.' }))),
-    h('div', { class: 'hfoot' }, legalLinks())].filter(Boolean));
+    h('div', { class: 'hfoot' }, legalLinks()),
+    h('p', { class: 'tm', style: 'margin:0 auto 24px;padding:0 16px;text-align:center' }, tx3({ en: 'MonCash, NatCash, Binance and the bank names and logos belong to their owners. They are shown only to say which payment methods people use. Haiti P2P is not part of, or approved by, these companies.',
+      fr: 'MonCash, NatCash, Binance et les noms et logos des banques appartiennent à leurs propriétaires. Ils servent seulement à montrer les moyens de paiement utilisés. Haiti P2P n\'est ni lié ni approuvé par ces entreprises.',
+      ht: 'MonCash, NatCash, Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Haiti P2P pa fè pati konpayi sa yo, e yo pa apwouve l.' }))].filter(Boolean));
 }

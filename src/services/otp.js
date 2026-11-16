@@ -44,8 +44,8 @@ export async function requestCode(phone, email) {
     `INSERT INTO otp_codes (phone, code_hash, expires_at, email) VALUES ($1,$2, now() + make_interval(mins => $3), $4) RETURNING id`,
     [phone, hash(phone, code), config.otpTtlMin, target])).rows[0].id;
   try {
-    if (target) await sendSms(phone, `Kòd Haiti P2P ou: ${code}\nYour Haiti P2P code: ${code}\n\nLi bon pou ${config.otpTtlMin} minit. Pa janm bay pèsonn li.\nIt works for ${config.otpTtlMin} minutes. Never share it with anyone.`, target);
-    else await sendSms(phone, `Haiti P2P code: ${code}. It works for ${config.otpTtlMin} minutes. Never share it with anyone.`);
+    if (target) await sendSms(phone, `Kòd Ayiti P2P Swap ou: ${code}\nYour Ayiti P2P Swap code: ${code}\n\nLi bon pou ${config.otpTtlMin} minit. Pa janm bay pèsonn li.\nIt works for ${config.otpTtlMin} minutes. Never share it with anyone.`, target);
+    else await sendSms(phone, `Ayiti P2P Swap code: ${code}. It works for ${config.otpTtlMin} minutes. Never share it with anyone.`);
   } catch (e) {
     await q('DELETE FROM otp_codes WHERE id=$1', [id]); // a code that was never sent should not count
     console.error('code send failed:', e.message);

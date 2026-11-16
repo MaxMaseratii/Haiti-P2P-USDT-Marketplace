@@ -16,7 +16,7 @@ function oldWay() {
     m5: { en: 'Please answer…', fr: 'Réponds s\'il te plaît…', ht: 'Tanpri reponn…' },
     sys: { en: 'Seen. No answer. Number blocked.', fr: 'Vu. Pas de réponse. Numéro bloqué.', ht: 'Li wè mesaj la. Li pa reponn. Li bloke w.' },
     end: { en: 'Money gone. Nobody to call. Nothing to do.', fr: 'Argent perdu. Personne à appeler.', ht: 'Lajan an ale. Pa gen moun pou rele.' },
-    neu: { en: 'With Haiti P2P', fr: 'Avec Haiti P2P', ht: 'Ak Haiti P2P' },
+    neu: { en: 'With Ayiti P2P Swap', fr: 'Avec Ayiti P2P Swap', ht: 'Ak Ayiti P2P Swap' },
     neuT: { en: 'We lock the crypto before you pay', fr: 'Nous verrouillons la crypto avant que vous payiez', ht: 'Nou kadnase kripto a anvan ou peye' },
     l1: [{ en: 'Real people only. ', fr: 'Que des vraies personnes. ', ht: 'Moun reyèl sèlman. ' }, { en: 'Every seller showed their ID and a video, and confirmed their phone with an OTP code.', fr: 'Chaque vendeur a montré sa pièce d\'identité et une vidéo, et confirmé son téléphone avec un code OTP.', ht: 'Chak vandè montre pyès idantite yo ak yon videyo, epi yo konfime telefòn yo ak yon kòd OTP.' }],
     l2: [{ en: 'The crypto is locked first. ', fr: 'La crypto est verrouillée d\'abord. ', ht: 'Kripto a kadnase anvan. ' }, { en: 'The seller cannot take it back while you pay.', fr: 'Le vendeur ne peut pas la reprendre pendant que vous payez.', ht: 'Vandè a pa ka repran l pandan w ap peye.' }],
@@ -43,7 +43,7 @@ function appShots(sec) {
     h('div', { class: 'aframe' }, h('img', { src: `img/app/${name}-${L}.jpg`, alt: tx3(cap), loading: 'lazy', decoding: 'async', width: '390', height: '844' })),
     h('figcaption', {}, tx3(cap)));
   return sec('screens', { en: 'The app', fr: 'L\'application', ht: 'Aplikasyon an' }, { en: 'Like your bank account, in your pocket.', fr: 'Comme votre compte bancaire, dans votre poche.', ht: 'Tankou kont labank ou, nan pòch ou.' },
-    { en: 'Real screens from Haiti P2P. Your balance, the market, every order step by step, and your ID check.', fr: 'De vrais écrans de Haiti P2P : votre solde, le marché, chaque commande étape par étape, et votre vérification.', ht: 'Vrè ekran Haiti P2P: balans ou, mache a, chak kòmand etap pa etap, ak verifikasyon idantite w.' },
+    { en: 'Real screens from Ayiti P2P Swap. Your balance, the market, every order step by step, and your ID check.', fr: 'De vrais écrans de Ayiti P2P Swap : votre solde, le marché, chaque commande étape par étape, et votre vérification.', ht: 'Vrè ekran Ayiti P2P Swap: balans ou, mache a, chak kòmand etap pa etap, ak verifikasyon idantite w.' },
     h('div', { class: 'ashots' },
       shot('home', { en: 'Your account: balance, buy, sell', fr: 'Votre compte : solde, achat, vente', ht: 'Kont ou: balans, achte, vann' }),
       shot('market', { en: 'The market: best price first', fr: 'Le marché : meilleur prix d\'abord', ht: 'Mache a: pi bon pri an premye' }),
@@ -124,10 +124,10 @@ function homeView(app, loginCard, quickTest, adsBox) {
       h('h2', {}, tx3({ en: 'Swap crypto in Haiti with confidence.', fr: 'Échangez de la crypto en Haïti en toute confiance.', ht: 'Fè echanj kripto ann Ayiti san pè.' })),
       h('p', {}, tx3({ en: 'Free to join. Takes 3 minutes.', fr: 'Gratuit. 3 minutes.', ht: 'Gratis. Li pran 3 minit.' })),
       h('button', { class: 'btn', onclick: go2('join') }, tx3(join))),
-    h('footer', { class: 'hfoot' }, h('span', {}, '© ' + new Date().getFullYear() + ' Haiti P2P'), h('a', { href: '#safety' }, tx3({ en: 'Safety', fr: 'Sécurité', ht: 'Sekirite' })),
+    h('footer', { class: 'hfoot' }, h('span', {}, '© ' + new Date().getFullYear() + ' Ayiti P2P Swap'), h('a', { href: '#safety' }, tx3({ en: 'Safety', fr: 'Sécurité', ht: 'Sekirite' })),
       h('span', { class: 'mute' }, tx3({ en: 'Crypto prices move. Only swap what you can afford.', fr: 'Le prix de la crypto bouge.', ht: 'Pri kripto a ka chanje. Pa riske lajan ou pa ka pèdi.' }))),
     h('div', { class: 'hfoot' }, legalLinks()),
-    h('p', { class: 'tm', style: 'margin:0 auto 24px;padding:0 16px;text-align:center' }, tx3({ en: 'MonCash, NatCash, Binance and the bank names and logos belong to their owners. They are shown only to say which payment methods people use. Haiti P2P is not part of, or approved by, these companies.',
-      fr: 'MonCash, NatCash, Binance et les noms et logos des banques appartiennent à leurs propriétaires. Ils servent seulement à montrer les moyens de paiement utilisés. Haiti P2P n\'est ni lié ni approuvé par ces entreprises.',
-      ht: 'MonCash, NatCash, Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Haiti P2P pa fè pati konpayi sa yo, e yo pa apwouve l.' }))].filter(Boolean));
+    h('p', { class: 'tm', style: 'margin:0 auto 24px;padding:0 16px;text-align:center' }, tx3({ en: 'MonCash, NatCash, Binance and the bank names and logos belong to their owners. They are shown only to say which payment methods people use. Ayiti P2P Swap is not part of, or approved by, these companies.',
+      fr: 'MonCash, NatCash, Binance et les noms et logos des banques appartiennent à leurs propriétaires. Ils servent seulement à montrer les moyens de paiement utilisés. Ayiti P2P Swap n\'est ni lié ni approuvé par ces entreprises.',
+      ht: 'MonCash, NatCash, Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Ayiti P2P Swap pa fè pati konpayi sa yo, e yo pa apwouve l.' }))].filter(Boolean));
 }

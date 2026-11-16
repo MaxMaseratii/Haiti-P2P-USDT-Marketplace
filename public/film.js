@@ -124,25 +124,25 @@
   }
 
   // ======================================================================
-  // Film 1: Why Haiti P2P? (the problem we solve)
+  // Film 1: Why Ayiti P2P Swap? (the problem we solve)
   // ======================================================================
   const WHY = {
     cls: 'why',
     scenes: [
-      { label: { en: 'Why', fr: 'Pourquoi', ht: 'Poukisa' }, min: 3600, cap: { en: 'Why Haiti P2P?', fr: 'Pourquoi Haiti P2P ?', ht: 'Poukisa Haiti P2P?' } },
+      { label: { en: 'Why', fr: 'Pourquoi', ht: 'Poukisa' }, min: 3600, cap: { en: 'Why Ayiti P2P Swap?', fr: 'Pourquoi Ayiti P2P Swap ?', ht: 'Poukisa Ayiti P2P Swap?' } },
       { label: { en: 'WhatsApp', fr: 'WhatsApp', ht: 'WhatsApp' }, min: 4600, cap: { en: 'Need crypto in Haiti? Today, you ask in every WhatsApp group.', fr: 'Besoin de crypto en Haïti ? Aujourd\'hui, vous demandez dans chaque groupe WhatsApp.', ht: 'Ou bezwen achte kripto ann Ayiti? Jodi a, ou mande nan tout gwoup WhatsApp.' } },
       { label: { en: 'Gone', fr: 'Disparu', ht: 'Disparèt' }, min: 6800, cap: { en: 'You send MonCash first. Then the person disappears. No answer. Your money is gone.', fr: 'Vous envoyez MonCash d\'abord. Puis la personne disparaît. Pas de réponse. Votre argent est perdu.', ht: 'Ou voye MonCash anvan. Epi moun nan disparèt. Li pa reponn. Lajan an ale.' } },
-      { label: { en: 'Verified', fr: 'Vérifiés', ht: 'Verifye' }, min: 5200, cap: { en: 'On Haiti P2P, everyone is verified: phone with an OTP code, ID, and a short video.', fr: 'Sur Haiti P2P, tout le monde est vérifié : téléphone avec code OTP, pièce d\'identité et courte vidéo.', ht: 'Sou Haiti P2P, tout moun verifye: telefòn ak kòd OTP, pyès idantite, ak yon ti videyo.' } },
+      { label: { en: 'Verified', fr: 'Vérifiés', ht: 'Verifye' }, min: 5200, cap: { en: 'On Ayiti P2P Swap, everyone is verified: phone with an OTP code, ID, and a short video.', fr: 'Sur Ayiti P2P Swap, tout le monde est vérifié : téléphone avec code OTP, pièce d\'identité et courte vidéo.', ht: 'Sou Ayiti P2P Swap, tout moun verifye: telefòn ak kòd OTP, pyès idantite, ak yon ti videyo.' } },
       { label: { en: 'Locked first', fr: 'Verrouillé', ht: 'Kadnase' }, min: 4600, cap: { en: 'We lock the seller\'s crypto before you pay. They cannot take it back.', fr: 'Nous verrouillons la crypto du vendeur avant que vous payiez. Il ne peut pas la reprendre.', ht: 'Nou kadnase kripto vandè a anvan ou peye. Li pa ka repran l.' } },
       { label: { en: 'Unlocked', fr: 'Libéré', ht: 'Dekadnase' }, min: 5200, cap: { en: 'We unlock it only when the seller confirms the money arrived.', fr: 'Nous la libérons seulement quand le vendeur confirme que l\'argent est arrivé.', ht: 'Nou dekadnase l sèlman lè vandè a konfime li resevwa lajan an.' } },
       { label: { en: 'Problem?', fr: 'Problème ?', ht: 'Pwoblèm?' }, min: 4800, cap: { en: 'If there is a problem, the crypto stays locked. Our team checks the proof and decides.', fr: 'En cas de problème, la crypto reste verrouillée. Notre équipe examine les preuves et décide.', ht: 'Si gen pwoblèm, kripto a rete kadnase. Ekip nou an gade prèv yo epi deside.' } },
       { label: { en: 'Fast', fr: 'Rapide', ht: 'Rapid' }, min: 4400, cap: { en: 'No long waits. A swap can be done in minutes.', fr: 'Pas de longue attente. Un échange se fait en quelques minutes.', ht: 'Pa gen tann lontan. Yon echanj ka fini nan kèk minit.' } },
       { label: { en: 'Best price', fr: 'Meilleur prix', ht: 'Pi bon pri' }, min: 5400, cap: { en: 'The market shows the best prices first. You see each trader\'s rating and how many swaps they finished.', fr: 'Le marché montre d\'abord les meilleurs prix. Vous voyez la note de chacun et ses échanges terminés.', ht: 'Mache a montre pi bon pri yo an premye. Ou wè nòt chak moun, ak konbyen echanj yo fè.' } },
-      { label: { en: 'Join', fr: 'Rejoindre', ht: 'Kreye kont' }, min: 4400, cap: { en: 'Create your free account. Haiti P2P: swap crypto without the risk.', fr: 'Créez votre compte gratuit. Haiti P2P : échangez de la crypto sans risque.', ht: 'Kreye kont ou gratis. Haiti P2P: chanje kripto san risk.' } },
+      { label: { en: 'Join', fr: 'Rejoindre', ht: 'Kreye kont' }, min: 4400, cap: { en: 'Create your free account. Ayiti P2P Swap: swap crypto without the risk.', fr: 'Créez votre compte gratuit. Ayiti P2P Swap : échangez de la crypto sans risque.', ht: 'Kreye kont ou gratis. Ayiti P2P Swap: chanje kripto san risk.' } },
     ],
     mount(stage, at) {
       const W = {
-        old: { en: 'The old way', fr: 'Avant', ht: 'Ansyen fason an' }, neu: { en: 'With Haiti P2P', fr: 'Avec Haiti P2P', ht: 'Ak Haiti P2P' },
+        old: { en: 'The old way', fr: 'Avant', ht: 'Ansyen fason an' }, neu: { en: 'With Ayiti P2P Swap', fr: 'Avec Ayiti P2P Swap', ht: 'Ak Ayiti P2P Swap' },
         grp: 'Kripto Ayiti 🇭🇹', mem: { en: '2,341 members', fr: '2 341 membres', ht: '2,341 manm' },
         m1: { en: 'Who has USDT? I need 100.', fr: 'Qui a des USDT ? J\'en veux 100.', ht: 'Kiyès ki gen USDT? M bezwen 100.' },
         m2: { en: 'Me. Send 14,000 HTG MonCash first.', fr: 'Moi. Envoie 14 000 HTG MonCash d\'abord.', ht: 'Mwen. Voye 14,000 goud MonCash anvan.' },
@@ -162,7 +162,7 @@
         f0: { en: 'Swap time', fr: 'Durée de l\'échange', ht: 'Tan echanj lan' }, f1: { en: 'Done', fr: 'Terminé', ht: 'Fini' },
         best: { en: 'Best price', fr: 'Meilleur prix', ht: 'Pi bon pri' }, sw: { en: 'swaps', fr: 'échanges', ht: 'echanj' },
         end: { en: 'Create your free account', fr: 'Créez votre compte gratuit', ht: 'Kreye kont ou gratis' }, endS: { en: 'Swap crypto without the risk.', fr: 'Échangez de la crypto sans risque.', ht: 'Chanje kripto san risk.' },
-        title: { en: 'Why Haiti P2P?', fr: 'Pourquoi Haiti P2P ?', ht: 'Poukisa Haiti P2P?' }, titleS: { en: 'The problem we solve', fr: 'Le problème que nous réglons', ht: 'Pwoblèm nou rezoud' },
+        title: { en: 'Why Ayiti P2P Swap?', fr: 'Pourquoi Ayiti P2P Swap ?', ht: 'Poukisa Ayiti P2P Swap?' }, titleS: { en: 'The problem we solve', fr: 'Le problème que nous réglons', ht: 'Pwoblèm nou rezoud' },
       };
       const msg = (txt, me) => h('div', { class: 'wb' + (me ? ' me' : '') }, me ? null : h('b', {}, '+509 •••• 31 22'), T3(txt), h('i', {}, me ? '10:4' + (me === 2 ? '6' : '2') + ' ✓✓' : '10:43'));
       const M = [msg(W.m1, 1), msg(W.m2, 0), msg(W.m3, 2), h('div', { class: 'wb me rc' }, h('span', { class: 'mcx' }, 'MonCash'), h('b', {}, '−14,000 HTG'), h('small', {}, T3(W.rc) + ' ✓')), msg(W.m4, 2), msg(W.m5, 2), h('div', { class: 'wsys' }, '⛔ ' + T3(W.sys))];
@@ -186,8 +186,8 @@
       const cPrice = h('div', { class: 'wcard list' }, rows);
       const cards = [cVer, cLock, cUn, cTeam, cFast, cPrice]; // scenes 3..8
       const newCol = h('div', { class: 'wy-new' }, h('div', { class: 'wtag good' }, T3(W.neu)), h('div', { class: 'wcards' }, cards));
-      const title = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Haiti P2P'), h('h3', {}, T3(W.title)), h('p', {}, T3(W.titleS))));
-      const end = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Haiti P2P'), h('h3', {}, T3(W.end)), h('p', {}, T3(W.endS)), h('button', { class: 'fo-btn', type: 'button', onclick: () => (document.getElementById('join') || document.querySelector('.logincard'))?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, T3(W.end) + ' →')));
+      const title = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Ayiti P2P Swap'), h('h3', {}, T3(W.title)), h('p', {}, T3(W.titleS))));
+      const end = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Ayiti P2P Swap'), h('h3', {}, T3(W.end)), h('p', {}, T3(W.endS)), h('button', { class: 'fo-btn', type: 'button', onclick: () => (document.getElementById('join') || document.querySelector('.logincard'))?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, T3(W.end) + ' →')));
       stage.append(h('div', { class: 'wy-grid' }, oldCol, newCol), title, end);
 
       return {
@@ -250,7 +250,7 @@
   const HOW = {
     cls: 'how',
     scenes: [
-      { label: { en: 'Start', fr: 'Début', ht: 'Kòmanse' }, min: 3400, cap: { en: 'How Haiti P2P works', fr: 'Comment fonctionne Haiti P2P', ht: 'Kijan Haiti P2P mache' } },
+      { label: { en: 'Start', fr: 'Début', ht: 'Kòmanse' }, min: 3400, cap: { en: 'How Ayiti P2P Swap works', fr: 'Comment fonctionne Ayiti P2P Swap', ht: 'Kijan Ayiti P2P Swap mache' } },
       { label: { en: 'Only crypto', fr: 'Que la crypto', ht: 'Kripto sèlman' }, min: 5200, cap: { en: 'We never hold your gourdes. We only lock the crypto during a swap.', fr: 'Nous ne gardons jamais vos gourdes. Nous verrouillons seulement la crypto pendant l\'échange.', ht: 'Nou pa janm kenbe goud ou. Nou kadnase kripto a sèlman pandan echanj lan.' } },
       { label: { en: 'Deposit', fr: 'Dépôt', ht: 'Depo' }, min: 5600, cap: { en: 'Step 1. The seller sends 1,000 USDT from their own crypto wallet into the platform\'s smart contract.', fr: 'Étape 1. Le vendeur envoie 1 000 USDT depuis son propre portefeuille crypto vers le contrat intelligent de la plateforme.', ht: 'Etap 1. Vandè a voye 1,000 USDT soti nan pòtfèy kripto pa li, sou kontra entèlijan platfòm nan.' } },
       { label: { en: 'Fixed rules', fr: 'Règles fixes', ht: 'Règ fiks' }, min: 5000, cap: { en: 'It is a program on the blockchain that follows fixed rules. The seller can still withdraw any time.', fr: 'C\'est un programme sur la blockchain qui suit des règles fixes. Le vendeur peut retirer à tout moment.', ht: 'Se yon pwogram sou blockchain lan ki swiv règ fiks. Vandè a ka retire l nenpòt lè.' } },
@@ -264,12 +264,12 @@
       { label: { en: 'If cancelled', fr: 'Si annulé', ht: 'Si l anile' }, min: 5000, cap: { en: 'If the buyer cancels or does not pay in time, the 200 go back to the ad.', fr: 'Si l\'acheteur annule ou ne paie pas à temps, les 200 retournent dans l\'annonce.', ht: 'Si achtè a anile, oswa li pa peye atan, 200 yo tounen nan piblisite a.' } },
       { label: { en: 'If dispute', fr: 'Si litige', ht: 'Si diskisyon' }, min: 5200, cap: { en: 'If there is a dispute, our team looks at the proof and decides where the 200 go.', fr: 'En cas de litige, notre équipe examine les preuves et décide où vont les 200.', ht: 'Si gen diskisyon, ekip nou an gade prèv yo, epi li deside kote 200 yo ale.' } },
       { label: { en: 'Close ad', fr: 'Fermer', ht: 'Fèmen' }, min: 5000, cap: { en: 'When the seller closes the ad, whatever is left goes back to Available in their account.', fr: 'Quand le vendeur ferme l\'annonce, le reste redevient disponible sur son compte.', ht: 'Lè vandè a fèmen piblisite a, sa ki rete a tounen disponib nan kont li.' } },
-      { label: { en: 'Done', fr: 'Fin', ht: 'Fini' }, min: 4200, cap: { en: 'Haiti P2P. Swap USDT and gourdes, without the risk.', fr: 'Haiti P2P. Échangez USDT et gourdes, sans risque.', ht: 'Haiti P2P. Chanje USDT ak goud, san risk.' } },
+      { label: { en: 'Done', fr: 'Fin', ht: 'Fini' }, min: 4200, cap: { en: 'Ayiti P2P Swap. Swap USDT and gourdes, without the risk.', fr: 'Ayiti P2P Swap. Échangez USDT et gourdes, sans risque.', ht: 'Ayiti P2P Swap. Chanje USDT ak goud, san risk.' } },
     ],
     mount(stage, at, starts) {
       const W = {
         seller: { en: 'seller', fr: 'vendeur', ht: 'vandè' }, buyer: { en: 'buyer', fr: 'acheteuse', ht: 'achtè' },
-        wal: { en: 'Own crypto wallet', fr: 'Son portefeuille crypto', ht: 'Pòtfèy kripto pa l' }, acct: { en: 'Haiti P2P account', fr: 'Compte Haiti P2P', ht: 'Kont Haiti P2P' },
+        wal: { en: 'Own crypto wallet', fr: 'Son portefeuille crypto', ht: 'Pòtfèy kripto pa l' }, acct: { en: 'Ayiti P2P Swap account', fr: 'Compte Ayiti P2P Swap', ht: 'Kont Ayiti P2P Swap' },
         c1: { en: 'Smart contract', fr: 'Contrat intelligent', ht: 'Kontra entèlijan' }, c2: { en: 'Jean\'s account', fr: 'Compte de Jean', ht: 'Kont Jean' },
         av: { en: 'Available', fr: 'Disponible', ht: 'Disponib' }, ad: { en: 'In the ad', fr: 'Dans l\'annonce', ht: 'Nan piblisite' }, ord: { en: 'Order with Rose', fr: 'Commande de Rose', ht: 'Kòmand Rose' },
         adT: { en: 'I sell 500 USDT · 140 HTG', fr: 'Je vends 500 USDT · 140 HTG', ht: 'M vann 500 USDT · 140 goud' },
@@ -299,12 +299,12 @@
       const team = h('div', { class: 'teamtag' }, '⚖️ ' + T3(W.team), h('span', { class: 'tw' }, h('i', {}, '→ Rose'), h('i', {}, '→ ' + T3(W.ad))));
       const rule = h('div', { class: 'crule' }, '↩ ' + T3(W.rule));
       const cLock = lockIcon('sm');
-      const contract = h('div', { class: 'hw-c' }, h('div', { class: 'chead' }, cLock, h('div', {}, h('b', {}, 'Haiti P2P'), h('small', {}, T3(W.c1) + ' · ' + T3(W.c2)))), AV.row, AD.row, adTag, OR.row, team, rule);
+      const contract = h('div', { class: 'hw-c' }, h('div', { class: 'chead' }, cLock, h('div', {}, h('b', {}, 'Ayiti P2P Swap'), h('small', {}, T3(W.c1) + ' · ' + T3(W.c2)))), AV.row, AD.row, adTag, OR.row, team, rule);
       const outTag = h('div', { class: 'outtag' }, '📱 ' + T3(W.out));
       const ifTag = h('div', { class: 'iftag' });
       const usdt = h('div', { class: 'tok usdt' }), htg = h('div', { class: 'tok htg' });
-      const title = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Haiti P2P'), h('h3', {}, T3(W.title)), h('p', {}, T3(W.titleS))));
-      const end = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Haiti P2P'), h('h3', {}, T3(W.end))));
+      const title = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Ayiti P2P Swap'), h('h3', {}, T3(W.title)), h('p', {}, T3(W.titleS))));
+      const end = h('div', { class: 'fover' }, h('div', { class: 'fo-in' }, h('div', { class: 'fo-logo' }, 'Ayiti P2P Swap'), h('h3', {}, T3(W.end))));
       stage.append(h('div', { class: 'hw-grid' }, jean, contract, rose), outTag, ifTag, usdt, htg, title, end);
 
       // money at the START of each scene (what-if scenes start from the open order)

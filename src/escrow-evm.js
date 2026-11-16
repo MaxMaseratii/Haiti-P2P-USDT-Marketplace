@@ -107,7 +107,7 @@ export async function initEvm() {
 }
 
 // ---------- wallet link proof ----------
-export const linkMessage = (userId) => `Link this wallet to my Haiti P2P account ${userId}`;
+export const linkMessage = (userId) => `Link this wallet to my Ayiti P2P Swap account ${userId}`;
 export function verifyWalletLink(userId, addr, signature) {
   let a;
   try { a = ethers.getAddress(addr); } catch { throw bad('Wallet address looks wrong.'); }

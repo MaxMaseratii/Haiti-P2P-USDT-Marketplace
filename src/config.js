@@ -34,7 +34,7 @@ export const config = {
   smsProvider: str('SMS_PROVIDER', 'mock'),           // mock | twilio | email (codes by email through Brevo, free up to 300 a day)
   brevoKey: str('BREVO_API_KEY', ''),
   mailFrom: str('MAIL_FROM', ''),                      // a sender email verified in Brevo
-  mailFromName: str('MAIL_FROM_NAME', 'Haiti P2P'),
+  mailFromName: str('MAIL_FROM_NAME', 'Ayiti P2P Swap'),
   twilioSid: str('TWILIO_ACCOUNT_SID', ''),
   twilioToken: str('TWILIO_AUTH_TOKEN', ''),
   twilioFrom: str('TWILIO_FROM', ''),

@@ -218,7 +218,7 @@
     // ---- linked accounts ----
     'The account cannot be used for new orders after this.': ['Apre sa, kont lan pa ka sèvi pou nouvo kòmand.', 'Le compte ne pourra plus servir à de nouvelles commandes.'], 'Keep': ['Kenbe', 'Garder'],
     'Receive gourdes into more MonCash, NatCash or bank accounts. For example when one account is full.': ['Resevwa goud nan plis kont MonCash, NatCash oswa bank. Pa egzanp lè yon kont plen.', 'Recevez des gourdes sur plus de comptes MonCash, NatCash ou bancaires. Par exemple quand un compte est plein.'],
-    'The other person opens their own Haiti P2P account and finishes the ID check.': ['Lòt moun nan louvri pwòp kont Haiti P2P pa l, epi li fini verifikasyon ID a.', 'L\'autre personne ouvre son propre compte Haiti P2P et termine la vérification.'],
+    'The other person opens their own Ayiti P2P Swap account and finishes the ID check.': ['Lòt moun nan louvri pwòp kont Ayiti P2P Swap pa l, epi li fini verifikasyon ID a.', 'L\'autre personne ouvre son propre compte Ayiti P2P Swap et termine la vérification.'],
     'You ask them here, with their phone number.': ['Ou mande l isit la, ak nimewo telefòn li.', 'Vous lui demandez ici, avec son numéro.'],
     'They accept in their app and choose which of their accounts to share.': ['Li aksepte nan aplikasyon pa l, epi li chwazi ki kont li pataje.', 'Elle accepte dans son appli et choisit quel compte partager.'],
     'When a buyer pays into that account, the owner confirms in their app that the gourdes arrived.': ['Lè yon achtè peye nan kont sa a, mèt kont lan konfime nan aplikasyon pa l ke goud yo rive.', 'Quand un acheteur paie sur ce compte, le titulaire confirme dans son appli que les gourdes sont arrivées.'],

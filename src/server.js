@@ -28,5 +28,5 @@ if (config.escrowMode === 'EVM') {
 }
 if (config.tokenSecret === 'dev-only-secret') console.warn('Warning: using the dev TOKEN_SECRET. Start with npm start so a strong one is made.');
 
-buildApp().listen(config.port, () => console.log(`Haiti P2P marketplace on http://localhost:${config.port} (${config.escrowMode} escrow)`));
+buildApp().listen(config.port, () => console.log(`Ayiti P2P Swap marketplace on http://localhost:${config.port} (${config.escrowMode} escrow)`));
 startWorker();

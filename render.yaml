@@ -1,4 +1,7 @@
-# One-click test server on Render: https://render.com/deploy?repo=https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace
+# Render blueprint: https://render.com/deploy?repo=https://github.com/MaxMaseratii/Haiti-P2P-USDT-Marketplace
+# For launch: change BOTH plans below from free to a paid plan in the Render dashboard
+# (web: Starter or higher so it never sleeps; database: Basic or higher, free databases expire).
+# Values marked sync:false are set in the Render dashboard (Environment). Render keeps them.
 services:
   - type: web
     name: haiti-p2p
@@ -12,18 +15,49 @@ services:
         fromDatabase: { name: haiti-p2p-db, property: connectionString }
       - key: TOKEN_SECRET
         generateValue: true
+      - key: PGSSL
+        value: "false"
+      # ---- test mode (default) or real money ----
       - key: ESCROW_MODE
-        value: MOCK            # fake money. Do not change until the contract is audited
+        sync: false            # MOCK = fake money. EVM = real contract (use the lines from /owner.html)
       - key: SMS_PROVIDER
-        value: mock            # login code 000000. Change to twilio when ready
+        sync: false            # mock (code 000000) or twilio. Real money needs twilio.
       - key: DEMO_SEED
-        value: "true"          # example sellers on the home page
+        sync: false            # "true" only in test mode (example sellers). Must be false with real money.
       - key: ADMIN_PHONES
         sync: false            # YOUR phone, like +50937001234. You become admin when you sign up
       - key: ADMIN_LOGIN_CODE
-        sync: false            # YOUR secret 6-digit login code while SMS is mock (000000 is public)
-      - key: PGSSL
-        value: "false"
+        sync: false            # YOUR secret 6-digit login code while SMS is mock
+      # ---- real money on Arbitrum (copy from /owner.html after you deploy) ----
+      - key: ESCROW_NETWORK
+        sync: false
+      - key: EVM_RPC_URL
+        sync: false            # best: your Alchemy Arbitrum URL
+      - key: EVM_CHAIN_ID
+        sync: false
+      - key: EVM_ESCROW_ADDRESS
+        sync: false
+      - key: EVM_START_BLOCK
+        sync: false
+      - key: EVM_CONFIRMATIONS
+        sync: false
+      - key: TOKEN_USDT
+        sync: false
+      - key: TOKEN_USDC
+        sync: false
+      - key: OPERATOR_PRIVATE_KEY
+        sync: false            # the app wallet secret key. Never share it.
+      - key: WITHDRAW_FEE_USDT
+        sync: false            # flat fee on a gasless withdraw. Default 1
+      # ---- real SMS (Twilio) ----
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false            # a Twilio phone number, or leave empty and set TWILIO_MESSAGING_SERVICE_SID
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
 databases:
   - name: haiti-p2p-db
     plan: free

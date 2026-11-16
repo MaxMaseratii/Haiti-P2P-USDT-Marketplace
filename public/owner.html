@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Owner Tools · Haiti P2P</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .ow{max-width:820px;margin:24px auto;padding:0 16px 80px}
+    .ow h1{font:700 30px/1.15 var(--serif,Georgia,serif);margin:6px 0 4px}
+    .ow .kick{font:700 12px var(--mono,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+    .ow .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+    .ow .step h2{font-size:18px;margin:0 0 6px;display:flex;gap:10px;align-items:center}
+    .ow .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:var(--brand-ink);font:700 13px var(--mono,monospace);flex:none}
+    .ow label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+    .ow input,.ow select{width:100%;box-sizing:border-box}
+    .ow .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .ow .seg{display:flex;gap:8px;flex-wrap:wrap}
+    .ow .seg button{flex:1;min-width:200px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px;cursor:pointer;color:var(--ink);font:inherit}
+    .ow .seg button.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
+    .ow .seg small{display:block;color:var(--mute);font-size:12.5px;margin-top:2px}
+    .ow pre{background:#0f1d18;color:#d8f3e6;border-radius:10px;padding:14px;overflow:auto;font:12.5px/1.6 var(--mono,monospace);white-space:pre-wrap;word-break:break-all}
+    .ow .ok{color:var(--good);font-weight:600}.ow .err{color:var(--bad);font-weight:600}
+    .ow .warn{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:10px 0}
+    .ow .key{font:12.5px var(--mono,monospace);word-break:break-all;background:var(--soft);border-radius:8px;padding:8px 10px}
+    .ow .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .ow .log{font:12.5px var(--mono,monospace);color:var(--mute);margin-top:8px;white-space:pre-wrap}
+    @media (max-width:600px){.ow .row2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="ow">
+    <div class="kick">Haiti P2P · owner only</div>
+    <h1>Owner tools</h1>
+    <p class="mute">Put the lock contract on Arbitrum with your own wallet, take out your fees, pause, and decide disputes on-chain. Nothing here can touch users' money except what the contract allows. This page never sends your keys anywhere.</p>
+
+    <div class="step">
+      <h2><span class="num">1</span>Pick the network</h2>
+      <div class="seg" id="netSeg">
+        <button type="button" data-net="test" class="on"><b>Practice first</b><small>Arbitrum Sepolia. Fake money. Free test ETH.</small></button>
+        <button type="button" data-net="real"><b>Real money</b><small>Arbitrum One. Real USDT and USDC.</small></button>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">2</span>Connect your Arbitrum wallet</h2>
+      <p class="mute">MetaMask, Rabby, Coinbase Wallet or any browser wallet. This wallet becomes the owner of the contract (it can pause it and change roles).</p>
+      <div class="acts"><button class="btn" id="connect">Connect wallet</button></div>
+      <div class="log" id="who"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">3</span>Choose the wallets</h2>
+      <label>Fee wallet: where your fees go</label>
+      <input id="fee" placeholder="0x… (your wallet by default)">
+      <label>Dispute judge (arbiter): can unlock to the buyer or return to the seller</label>
+      <input id="arb" placeholder="0x… (your wallet by default. Later move it to a Safe that 2 people must sign)">
+      <label>App wallet (operator): the server uses it to lock and send. It cannot take money.</label>
+      <div class="acts"><button class="btn alt" id="mkop">Make a new app wallet</button></div>
+      <div id="opBox" class="hidden">
+        <label>App wallet address</label><div class="key" id="opAddr"></div>
+        <label>App wallet secret key: paste it ONLY in Render as OPERATOR_PRIVATE_KEY</label>
+        <div class="key" id="opKey">••••••••••••••••••••••••</div>
+        <div class="acts"><button class="btn alt sm" id="showKey">Show</button><button class="btn alt sm" id="copyKey">Copy</button></div>
+        <div class="warn">Save this secret key now. It is shown only on this page and is lost if you reload. Anyone with it can run the app wallet (lock and send), but it can never take users' money or your fees.</div>
+      </div>
+      <div class="warn">Use a different wallet to trade on the app yourself. The fee wallet is kept for fees only.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">4</span>Put the contract on the network</h2>
+      <p class="mute" id="deployNote">Your wallet asks you to confirm. It costs a few cents of ETH.</p>
+      <div class="acts"><button class="btn" id="deploy">Deploy the contract</button></div>
+      <div class="log" id="deployLog"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">5</span>Give the app wallet a little ETH</h2>
+      <p class="mute">The app wallet pays the network cost for locks, unlocks and gasless withdraws. On Arbitrum each one costs about 1 to 5 cents. Start with about $10 of ETH and top it up when it runs low.</p>
+      <div class="row2"><div><label>Amount of ETH</label><input id="ethAmt" value="0.003"></div><div><label>&nbsp;</label><button class="btn alt" id="fund">Send ETH to the app wallet</button></div></div>
+      <div class="log" id="fundLog"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">6</span>Copy these lines into Render</h2>
+      <p class="mute">Render → your haiti-p2p service → Environment → add each line. Then save. The app restarts in real mode.</p>
+      <pre id="env">Deploy first (step 4).</pre>
+      <div class="acts"><button class="btn alt" id="copyEnv">Copy all</button></div>
+    </div>
+
+    <h1 style="margin-top:40px;font-size:24px">After launch</h1>
+    <div class="step">
+      <h2><span class="num">★</span>Your contract</h2>
+      <label>Contract address</label><input id="cAddr" placeholder="0x… (filled in after you deploy)">
+      <div class="acts"><button class="btn alt" id="readC">Check it</button></div>
+      <div class="log" id="cInfo"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">$</span>Take out your fees</h2>
+      <p class="mute">Connect the fee wallet first. Fees wait inside the contract until you take them out.</p>
+      <div class="acts"><button class="btn" id="feesUsdt">Withdraw all USDT fees</button><button class="btn" id="feesUsdc">Withdraw all USDC fees</button></div>
+      <div class="log" id="feeLog"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">⚖</span>Decide a dispute on-chain</h2>
+      <p class="mute">Use this only when the app says a decision is waiting for the arbiter. Connect the arbiter wallet. Paste the order number from the staff page.</p>
+      <label>Order number</label><input id="ordId" placeholder="e.g. 6f1076e5-099c-4561-a4ab-d2bc5a0f2e25">
+      <div class="acts"><button class="btn good" id="relBuyer">Unlock to the buyer</button><button class="btn danger" id="refSeller">Return to the seller</button></div>
+      <div class="log" id="ordLog"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">⏸</span>Emergency pause</h2>
+      <p class="mute">Pause stops new deposits, ad holds and locks. Withdraws, unlocks and refunds still work, so nobody's money gets stuck. Owner wallet only.</p>
+      <div class="acts"><button class="btn danger" id="pause">Pause</button><button class="btn alt" id="unpause">Unpause</button></div>
+      <div class="log" id="pauseLog"></div>
+    </div>
+  </div>
+  <script src="vendor/ethers-6.umd.min.js"></script>
+  <script src="owner.js"></script>
+</body>
+</html>

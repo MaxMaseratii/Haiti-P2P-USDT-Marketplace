@@ -10,7 +10,8 @@
     .ow{max-width:820px;margin:24px auto;padding:0 16px 80px}
     .ow h1{font:700 30px/1.15 var(--serif,Georgia,serif);margin:6px 0 4px}
     .ow .kick{font:700 12px var(--mono,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
-    .ow .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+    .ow .step::before,.ow .step::after{display:none!important}
+    .ow .step{text-align:left;font-size:15px;font-weight:400;color:var(--ink);flex:none;position:static;padding-top:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
     .ow .step h2{font-size:18px;margin:0 0 6px;display:flex;gap:10px;align-items:center}
     .ow .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:var(--brand-ink);font:700 13px var(--mono,monospace);flex:none}
     .ow label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
@@ -33,13 +34,47 @@
   <div class="ow">
     <div class="kick">Haiti P2P · owner only</div>
     <h1>Owner tools</h1>
-    <p class="mute">Put the lock contract on Arbitrum with your own wallet, take out your fees, pause, and decide disputes on-chain. Nothing here can touch users' money except what the contract allows. This page never sends your keys anywhere.</p>
+    <p class="mute">Your contract on Arbitrum: take out your fees, pause, and decide disputes on-chain. Nothing here can touch users' money except what the contract allows. This page never sends your keys anywhere.</p>
 
+    
+    <div class="step">
+      <h2><span class="num">★</span>Your contract</h2>
+      <label>Contract address</label><input id="cAddr" placeholder="0x… (filled in after you deploy)">
+      <div class="acts"><button class="btn alt" id="readC">Check it</button></div>
+      <div class="log" id="cInfo"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">⛽</span>Top up the app wallet gas</h2>
+      <p class="mute">The app wallet pays the network cost of locks, unlocks and withdraws (the fees users pay come back to you). Keep about 0.003 ETH in it. Your admin page turns red when it is low.</p>
+      <label>App wallet address</label><div class="key" id="topAddr">loading…</div>
+      <div class="row2"><div><label>Amount of ETH</label><input id="topAmt" value="0.004"></div><div><label>&nbsp;</label><button class="btn" id="topUp">Send ETH from my wallet</button></div></div>
+      <div class="log" id="topLog"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">$</span>Take out your fees</h2>
+      <p class="mute">Connect the fee wallet first. Fees wait inside the contract until you take them out.</p>
+      <div class="acts"><button class="btn" id="feesUsdt">Withdraw all USDT fees</button><button class="btn" id="feesUsdc">Withdraw all USDC fees</button></div>
+      <div class="log" id="feeLog"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">⚖</span>Decide a dispute on-chain</h2>
+      <p class="mute">Use this only when the app says a decision is waiting for the arbiter. Connect the arbiter wallet. Paste the order number from the staff page.</p>
+      <label>Order number</label><input id="ordId" placeholder="e.g. 6f1076e5-099c-4561-a4ab-d2bc5a0f2e25">
+      <div class="acts"><button class="btn good" id="relBuyer">Unlock to the buyer</button><button class="btn danger" id="refSeller">Return to the seller</button></div>
+      <div class="log" id="ordLog"></div>
+    </div>
+    <div class="step">
+      <h2><span class="num">⏸</span>Emergency pause</h2>
+      <p class="mute">Pause stops new deposits, ad holds and locks. Withdraws, unlocks and refunds still work, so nobody's money gets stuck. Owner wallet only.</p>
+      <div class="acts"><button class="btn danger" id="pause">Pause</button><button class="btn alt" id="unpause">Unpause</button></div>
+      <div class="log" id="pauseLog"></div>
+    </div>
+
+    <details class="step" style="margin-top:30px"><summary style="cursor:pointer;font-weight:700">Set up a new contract (already done. Open only to start over.)</summary>
     <div class="step">
       <h2><span class="num">1</span>Pick the network</h2>
       <div class="seg" id="netSeg">
-        <button type="button" data-net="test" class="on"><b>Practice first</b><small>Arbitrum Sepolia. Fake money. Free test ETH.</small></button>
-        <button type="button" data-net="real"><b>Real money</b><small>Arbitrum One. Real USDT and USDC.</small></button>
+        <button type="button" data-net="real" class="on"><b>Real money</b><small>Arbitrum One. Real USDT and USDC.</small></button>
       </div>
     </div>
 
@@ -75,7 +110,7 @@
       <div class="log" id="deployLog"></div>
     </div>
 
-    <div class="step" id="mintStep">
+    <div class="step" id="mintStep" hidden>
       <h2><span class="num">4b</span>Practice only: give test USDT to a wallet</h2>
       <p class="mute">The seller wallet you trade with needs test USDT. Use a different wallet than the fee wallet (for example a second account in MetaMask).</p>
       <div class="row2"><div><label>Wallet address</label><input id="mintTo" placeholder="0x…"></div><div><label>&nbsp;</label><button class="btn alt" id="mint">Send 1,000 test USDT</button></div></div>
@@ -98,32 +133,7 @@
       <div class="acts"><button class="btn alt" id="copyEnv">Copy all</button></div>
     </div>
 
-    <h1 style="margin-top:40px;font-size:24px">After launch</h1>
-    <div class="step">
-      <h2><span class="num">★</span>Your contract</h2>
-      <label>Contract address</label><input id="cAddr" placeholder="0x… (filled in after you deploy)">
-      <div class="acts"><button class="btn alt" id="readC">Check it</button></div>
-      <div class="log" id="cInfo"></div>
-    </div>
-    <div class="step">
-      <h2><span class="num">$</span>Take out your fees</h2>
-      <p class="mute">Connect the fee wallet first. Fees wait inside the contract until you take them out.</p>
-      <div class="acts"><button class="btn" id="feesUsdt">Withdraw all USDT fees</button><button class="btn" id="feesUsdc">Withdraw all USDC fees</button></div>
-      <div class="log" id="feeLog"></div>
-    </div>
-    <div class="step">
-      <h2><span class="num">⚖</span>Decide a dispute on-chain</h2>
-      <p class="mute">Use this only when the app says a decision is waiting for the arbiter. Connect the arbiter wallet. Paste the order number from the staff page.</p>
-      <label>Order number</label><input id="ordId" placeholder="e.g. 6f1076e5-099c-4561-a4ab-d2bc5a0f2e25">
-      <div class="acts"><button class="btn good" id="relBuyer">Unlock to the buyer</button><button class="btn danger" id="refSeller">Return to the seller</button></div>
-      <div class="log" id="ordLog"></div>
-    </div>
-    <div class="step">
-      <h2><span class="num">⏸</span>Emergency pause</h2>
-      <p class="mute">Pause stops new deposits, ad holds and locks. Withdraws, unlocks and refunds still work, so nobody's money gets stuck. Owner wallet only.</p>
-      <div class="acts"><button class="btn danger" id="pause">Pause</button><button class="btn alt" id="unpause">Unpause</button></div>
-      <div class="log" id="pauseLog"></div>
-    </div>
+    </details>
   </div>
   <script src="vendor/ethers-6.umd.min.js"></script>
   <script src="owner.js"></script>

@@ -17,17 +17,15 @@ services:
         generateValue: true
       - key: PGSSL
         value: "false"
-      # ---- test mode (default) or real money ----
+      # ---- real money ----
       - key: ESCROW_MODE
-        sync: false            # MOCK = fake money. EVM = real contract (use the lines from /owner.html)
+        sync: false            # EVM (real contract). Use the lines from /owner.html
       - key: SMS_PROVIDER
-        sync: false            # mock (code 000000) or twilio. Real money needs twilio.
-      - key: DEMO_SEED
-        sync: false            # "true" only in test mode (example sellers). Must be false with real money.
+        sync: false            # email (Brevo codes, free) or twilio (SMS)
       - key: ADMIN_PHONES
         sync: false            # YOUR phone, like +50937001234. You become admin when you sign up
       - key: ADMIN_LOGIN_CODE
-        sync: false            # YOUR secret 6-digit login code while SMS is mock
+        sync: false            # only used on a laptop in test mode. Not needed live
       # ---- real money on Arbitrum (copy from /owner.html after you deploy) ----
       - key: ESCROW_NETWORK
         sync: false

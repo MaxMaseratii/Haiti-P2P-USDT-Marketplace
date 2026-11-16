@@ -52,6 +52,7 @@ function get() {
   ctx = { provider, operator, arbiter, base, op: base.connect(operator), arb: arbiter ? base.connect(arbiter) : null, tokens, assetOf };
   return ctx;
 }
+export const appWalletAddress = () => (ctx ? ctx.operator.address : null);
 export const resetEvm = () => { ctx?.provider.destroy(); ctx = null; };
 
 // Send one transaction at a time so nonces never collide.

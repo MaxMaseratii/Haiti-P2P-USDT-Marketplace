@@ -16,7 +16,7 @@
   const errText = (e) => e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
   const store = { get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private window */ } } };
 
-  let net = 'test', provider = null, signer = null, me = null, op = null, deployed = store.get('hp2p-deployed'), C = null;
+  let net = 'real', provider = null, signer = null, me = null, op = null, deployed = store.get('hp2p-deployed'), C = null;
 
   async function contracts() { if (!C) C = await (await fetch('owner/contracts.json')).json(); return C; }
   async function connect() {
@@ -55,7 +55,7 @@
     $('deployNote').textContent = net === 'test' ? 'Practice: we also make a test USDT for you (and send you 1,000). It costs only free test ETH.' : 'Real money. Your wallet asks you to confirm. It costs a few cents of ETH.';
     provider = signer = me = null; say('who', 'Network changed. Connect again.');
   });
-  $('deployNote').textContent = 'Practice: we also make a test USDT for you (and send you 1,000). It costs only free test ETH.';
+  $('deployNote').textContent = 'Real money. Your wallet asks you to confirm. It costs a few cents of ETH.';
 
   // 2. connect
   act('connect', connect, 'who');
@@ -107,6 +107,18 @@
     await (await t.mint(to, 1000n * 10n ** 6n)).wait();
     say('mintLog', `Sent 1,000 test USDT to ${to}. In MetaMask, import the token ${deployed.usdt} to see it.`, 'ok');
   }, 'mintLog');
+
+  // top up the app wallet of the live app
+  act('topUp', async () => {
+    const to = $('topAddr').textContent.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new Error('The app is not on real money yet, so there is no app wallet to top up.');
+    await connect();
+    const v = ethers.parseEther(String($('topAmt').value || '0'));
+    if (v <= 0n) throw new Error('Write an amount of ETH.');
+    say('topLog', 'Confirm in your wallet…');
+    await (await signer.sendTransaction({ to, value: v })).wait();
+    say('topLog', `Sent ${$('topAmt').value} ETH to the app wallet.`, 'ok');
+  }, 'topLog');
 
   // 5. fund the app wallet
   act('fund', async () => {
@@ -175,4 +187,11 @@
   act('unpause', pause(false), 'pauseLog');
 
   if (deployed) { $('cAddr').value = deployed.address; net = deployed.net; [...$('netSeg').children].forEach((x) => x.classList.toggle('on', x.dataset.net === net)); renderEnv(); }
+  // The live app knows its contract: fill it in so the tools below work on any computer.
+  fetch('/api/config').then((r) => r.json()).then((c) => {
+    if (!c.chain || !c.chain.contract) { $('topAddr').textContent = '— (the app is not on real money yet)'; return; }
+    $('cAddr').value = c.chain.contract;
+    if (c.chain.app_wallet) $('topAddr').textContent = c.chain.app_wallet;
+    net = Number(c.chain.chain_id) === 421614 ? 'test' : 'real';
+  }).catch(() => {});
 })();

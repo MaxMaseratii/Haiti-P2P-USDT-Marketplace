@@ -35,7 +35,6 @@ api.get('/config', (_req, res) => res.json({
   fee_rate: config.feeRate,
   mock_otp: isMockSms() ? '000000' : null,
   code_channel: config.smsProvider === 'email' ? 'email' : 'sms',
-  demo: config.demoSeed && isMock(),
   network: config.escrowNetwork,
   // Official logo files, if you add them to public/img/pay/ (moncash.png, natcash.png, bank.png). Otherwise the name is shown.
   pay_logos: payLogos(),
@@ -43,7 +42,7 @@ api.get('/config', (_req, res) => res.json({
   networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
   withdraw_fee: config.withdrawFee,
   lock_fee: config.lockFee,
-  chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
+  chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract, app_wallet: evm.appWalletAddress(),
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));
 
@@ -63,17 +62,6 @@ api.post('/auth/signup', wrap(async (req) => {
   if (!isMockSms() || code !== undefined || owner) proof = await otp.verifyCode(phone, code, owner);
   // Email codes: the email that got the code becomes the account's email.
   const u = await users.signup({ phone, full_name, email: proof?.email || null });
-  return { token: makeToken(u.id), user: users.publicUser(u) };
-}));
-
-// Test mode only: one-click login as the ready-made test buyer or test seller.
-api.post('/auth/demo-login', wrap(async (req) => {
-  if (!(config.demoSeed && isMock())) throw forbidden('Not available.');
-  const { TEST_PHONES } = await import('./services/demo.js');
-  const phone = TEST_PHONES[req.body?.who];
-  if (!phone) throw bad('who must be buyer or seller.');
-  const u = await users.findByPhone(phone);
-  if (!u) throw notFound('Test accounts are not ready yet.');
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
@@ -277,7 +265,7 @@ admin.get('/overview', wrap(async () => {
       FROM generate_series(current_date - 29, current_date, interval '1 day') d
       LEFT JOIN orders o ON o.state='COMPLETED' AND o.updated_at::date = d::date GROUP BY d ORDER BY d`)).rows;
   return { users: u, orders: o, volume: money, wallets: wal, ads, disputes: disp, daily,
-    server: { escrow_mode: config.escrowMode, sms: config.smsProvider, demo: !!(config.demoSeed && isMock()), network: config.escrowNetwork,
+    server: { escrow_mode: config.escrowMode, sms: config.smsProvider, network: config.escrowNetwork,
       fee_rate: config.feeRate, commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, started_at: started, owner_code_set: /^\d{6}$/.test(config.adminLoginCode) } };
 }));
 admin.get('/orders', wrap(async (req) => (await q(

@@ -3,7 +3,12 @@ import { config } from './config.js';
 import { startWorker } from './worker.js';
 
 if (!['MOCK', 'EVM'].includes(config.escrowMode)) {
-  console.error('ESCROW_MODE must be MOCK or EVM.');
+  console.error('ESCROW_MODE must be EVM.');
+  process.exit(1);
+}
+// Fake money (MOCK) is only for the automated tests and a laptop. A public server must run real money.
+if (config.escrowMode === 'MOCK' && process.env.ALLOW_TEST_MODE !== 'true') {
+  console.error('ESCROW_MODE=MOCK (fake money) is turned off. Set ESCROW_MODE=EVM and the lines from /owner.html. (On a laptop only: ALLOW_TEST_MODE=true.)');
   process.exit(1);
 }
 // Real money must never run with fake SMS codes or demo data. Test networks are allowed (for a practice run).
@@ -14,7 +19,6 @@ if (config.escrowMode === 'EVM' && !TESTNETS.has(config.evmChainId)) {
   if (config.smsProvider === 'email' && (!config.brevoKey || !config.mailFrom)) stop.push('Email codes need BREVO_API_KEY and MAIL_FROM (a sender email verified in Brevo).');
   if (config.smsProvider === 'twilio' && (!config.twilioSid || !config.twilioToken || !(config.twilioFrom || config.twilioMessagingService)))
     stop.push('Twilio values are missing: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (or TWILIO_MESSAGING_SERVICE_SID).');
-  if (config.demoSeed) stop.push('DEMO_SEED must be false with real money.');
   if (stop.length) { console.error('Real money mode will not start until you fix this:\n - ' + stop.join('\n - ')); process.exit(1); }
 }
 if (config.escrowMode === 'EVM') {

@@ -178,7 +178,7 @@
     'Fill with test data': ['Mete done tès', 'Remplir avec des données test'], 'Saved.': ['Li anrejistre.', 'Enregistré.'], 'Save': ['Anrejistre', 'Enregistrer'],
     'Your USDT wallet address (for withdrawals when live)': ['Adrès pòtfèy USDT ou (pou retrè)', 'Votre adresse USDT (pour les retraits)'],
     'Empty.': ['Vid.', 'Vide.'], 'Deposit': ['Depo', 'Dépôt'], 'Withdraw': ['Retire', 'Retirer'],
-    'Real chain mode. The contract is UNAUDITED. Use small amounts only.': ['Mòd blockchain reyèl. Kontra a poko odite. Sèvi ak ti kantite sèlman.', 'Mode blockchain réel. Le contrat n\'est pas encore audité. Utilisez de petits montants seulement.'],
+    'Your crypto is held in a smart contract on Arbitrum. Start with small amounts.': ['Kripto ou kenbe nan yon kontra entèlijan sou Arbitrum. Kòmanse ak ti kantite.', 'Votre crypto est gardée dans un contrat intelligent sur Arbitrum. Commencez avec de petits montants.'],
     'Your wallet': ['Pòtfèy ou', 'Votre portefeuille'], 'Not linked yet.': ['Poko konekte.', 'Pas encore lié.'], 'Wallet linked.': ['Pòtfèy la konekte.', 'Portefeuille lié.'],
     'Connect and link my wallet': ['Konekte pòtfèy mwen', 'Connecter mon portefeuille'], 'Deposit or withdraw': ['Depo oswa retrè', 'Dépôt ou retrait'], 'Save address': ['Anrejistre adrès la', 'Enregistrer l\'adresse'],
     'Wallet': ['Pòtfèy', 'Portefeuille'], 'Balance': ['Balans', 'Solde'], 'Free': ['Lib', 'Libre'],

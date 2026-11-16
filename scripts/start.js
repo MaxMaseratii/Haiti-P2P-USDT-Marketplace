@@ -1,4 +1,4 @@
-// One command for a hosted server: make the tables if they are missing, optionally add demo ads, then start.
+// One command for a hosted server: make the tables if they are missing, then start.
 import fs from 'node:fs';
 import pg from 'pg';
 import { config } from '../src/config.js';
@@ -51,10 +51,4 @@ if (!config.tokenSecret || config.tokenSecret === 'dev-only-secret' || config.to
 }
 await client.end();
 
-if (config.demoSeed && config.escrowMode === 'MOCK') {
-  const { seedDemo } = await import('../src/services/demo.js');
-  console.log((await seedDemo()) ? 'Demo ads added.' : 'Demo ads skipped (market is not empty).');
-  const { ensureTestAccounts } = await import('../src/services/demo.js');
-  await ensureTestAccounts(); console.log('Test buyer and test seller are ready.');
-}
 await import('../src/server.js');

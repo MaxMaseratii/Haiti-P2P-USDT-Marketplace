@@ -58,7 +58,6 @@ export const config = {
   withdrawFee: str('WITHDRAW_FEE_USDT', '1'),           // flat fee for a gasless withdraw (the app pays the gas), in USDT/USDC   // the network the escrow runs on (shown to users)
   pgSsl: str('PGSSL', '') === 'true',                // true for hosted databases that need SSL
   adminPhones: str('ADMIN_PHONES', '').split(',').map((x) => x.trim()).filter(Boolean), // these phones become ADMIN when they sign up
-  demoSeed: str('DEMO_SEED', '') === 'true',          // MOCK only: fill the market with example sellers
   uploadDir: str('UPLOAD_DIR', 'uploads'),
   maxUploadBytes: num('MAX_UPLOAD_BYTES', 4 * 1024 * 1024),
   platformUserId: '00000000-0000-0000-0000-000000000001',

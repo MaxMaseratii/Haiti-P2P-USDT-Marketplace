@@ -57,8 +57,7 @@ async function route() {
   const app = h('div', { class: 'view' }); $('#app').replaceChildren(app);
   if (!cfg.escrow_mode) cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   const ban = $('#banner');
-  ban.hidden = cfg.escrow_mode !== 'MOCK';
-  ban.textContent = 'TEST MODE: fake money. Nothing here is real USDT or real gourdes.';
+  ban.hidden = true;
   if (location.hash.startsWith('#legal')) { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return legalView(app, location.hash.split('/')[1]); }
   if (location.hash === '#welcome') { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return authView(app); } // the public home page, also for logged-in people
   if (!token && location.hash === '#safety') { renderNav(); return safetyView(app); }
@@ -92,7 +91,7 @@ function authView(app) {
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
   const byEmail = cfg.code_channel === 'email';
   const email = h('input', { type: 'email', placeholder: 'you@gmail.com', autocomplete: 'email' });
-  const code = h('input', { placeholder: cfg.mock_otp ? 'Test code: ' + cfg.mock_otp : byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric' });
+  const code = h('input', { placeholder: byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
   const loginCard = h('div', { class: 'card logincard' },
     h('h2', {}, 'Log in / Sign up'),
@@ -101,23 +100,18 @@ function authView(app) {
     byEmail ? h('label', {}, 'Email — sign up only. Your code goes there.') : null, byEmail ? email : null,
     h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, h('button', { class: 'btn alt', onclick: act(async () => {
       const r = await api('POST', '/auth/request-code', { phone: phone.value.replace(/[\s()\-.]/g, ''), email: byEmail ? email.value.trim() || undefined : undefined });
-      toast(cfg.mock_otp ? 'Test mode: no SMS is sent. Use code ' + cfg.mock_otp : r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+      toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
     }) }, 'Send code')),
     h('div', { class: 'gactions', style: 'margin-top:12px' },
       h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.replace(/[\s()\-.]/g, ''), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up')),
       h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.replace(/[\s()\-.]/g, ''), code: code.value.trim() }))) }, t('Log in'))),
     h('p', { class: 'mute', style: 'margin:10px 0 0;font-size:12.5px' }, byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video.' : 'We send a code by SMS to confirm your phone. Then you verify your ID with photos and a short video.'));
-  const quickTest = cfg.demo ? h('div', { class: 'quicktest' },
-    h('div', {}, h('b', {}, 'Test mode'), h('span', { class: 'mute' }, ' · fake money · ready-made accounts with 1,000 fake USDT')),
-    h('div', { class: 'gactions' },
-      h('button', { class: 'btn good sm', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'buyer' }))) }, 'Log in as TEST BUYER'),
-      h('button', { class: 'btn danger sm', onclick: act(async () => done(await api('POST', '/auth/demo-login', { who: 'seller' }))) }, 'Log in as TEST SELLER'))) : null;
   const adsBox = h('div');
   // Logged in and looking at the public home page: show a way back to the account instead of the login form.
   const card = token && me ? h('div', { class: 'card logincard' }, h('h2', {}, (me.user.display_name || me.user.full_name).split(' ')[0] + ' 👋'),
     h('p', { class: 'mute' }, lang === 'ht' ? 'Ou konekte deja.' : lang === 'fr' ? 'Vous êtes déjà connecté.' : 'You are already logged in.'),
     h('button', { class: 'btn big-btn', onclick: () => go('home') }, lang === 'ht' ? 'Ale nan kont mwen' : lang === 'fr' ? 'Aller à mon compte' : 'Go to my account')) : loginCard;
-  homeView(app, card, token ? null : quickTest, adsBox);
+  homeView(app, card, null, adsBox);
   publicAds(adsBox);
 }
 
@@ -241,7 +235,7 @@ function takeAd(a) {
   const LF = Number(cfg.lock_fee || 0);
   // People can type the amount in gourdes (most natural) or in USDT. We always send USDT to the server.
   let unit = 'HTG';
-  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount', value: tail ? rest.toFixed(2) : cfg.demo ? String(Math.max(minH, Math.min(1000, maxH))) : '' });
+  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount', value: tail ? rest.toFixed(2) : '' });
   if (tail) amount.readOnly = true;
   const unitSeg = h('div', { class: 'seg unitseg' }, ['HTG', a.asset].map((u2, i) => h('button', { type: 'button', class: i ? '' : 'on', onclick: (e) => {
     const v = Number(amount.value || 0);
@@ -332,10 +326,10 @@ async function adsView(app) {
       h('div', {}, field('asset', 'Asset', h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC')))),
     ),
     h('div', { class: 'row' },
-      h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal', value: cfg.demo ? '140' : '' }))),
-      h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal', value: cfg.demo ? '100' : '' }))),
-      h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '500' : '' }))),
-      h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '10000' : '' })))),
+      h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal' }))),
+      h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal' }))),
+      h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal' }))),
+      h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal' })))),
     sellBox, buyBox,
     h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
     Number(cfg.lock_fee) > 0 ? h('p', { class: 'mute' }, `The buyer pays a ${cfg.lock_fee} USDT lock fee per order. It comes out of the USDT they get.`) : null,
@@ -622,7 +616,7 @@ function renderChat(col, v, msgs) {
   log.scrollTop = log.scrollHeight;
 }
 
-// ---------- real chain helpers (ESCROW_MODE=EVM). NOT TESTED in a browser wallet yet. ----------
+// ---------- real chain helpers (ESCROW_MODE=EVM) ----------
 const pad = (hex) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
 const toUnits = (v) => { const [i, f = ''] = String(v).split('.'); return BigInt(i + f.padEnd(6, '0').slice(0, 6)); };
 async function eth() {
@@ -680,8 +674,6 @@ function payoutCard() {
   const hint = h('div', { class: 'mute' });
   const paint = () => { const n = nets.find((x) => x.id === net.value) || {}; hint.textContent = (n.fee || '') + (n.auto ? '. Automatic payouts work on this network.' : '. Saved for staff payouts. Not automatic yet.'); };
   net.addEventListener('change', paint); paint();
-  const fake = { TRON: () => 'T' + Array.from(crypto.getRandomValues(new Uint8Array(33)), (b) => '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'[b % 58]).join(''), };
-  const evm = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
   return h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Where do I receive crypto?'),
     h('p', { class: 'mute' }, 'Binance UID is the easiest: a Binance to Binance transfer has no network fee. Or use a wallet.'),
     h('label', { class: 'withlogo' }, h('img', { src: 'img/brand/binance.png', alt: '' }), 'Binance UID'), uid,
@@ -689,7 +681,6 @@ function payoutCard() {
     h('label', {}, 'Wallet address'), addr,
     h('div', { class: 'warn-note', style: 'margin-top:10px' }, 'Be careful. If you pick the wrong network, the money can be lost forever. Always check the network and the address.'),
     h('div', { class: 'gactions', style: 'margin-top:12px' },
-      cfg.demo ? h('button', { class: 'btn alt', onclick: () => { uid.value = '123456789'; addr.value = (fake[net.value] || evm)(); } }, 'Fill with test data') : null,
       h('button', { class: 'btn', onclick: act(async () => { await api('PUT', '/me/payout', { binance_uid: uid.value, network: addr.value ? net.value : undefined, address: addr.value }); me = await api('GET', '/me'); toast('Saved.'); }) }, 'Save')));
 }
 
@@ -698,16 +689,13 @@ async function walletView(app) {
   const w = me.wallet;
   const amt = h('input', { value: '100', inputmode: 'decimal' });
   const asset = h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC'));
-  const fakeAddr = () => '0x' + Array.from(crypto.getRandomValues(new Uint8Array(20)), (b) => b.toString(16).padStart(2, '0')).join('');
-  const addr = h('input', { value: me.user.wallet_addr || (cfg.demo ? fakeAddr() : ''), placeholder: 'Your USDT wallet address (for withdrawals when live)' });
+  const addr = h('input', { value: me.user.wallet_addr || '', placeholder: 'Your USDT wallet address (for withdrawals when live)' });
   const wto = h('input', { value: (me.user.payout_network === 'ARBITRUM' && me.user.payout_addr) || me.user.wallet_addr || '', placeholder: '0x… (your wallet, or your Binance USDT deposit address on Arbitrum)' });
   app.append(h('div', { class: 'card' }, h('h2', {}, t('Wallet')),
     w.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Asset', t('Available'), 'Locked'].map((x) => h('th', {}, x)))),
       h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
-    cfg.escrow_mode === 'MOCK' ? [h('h3', {}, 'Deposit (fake money, test mode)'), h('div', { class: 'row' }, asset, amt),
-      h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/wallet/dev-deposit', { asset: asset.value, amount: amt.value }); route(); }) }, t('Deposit'))] : null,
     cfg.chain ? [
-      h('p', { class: 'mute' }, 'Real chain mode. The contract is UNAUDITED. Use small amounts only.'),
+      h('p', { class: 'mute' }, 'Your crypto is held in a smart contract on Arbitrum. Start with small amounts.'),
       h('h3', {}, 'Your wallet'), h('p', {}, me.user.wallet_addr || 'Not linked yet.'),
       h('button', { class: 'btn alt', onclick: act(async () => { await linkWalletWithSignature(); toast('Wallet linked.'); route(); }) }, 'Connect and link my wallet'),
       h('h3', {}, 'Deposit or withdraw'), h('div', { class: 'row' }, asset, amt),
@@ -971,8 +959,8 @@ async function profileView(app) {
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
   const bank = bankPicker(), bankRow = h('div', { class: 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
   type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
-  const an = h('input', { placeholder: 'Name on the account (must match your ID)', value: cfg.demo ? u.full_name : '' });
-  const ar = h('input', { placeholder: 'Phone number or bank account number', value: cfg.demo ? '37' + String(Math.floor(Math.random() * 1e6)).padStart(6, '0') : '' });
+  const an = h('input', { placeholder: 'Name on the account (must match your ID)' });
+  const ar = h('input', { placeholder: 'Phone number or bank account number' });
   // public profile
   const pub = h('input', { value: u.display_name || '', placeholder: 'Optional. A company or trading name', maxlength: 40 });
   const bio = h('textarea', { rows: 2, maxlength: 160, placeholder: 'Optional. One line about you. No phone numbers or links.' }, u.bio || '');

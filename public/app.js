@@ -232,18 +232,23 @@ const accLabel = (p) => (p.linked ? '🔗 ' + p.account_name + ' (linked) · ' :
 
 function takeAd(a) {
   const P = Number(a.price_htg);
-  const minH = Number(a.min_order_htg), maxH = Math.min(Number(a.max_order_htg), Math.floor(Number(a.remaining) * P));
+  // If what is left is worth less than the minimum, the next person takes all of it (the ad never gets stuck).
+  const rest = Number(a.remaining) * P, tail = rest < Number(a.min_order_htg);
+  const minH = tail ? rest : Number(a.min_order_htg), maxH = tail ? rest : Math.min(Number(a.max_order_htg), Math.floor(rest));
+  const LF = Number(cfg.lock_fee || 0);
   // People can type the amount in gourdes (most natural) or in USDT. We always send USDT to the server.
   let unit = 'HTG';
-  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount', value: cfg.demo ? String(Math.max(minH, Math.min(1000, maxH))) : '' });
+  const amount = h('input', { inputmode: 'decimal', placeholder: 'Amount', value: tail ? rest.toFixed(2) : cfg.demo ? String(Math.max(minH, Math.min(1000, maxH))) : '' });
+  if (tail) amount.readOnly = true;
   const unitSeg = h('div', { class: 'seg unitseg' }, ['HTG', a.asset].map((u2, i) => h('button', { type: 'button', class: i ? '' : 'on', onclick: (e) => {
     const v = Number(amount.value || 0);
     if (u2 !== unit && v) amount.value = u2 === 'HTG' ? (v * P).toFixed(2) : (v / P).toFixed(2);
     unit = u2; unitSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); upd();
   } }, u2 === 'HTG' ? 'Gourdes (HTG)' : u2)));
-  const total = h('div', { class: 'big' }, '0 HTG'), other = h('div', { class: 'mute' });
+  const total = h('div', { class: 'big' }, '0 HTG'), other = h('div', { class: 'mute' }), feeLine = h('div', { class: 'feeline' });
   // USDT with 2 decimals, nudged to stay inside the order limits.
   const usdtOf = () => {
+    if (tail) return Number(a.remaining);
     const v = Number(amount.value || 0); let u2 = Math.round((unit === 'HTG' ? v / P : v) * 100) / 100;
     if (u2 && u2 * P < minH - 0.005) u2 = Math.round((u2 + 0.01) * 100) / 100;
     if (u2 * P > maxH + 0.005) u2 = Math.round((u2 - 0.01) * 100) / 100;
@@ -254,6 +259,11 @@ function takeAd(a) {
     total.textContent = (a.side === 'SELL' ? '' : '') + money(htg) + ' HTG';
     other.textContent = `= ${usd2(u2)} ${a.asset}` + (htg && (htg < minH - 0.01 || htg > maxH + 0.01) ? `  ·  must be ${money(minH, 0)} – ${money(maxH, 0)} HTG` : '');
     other.classList.toggle('badtxt', !!htg && (htg < minH - 0.01 || htg > maxH + 0.01));
+    // Who pays what: the buyer pays the lock fee, the seller pays the platform fee.
+    const sellFee = Math.trunc(u2 * Number(cfg.fee_rate || 0) * 1e6) / 1e6;
+    feeLine.replaceChildren(!u2 ? '' : a.side === 'SELL'
+      ? h('span', {}, h('b', {}, `You get: ${usd2(Math.max(0, u2 - LF))} ${a.asset}`), ' ', h('span', { class: 'mute' }, `(${usd2(u2)} − ${usd2(LF)} lock fee)`))
+      : h('span', {}, h('b', {}, `You sell: ${usd2(u2)} ${a.asset}`), ' ', h('span', { class: 'mute' }, `+ ${usd(sellFee)} ${a.asset} platform fee (${Number(cfg.fee_rate) * 100}%)`)));
   };
   amount.addEventListener('input', upd); upd();
   const types = a.pay_types || [a.pay_type];
@@ -283,8 +293,9 @@ function takeAd(a) {
       h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), a.bio ? h('div', { class: 'bio' }, a.bio) : null, repBadges(a))),
     h('div', { class: 'kv' }, kv([['Available', `${usd(a.remaining)} ${a.asset}  (≈ ${money(Number(a.remaining) * P, 0)} HTG)`],
       ['Per order', `${money(minH, 0)} – ${money(Number(a.max_order_htg), 0)} HTG  (≈ ${usd2(minH / P)} – ${usd2(Number(a.max_order_htg) / P)} ${a.asset})`], [a.side === 'SELL' ? 'Seller accepts' : 'Buyer pays with', types.map((x) => PAY_NAME[x]).join(', ')]])),
-    h('label', {}, 'How much?'), unitSeg, amount, h('div', { class: 'mute' }, `From ${money(minH, 0)} to ${money(maxH, 0)} HTG.`),
-    h('div', { class: 'sumbox' }, h('div', { class: 'mute' }, a.side === 'SELL' ? 'You pay' : 'You receive'), total, other)];
+    h('label', {}, 'How much?'), unitSeg, amount,
+    tail ? h('div', { class: 'mute' }, `Only ${usd(a.remaining)} ${a.asset} is left. You take all of it.`) : h('div', { class: 'mute' }, `From ${money(minH, 0)} to ${money(maxH, 0)} HTG.`),
+    h('div', { class: 'sumbox' }, h('div', { class: 'mute' }, a.side === 'SELL' ? 'You pay' : 'You receive'), total, other, feeLine)];
   if (a.side === 'SELL') body.push(h('label', {}, 'How will you pay?'), paySeg);
   if (a.side === 'BUY') {
     body.push(h('label', {}, 'Where should the buyer send the gourdes?'), h('p', { class: 'mute' }, 'One of your accounts, or a linked account (see "Linked accounts").'), mine.length ? pm : null,
@@ -292,7 +303,7 @@ function takeAd(a) {
   }
   body.push(h('button', { class: 'btn big-btn', onclick: act(async () => {
     if (a.side === 'BUY' && !mine.length) throw new Error('Add a payment account first.');
-    const o = await api('POST', '/orders', { ad_id: a.id, amount: usdtOf().toFixed(2), payment_method_id: a.side === 'BUY' ? pm.value : undefined, pay_type: a.side === 'SELL' ? payWith : undefined });
+    const o = await api('POST', '/orders', { ad_id: a.id, amount: tail ? String(a.remaining) : usdtOf().toFixed(2), payment_method_id: a.side === 'BUY' ? pm.value : undefined, pay_type: a.side === 'SELL' ? payWith : undefined });
     go('order/' + o.id);
   }) }, 'Continue'));
   body.push(h('p', { class: 'mute center' }, '🔒 We lock the seller\'s USDT before you pay. ', h('a', { href: '#safety' }, 'How it works')));
@@ -324,6 +335,7 @@ async function adsView(app) {
       h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal', value: cfg.demo ? '10000' : '' })))),
     sellBox, buyBox,
     h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
+    Number(cfg.lock_fee) > 0 ? h('p', { class: 'mute' }, `The buyer pays a ${cfg.lock_fee} USDT lock fee per order. It comes out of the USDT they get.`) : null,
     h('button', { class: 'btn', onclick: act(async () => {
       const b = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value]));
       if (b.side === 'SELL') b.payment_method_ids = [...sellBox.querySelectorAll('input:checked')].map((x) => x.value);
@@ -540,7 +552,9 @@ function renderOrder(col, v) {
     pay, dispute,
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Order details'),
       kv([['Price', money(o.price_htg) + ' HTG per ' + o.asset], ['You ' + (r === 'SELLER' ? 'sell' : 'buy'), usd(o.amount) + ' ' + o.asset], ['Total', money(o.total_htg) + ' HTG'],
-        ['Platform fee', usd(o.fee_amount) + ' ' + o.asset + ' (paid by the seller)'], ['Order number', o.id.slice(0, 8).toUpperCase()]])),
+        ['Platform fee', usd(o.fee_amount) + ' ' + o.asset + ' (paid by the seller)'],
+        ...(Number(o.lock_fee) > 0 ? [['Lock fee', usd(o.lock_fee) + ' ' + o.asset + ' (paid by the buyer)'], ['Buyer gets', usd(Number(o.amount) - Number(o.lock_fee)) + ' ' + o.asset]] : []),
+        ['Order number', o.id.slice(0, 8).toUpperCase()]])),
     h('details', { class: 'card' }, h('summary', {}, 'History'), h('div', { class: 'timeline' },
       v.events.map((e) => h('div', {}, hm(e.created_at) + '  ' + (e.to_state || '').replaceAll('_', ' ').toLowerCase() + (e.note ? ' · ' + e.note : '')),
       v.escrow.map((x) => h('div', {}, `escrow ${x.kind.toLowerCase()}: ${x.status.toLowerCase()}` + (x.tx_hash ? ' ' + x.tx_hash.slice(0, 14) + '…' : '')))))),

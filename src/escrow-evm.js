@@ -177,7 +177,8 @@ export const adapter = {
     if (st !== 0n) throw new Error('Order is already finished on chain');
     const ad = (await q('SELECT side FROM ads WHERE id=$1', [order.ad_id])).rows[0];
     const txHash = await send(op, 'lock', oid(order), await addrOf(order.seller_id), await addrOf(order.buyer_id),
-      tokenOf(order.asset), units(order.amount), units(order.fee_amount), ad.side === 'SELL');
+      // The chain pays the buyer "amount" and the fee wallet "fee". The buyer's lock fee moves from one to the other.
+      tokenOf(order.asset), units(order.amount) - units(order.lock_fee || '0'), units(order.fee_amount) + units(order.lock_fee || '0'), ad.side === 'SELL');
     return { txHash };
   },
 

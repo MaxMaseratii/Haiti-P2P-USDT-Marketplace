@@ -127,7 +127,7 @@
     const lines = [
       'ESCROW_MODE=EVM', 'ESCROW_NETWORK=ARBITRUM', `EVM_RPC_URL=${N.rpc}`, `EVM_CHAIN_ID=${deployed.chainId}`, `EVM_ESCROW_ADDRESS=${deployed.address}`,
       `EVM_START_BLOCK=${deployed.block}`, 'EVM_CONFIRMATIONS=40', `TOKEN_USDT=${deployed.usdt}`, `TOKEN_USDC=${deployed.usdc}`,
-      `OPERATOR_PRIVATE_KEY=${op ? op.privateKey : '(the app wallet secret key from step 3)'}`, 'WITHDRAW_FEE_USDT=1', 'DEMO_SEED=false',
+      `OPERATOR_PRIVATE_KEY=${op ? op.privateKey : '(the app wallet secret key from step 3)'}`, 'WITHDRAW_FEE_USDT=1', 'LOCK_FEE_USDT=0.25', 'DEMO_SEED=false',
     ];
     $('env').textContent = lines.join('\n');
   }

@@ -141,6 +141,7 @@
     'Code copied.': ['Kòd la kopye.', 'Code copié.'], 'Copy': ['Kopye', 'Copier'], 'You buy': ['Ou achte', 'Vous achetez'], 'You sell': ['Ou vann', 'Vous vendez'],
     'Order': ['Kòmand', 'Commande'], 'Time left': ['Tan ki rete', 'Temps restant'],
     'Nobody can touch it until the seller confirms the money arrived, the order is cancelled, or our team decides.': ['Pèsonn pa ka manyen l jiskaske vandè a konfime lajan an rive, kòmand lan anile, oswa ekip nou an deside.', 'Personne ne peut y toucher avant que le vendeur confirme l\'arrivée de l\'argent, que la commande soit annulée, ou que notre équipe décide.'],
+    'Lock fee': ['Frè kadna', 'Frais de verrouillage'], 'Buyer gets': ['Achtè a resevwa', 'L\'acheteur reçoit'],
     'Order details': ['Detay kòmand lan', 'Détails de la commande'], 'Total': ['Total', 'Total'], 'Platform fee': ['Frè platfòm', 'Frais de la plateforme'],
     'Order number': ['Nimewo kòmand', 'Numéro de commande'], 'History': ['Istwa', 'Historique'],
     'In review': ['Ap egzamine', 'En examen'], 'Decided for the buyer': ['Deside pou achtè a', 'Décidé pour l\'acheteur'], 'Decided for the seller': ['Deside pou vandè a', 'Décidé pour le vendeur'],
@@ -331,6 +332,14 @@
 
   // Text that has numbers or names inside. [English pattern, Kreyòl, Français]. $1, $2 … are the parts that change.
   const P = [
+    ['^You get: (.+)$', 'Ou resevwa: $1', 'Vous recevez : $1'],
+    ['^You sell: (.+)$', 'Ou vann: $1', 'Vous vendez : $1'],
+    ['^\\((.+) − (.+) lock fee\\)$', '($1 − $2 frè kadna)', '($1 − $2 frais de verrouillage)'],
+    ['^\\+ (.+) platform fee \\((.+)\\)$', '+ $1 frè platfòm ($2)', '+ $1 frais de plateforme ($2)'],
+    ['^Only (.+) is left\\. You take all of it\\.$', 'Rete sèlman $1. Ou pran tout.', 'Il ne reste que $1. Vous prenez tout.'],
+    ['^The buyer pays a (.+) USDT lock fee per order\\. It comes out of the USDT they get\\.$', 'Achtè a peye yon frè kadna $1 USDT pou chak kòmand. Nou retire l sou USDT li resevwa a.', 'L\'acheteur paie des frais de verrouillage de $1 USDT par commande. Ils sont retirés des USDT qu\'il reçoit.'],
+    ['^Order is too small\\. The buyer lock fee is (.+)\\.$', 'Kòmand lan twò piti. Frè kadna achtè a se $1.', 'Commande trop petite. Les frais de verrouillage de l\'acheteur sont de $1.'],
+    ['^The whole ad is worth (.+) HTG\\. Make the minimum order lower than that, or the amount bigger\\.$', 'Tout piblisite a vo $1 HTG. Mete kòmand minimòm lan pi ba pase sa, oswa mete plis kantite.', 'L\'annonce entière vaut $1 HTG. Baissez la commande minimum, ou augmentez le montant.'],
     ['^Per order: (.+) – (.+) HTG$', 'Pou chak kòmand: $1 – $2 HTG', 'Par commande : $1 – $2 HTG'],
     ['^(\\d[\\d,]*) trades?$', '$1 echanj', '$1 échanges'],
     ['^(\\d+)% completed$', '$1% fini', '$1 % terminés'],
@@ -396,7 +405,7 @@
     ['Buyer cancelled', 'Achtè a anile', 'L\'acheteur a annulé'], ['Payment window ended', 'Tan pou peye a fini', 'Délai de paiement terminé'],
     ['Seller did not answer in time', 'Vandè a pa t reponn atan', 'Le vendeur n\'a pas répondu à temps'], ['Lock was not confirmed in time', 'Kadna a pa t konfime atan', 'Le verrouillage n\'a pas été confirmé à temps'],
     [' · member since ', ' · manm depi ', ' · membre depuis '], [' · ID checked ✓', ' · ID verifye ✓', ' · identité vérifiée ✓'],
-    [' (paid by the seller)', ' (vandè a peye l)', ' (payé par le vendeur)'], [' HTG per ', ' HTG pou chak ', ' HTG par '],
+    [' (paid by the seller)', ' (vandè a peye l)', ' (payé par le vendeur)'], [' (paid by the buyer)', ' (achtè a peye l)', ' (payé par l\'acheteur)'], [' HTG per ', ' HTG pou chak ', ' HTG par '],
     [' · paid until ', ' · peye jiska ', ' · payé jusqu\'au '], [' · free', ' · gratis', ' · gratuit'], [' (linked)', ' (konekte)', ' (lié)'],
     [' (fake money, test mode)', ' (fo lajan, mòd tès)', ' (faux argent, mode test)'], ['Tier ', 'Nivo ', 'Niveau '], [' strike(s)', ' avètisman', ' avertissement(s)'],
     ['ID name: ', 'Non sou ID: ', 'Nom sur la pièce : '], [' (private)', ' (prive)', ' (privé)'], ['Uses your ', 'Sèvi ak ', 'Utilise votre '],

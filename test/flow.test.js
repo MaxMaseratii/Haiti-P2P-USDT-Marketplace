@@ -13,6 +13,7 @@ process.env.ESCROW_MODE = 'MOCK';
 process.env.DUAL_AGENT_HTG = '1000';      // every test order needs two agents
 process.env.WORKER_INTERVAL_SEC = '3600';
 process.env.FEE_RATE = '0.005';
+process.env.LOCK_FEE_USDT = '0';   // one test below turns the buyer lock fee on
 process.env.API_RATE_LIMIT = '100000';
 process.env.ADMIN_PHONES = '+50937000777';
 process.env.ADMIN_LOGIN_CODE = '482913';
@@ -551,4 +552,36 @@ test('close account: refused while something is open, then the person cannot log
   await ok('POST', '/me/close', null, tk('cls'));
   assert.equal((await call('GET', '/me', null, tk('cls'))).status, 403);
   assert.equal((await call('POST', '/auth/login', { phone: '+50937000555', code: '000000' })).status, 403);
+});
+
+test('buyer lock fee: the buyer gets the amount minus the fee; a small last bit of an ad can be taken whole', async () => {
+  const { config } = await import('../src/config.js');
+  await signup('lfS', '+50937000301', 'Paul Vendeur'); await signup('lfB', '+50937000302', 'Lucie Achete');
+  await kyc('lfS'); await kyc('lfB');
+  const pm = await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Paul Vendeur', account_ref: '37300301' }, tk('lfS'));
+  await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Lucie Achete', account_ref: '37300302' }, tk('lfB'));
+  await ok('POST', '/wallet/dev-deposit', { asset: 'USDT', amount: '100' }, tk('lfS'));
+  // an ad worth less than its own minimum order is refused
+  const tiny = await call('POST', '/ads', { side: 'SELL', pay_type: 'MONCASH', price_htg: '140', amount: '5', min_order_htg: '1000', max_order_htg: '10000', payment_method_id: pm.id }, tk('lfS'));
+  assert.equal(tiny.status, 400);
+  const a = await ok('POST', '/ads', { side: 'SELL', pay_type: 'MONCASH', price_htg: '140', amount: '12', min_order_htg: '1000', max_order_htg: '10000', payment_method_id: pm.id }, tk('lfS'));
+  config.lockFee = '0.25';
+  try {
+    const o = await ok('POST', '/orders', { ad_id: a.id, amount: '10' }, tk('lfB'));
+    assert.equal(o.lock_fee, '0.250000');
+    await ok('POST', `/orders/${o.id}/paid`, null, tk('lfB'));
+    await ok('POST', `/orders/${o.id}/confirm`, null, tk('lfS'));
+    assert.deepEqual(await bal('lfB'), { a: '9.750000', l: '0.000000' }, 'buyer pays the lock fee');
+    const feeW = async () => (await pool.query(`SELECT available::text a FROM wallet_balances WHERE user_id='00000000-0000-0000-0000-000000000001'`)).rows[0].a;
+    const f0 = Number(await feeW());
+    // 2 USDT left = 280 HTG, below the 1000 HTG minimum: only "take all" works
+    assert.equal((await call('POST', '/orders', { ad_id: a.id, amount: '1' }, tk('lfB'))).status, 400, 'part of the last bit is refused');
+    const last = await ok('POST', '/orders', { ad_id: a.id, amount: '2' }, tk('lfB'));
+    assert.equal(last.total_htg, '280.00');
+    await ok('POST', `/orders/${last.id}/paid`, null, tk('lfB'));
+    await ok('POST', `/orders/${last.id}/confirm`, null, tk('lfS'));
+    assert.deepEqual(await bal('lfB'), { a: '11.500000', l: '0.000000' });
+    assert.equal(Math.round((Number(await feeW()) - f0) * 1e6) / 1e6, 0.26, 'seller fee 0.01 + lock fee 0.25');
+    assert.equal((await ad(a.id)).status, 'SOLD_OUT');
+  } finally { config.lockFee = '0'; }
 });

@@ -48,7 +48,9 @@ services:
       - key: OPERATOR_PRIVATE_KEY
         sync: false            # the app wallet secret key. Never share it.
       - key: WITHDRAW_FEE_USDT
-        sync: false            # flat fee on a gasless withdraw. Default 1
+        sync: false            # flat fee the person withdrawing pays (covers the network cost). Default 1
+      - key: LOCK_FEE_USDT
+        sync: false            # flat fee the buyer pays per order (covers lock and unlock network cost). Default 0.25
       # ---- real SMS (Twilio) ----
       - key: TWILIO_ACCOUNT_SID
         sync: false

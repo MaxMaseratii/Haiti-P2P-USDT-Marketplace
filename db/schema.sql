@@ -349,3 +349,5 @@ CREATE TABLE chain_events (
   UNIQUE (tx_hash, log_index)
 );
 CREATE TABLE chain_state (key text PRIMARY KEY, value text NOT NULL);
+-- The buyer's flat lock fee (comes out of the USDT the buyer gets; goes to the platform).
+ALTER TABLE orders ADD COLUMN lock_fee numeric(18,6) NOT NULL DEFAULT 0;

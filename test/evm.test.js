@@ -92,7 +92,7 @@ before(async () => {
 
   Object.assign(process.env, {
     DATABASE_URL: base.toString(), ESCROW_MODE: 'EVM', WORKER_INTERVAL_SEC: '3600', FEE_RATE: '0.005',
-    DUAL_AGENT_HTG: '100000000', EVM_RPC_URL: `http://127.0.0.1:${srv.address().port}`, EVM_CHAIN_ID: '1337',
+    DUAL_AGENT_HTG: '100000000', LOCK_FEE_USDT: '0', EVM_RPC_URL: `http://127.0.0.1:${srv.address().port}`, EVM_CHAIN_ID: '1337',
     EVM_ESCROW_ADDRESS: await esc.getAddress(), EVM_CONFIRMATIONS: '0', OPERATOR_PRIVATE_KEY: KEYS.operator,
     TOKEN_USDT: await usdt.getAddress(), UPLOAD_DIR: fs.mkdtempSync('/tmp/p2p-evm-up-'),
   });
@@ -172,7 +172,13 @@ test('SELL ad reserves on chain. Seller cannot withdraw the reserve, only the fr
 });
 
 test('trade: lock on chain, buyer claims, seller signs release, buyer withdraws', { skip: SKIP }, async () => {
+  config.lockFee = '0.25'; // the buyer pays a flat lock fee in this trade
   const o = await ok('POST', '/orders', { ad_id: adId, amount: '10' }, tk('buyer'));
+  config.lockFee = '0';
+  assert.equal(o.lock_fee, '0.250000');
+  const lk = await esc.orders(ethers.id(o.id));
+  assert.equal(lk.amount, units(9.75), 'chain pays the buyer amount minus the lock fee');
+  assert.equal(lk.fee, units(0.3), 'chain pays the fee wallet the seller fee plus the lock fee');
   assert.equal(o.state, 'AWAITING_PAYMENT');
   const co = await esc.orders(ethers.id(o.id));
   assert.equal(co.status, 1n); assert.equal(co.claimed, false);
@@ -188,14 +194,14 @@ test('trade: lock on chain, buyer claims, seller signs release, buyer withdraws'
   const good = await sellerSig(o.id);
   const done = await ok('POST', `/orders/${o.id}/confirm`, good, tk('seller'));
   assert.equal(done.state, 'COMPLETED');
-  assert.equal(await chainAvail('buyer'), '10.000000');
-  assert.equal(await chainAvail('fee'), '0.050000');
+  assert.equal(await chainAvail('buyer'), '9.750000');
+  assert.equal(await chainAvail('fee'), '0.300000');
   assert.equal((await esc.orders(ethers.id(o.id))).status, 2n);
-  assert.deepEqual(await dbBal('buyer'), { a: '10.000000', l: '0.000000' });
+  assert.deepEqual(await dbBal('buyer'), { a: '9.750000', l: '0.000000' });
   assert.equal((await reconcile()).ok, true);
   // buyer takes the USDT out to their own wallet
-  await (await esc.connect(W.buyer).withdraw(await usdt.getAddress(), units(10))).wait();
-  assert.equal(await usdt.balanceOf(addr('buyer')), units(10));
+  await (await esc.connect(W.buyer).withdraw(await usdt.getAddress(), units(9.75))).wait();
+  assert.equal(await usdt.balanceOf(addr('buyer')), units(9.75));
   await sync();
   assert.deepEqual(await dbBal('buyer'), { a: '0.000000', l: '0.000000' });
   assert.equal((await reconcile()).ok, true);

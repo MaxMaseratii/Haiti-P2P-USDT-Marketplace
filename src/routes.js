@@ -41,6 +41,7 @@ api.get('/config', (_req, res) => res.json({
   link_fee: config.linkFeeUsdt,
   networks: Object.entries(NETWORKS).map(([k, v]) => ({ id: k, label: v.label, fee: v.fee, auto: k === config.escrowNetwork })),
   withdraw_fee: config.withdrawFee,
+  lock_fee: config.lockFee,
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract,
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
 }));

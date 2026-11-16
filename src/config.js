@@ -51,6 +51,7 @@ export const config = {
   tokenUsdt: str('TOKEN_USDT', ''),
   tokenUsdc: str('TOKEN_USDC', ''),
   escrowNetwork: str('ESCROW_NETWORK', 'ARBITRUM'),
+  lockFee: str('LOCK_FEE_USDT', '0.25'),               // flat fee the BUYER pays per order (covers the lock/unlock network cost), in USDT/USDC
   withdrawFee: str('WITHDRAW_FEE_USDT', '1'),           // flat fee for a gasless withdraw (the app pays the gas), in USDT/USDC   // the network the escrow runs on (shown to users)
   pgSsl: str('PGSSL', '') === 'true',                // true for hosted databases that need SSL
   adminPhones: str('ADMIN_PHONES', '').split(',').map((x) => x.trim()).filter(Boolean), // these phones become ADMIN when they sign up

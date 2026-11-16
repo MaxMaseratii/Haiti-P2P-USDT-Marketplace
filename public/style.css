@@ -475,3 +475,4 @@ a.brand { color:inherit; text-decoration:none; font-weight:700; }
 .payhead{display:flex;gap:10px;align-items:center;margin:-4px 0 10px}.payhead .acclogo{width:40px;height:40px}.payhead b{font-size:16px}
 label.withlogo{display:flex;align-items:center;gap:6px}label.withlogo img{width:16px;height:16px}
 .tm{font-size:11.5px;color:var(--mute);max-width:760px}
+.feeline{margin-top:6px;font-size:14px}.feeline b{font-weight:700}

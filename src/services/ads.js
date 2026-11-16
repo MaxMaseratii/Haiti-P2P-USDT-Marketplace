@@ -27,6 +27,8 @@ export async function createAd(user, b) {
   const minHtg = num(b.min_order_htg, 'Minimum order');
   const maxHtg = num(b.max_order_htg, 'Maximum order');
   if (Number(maxHtg) < Number(minHtg)) throw bad('Maximum order must be at least the minimum.');
+  // The whole ad must be worth at least one minimum order, or nobody could ever take it.
+  if (Number(amount) * Number(price) < Number(minHtg)) throw bad(`The whole ad is worth ${(Number(amount) * Number(price)).toFixed(0)} HTG. Make the minimum order lower than that, or the amount bigger.`, 'RANGE');
 
   const ad = await tx(async (c) => {
     let pmIds2 = null;

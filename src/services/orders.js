@@ -50,8 +50,13 @@ export async function createOrder(user, { ad_id, amount, payment_method_id, pay_
 
     if (Number(amt) > Number(ad.remaining)) throw bad('Not enough left in this ad.', 'TOO_BIG');
     const total = (await c.query('SELECT round($1::numeric * $2::numeric, 2)::text AS t', [amt, ad.price_htg])).rows[0].t;
-    if (Number(total) < Number(ad.min_order_htg) || Number(total) > Number(ad.max_order_htg))
+    // Taking everything that is left is always allowed, even below the minimum (so an ad never gets stuck).
+    const takesAll = Number(amt) === Number(ad.remaining);
+    if ((Number(total) < Number(ad.min_order_htg) && !takesAll) || Number(total) > Number(ad.max_order_htg))
       throw bad(`Order must be between ${ad.min_order_htg} and ${ad.max_order_htg} HTG.`, 'RANGE');
+    // The buyer pays a small flat lock fee (network cost of locking and unlocking). It comes out of the USDT they get.
+    const lockFee = Number(config.lockFee) > 0 ? String(config.lockFee) : '0';
+    if (Number(amt) <= Number(lockFee) * 2) throw bad(`Order is too small. The buyer lock fee is ${lockFee} ${ad.asset}.`, 'RANGE');
 
     // Payment account the buyer will pay into.
     const accepted = ad.pay_types || [ad.pay_type];
@@ -101,9 +106,9 @@ export async function createOrder(user, { ad_id, amount, payment_method_id, pay_
     const ref = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
     const o = (await c.query(
       `INSERT INTO orders (ad_id, buyer_id, seller_id, asset, amount, price_htg, total_htg, fee_amount,
-                           payment_method_id, pay_reference, state_deadline)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-      [ad.id, buyerId, sellerId, ad.asset, amt, ad.price_htg, total, fee, pmId, ref, mins(config.lockTimeoutMin)])).rows[0];
+                           payment_method_id, pay_reference, state_deadline, lock_fee)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+      [ad.id, buyerId, sellerId, ad.asset, amt, ad.price_htg, total, fee, pmId, ref, mins(config.lockTimeoutMin), lockFee])).rows[0];
 
     const newRemaining = (await c.query('SELECT ($1::numeric - $2::numeric)::text AS r', [ad.remaining, amt])).rows[0].r;
     await c.query(
@@ -245,8 +250,11 @@ export async function confirmRelease(orderId) {
     if (o.state !== 'RELEASING') return;
     const total = (await c.query('SELECT ($1::numeric + $2::numeric)::text AS n', [o.amount, o.fee_amount])).rows[0].n;
     await wallet.burnLocked(c, o.seller_id, o.asset, total);
-    await wallet.credit(c, o.buyer_id, o.asset, o.amount);
-    if (Number(o.fee_amount) > 0) await wallet.credit(c, config.platformUserId, o.asset, o.fee_amount);
+    // Buyer gets the amount minus the lock fee. The platform gets the seller fee plus the lock fee.
+    const lf = o.lock_fee || '0';
+    const toBuyer = (await c.query('SELECT ($1::numeric - $2::numeric)::text AS n, ($3::numeric + $2::numeric)::text AS f', [o.amount, lf, o.fee_amount])).rows[0];
+    await wallet.credit(c, o.buyer_id, o.asset, toBuyer.n);
+    if (Number(toBuyer.f) > 0) await wallet.credit(c, config.platformUserId, o.asset, toBuyer.f);
     await c.query(`UPDATE escrow_txs SET status='CONFIRMED', tx_hash=$2, confirmed_at=now() WHERE order_id=$1 AND kind='RELEASE'`, [orderId, txHash]);
     await setState(c, orderId, 'RELEASING', 'COMPLETED', { note: 'USDT sent to buyer' });
   });

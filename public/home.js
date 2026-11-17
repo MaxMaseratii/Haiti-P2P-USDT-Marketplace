@@ -42,11 +42,11 @@ function appShots(sec) {
   const shot = (name, cap) => h('figure', { class: 'ashot' },
     h('div', { class: 'aframe' }, h('img', { src: `img/app/${name}-${L}.jpg`, alt: tx3(cap), loading: 'lazy', decoding: 'async', width: '390', height: '844' })),
     h('figcaption', {}, tx3(cap)));
-  return sec('screens', { en: 'The app', fr: 'L\'application', ht: 'Aplikasyon an' }, { en: 'Like your bank account, in your pocket.', fr: 'Comme votre compte bancaire, dans votre poche.', ht: 'Tankou kont labank ou, nan pòch ou.' },
-    { en: 'Real screens from Ayiti P2P. Your balance, the market, every order step by step, and your ID check.', fr: 'De vrais écrans de Ayiti P2P : votre solde, le marché, chaque commande étape par étape, et votre vérification.', ht: 'Vrè ekran Ayiti P2P: balans ou, mache a, chak kòmand etap pa etap, ak verifikasyon idantite w.' },
+  return sec('screens', { en: 'The app', fr: 'L\'application', ht: 'Aplikasyon an' }, { en: 'Ayiti P2P is a platform in your pocket to buy USDT/USDC fast.', fr: 'Ayiti P2P, une plateforme dans votre poche pour acheter des USDT/USDC rapidement.', ht: 'Ayiti P2P, se yon platfòm nan pòch ou, pou w achte USDT/USDC rapid vit.' },
+    null,
     h('div', { class: 'ashots' },
       shot('home', { en: 'Your account: balance, buy, sell', fr: 'Votre compte : solde, achat, vente', ht: 'Kont ou: balans, achte, vann' }),
-      shot('market', { en: 'The market: best price first', fr: 'Le marché : meilleur prix d\'abord', ht: 'Mache a: pi bon pri an premye' }),
+      shot('market', { en: 'MarketPlace: best price first', fr: 'MarketPlace : meilleur prix d\'abord', ht: 'MarketPlace: pi bon pri an premye' }),
       shot('order', { en: 'An order: clear steps and chat', fr: 'Une commande : étapes claires et chat', ht: 'Yon kòmand: etap klè ak chat' }),
       shot('id', { en: 'ID check: photo and video', fr: 'Vérification : photo et vidéo', ht: 'Verifikasyon: foto ak videyo' })));
 }
@@ -56,20 +56,20 @@ function heroSlides() {
   const L = HL();
   const S = [
     ['market', '1', { en: 'Pick a verified seller', fr: 'Choisissez un vendeur vérifié', ht: 'Chwazi yon vandè verifye' },
-      { en: 'Best price first. Every seller showed their ID and a live video.', fr: 'Meilleur prix d\'abord. Chaque vendeur a montré sa pièce et une vidéo.', ht: 'Pi bon pri an premye. Chak vandè montre pyès idantite yo ak yon videyo an dirèk.' }, '✓ ID', { en: 'seller verified', fr: 'vendeur vérifié', ht: 'vandè verifye' }],
+      { en: 'Best price first. Every seller showed their ID and a live video.', fr: 'Meilleur prix d\'abord. Chaque vendeur a montré sa pièce et une vidéo.', ht: 'Pi bon pri an premye. Chak vandè montre pyès idantite yo ak yon videyo an dirèk.' }, ['shield', 'ID'], { en: 'seller verified', fr: 'vendeur vérifié', ht: 'vandè verifye' }],
     ['order', '2', { en: 'The crypto is locked before you pay', fr: 'La crypto est verrouillée avant de payer', ht: 'Kripto a kadnase anvan ou peye' },
-      { en: 'Then you pay the seller by MonCash, NatCash or bank. The seller cannot take the crypto back.', fr: 'Puis vous payez par MonCash, NatCash ou banque. Le vendeur ne peut pas reprendre la crypto.', ht: 'Apre sa ou peye vandè a pa MonCash, NatCash oswa labank. Vandè a pa ka repran kripto a.' }, '🔒 20 USDT', { en: 'locked for you', fr: 'verrouillés pour vous', ht: 'kadnase pou ou' }],
+      { en: 'Then you pay the seller by MonCash, NatCash or bank. The seller cannot take the crypto back.', fr: 'Puis vous payez par MonCash, NatCash ou banque. Le vendeur ne peut pas reprendre la crypto.', ht: 'Apre sa ou peye vandè a pa MonCash, NatCash oswa labank. Vandè a pa ka repran kripto a.' }, ['lock', '20 USDT'], { en: 'locked for you', fr: 'verrouillés pour vous', ht: 'kadnase pou ou' }],
     ['home', '3', { en: 'The money arrives, the crypto is yours', fr: 'L\'argent arrive, la crypto est à vous', ht: 'Lajan an rive, kripto a pou ou' },
-      { en: 'The seller confirms and the USDT lands in your account. Like a bank app, in your pocket.', fr: 'Le vendeur confirme et les USDT arrivent sur votre compte. Comme une appli bancaire.', ht: 'Vandè a konfime, epi USDT a tonbe nan kont ou. Tankou yon aplikasyon labank, nan pòch ou.' }, '⚡ 5 min', { en: 'released after payment', fr: 'libéré après paiement', ht: 'dekadnase apre peman' }],
+      { en: 'The seller confirms and the USDT lands in your account. Like a bank app, in your pocket.', fr: 'Le vendeur confirme et les USDT arrivent sur votre compte. Comme une appli bancaire.', ht: 'Vandè a konfime, epi USDT a tonbe nan kont ou. Tankou yon aplikasyon labank, nan pòch ou.' }, ['bolt', '5 min'], { en: 'released after payment', fr: 'libéré après paiement', ht: 'dekadnase apre peman' }],
     ['profile', '4', { en: 'Check the seller before you buy', fr: 'Vérifiez le vendeur avant d\'acheter', ht: 'Gade vandè a anvan ou achte' },
-      { en: 'Real reviews, finished trades, response time and business posters.', fr: 'Vrais avis, échanges terminés, délai de réponse et affiches.', ht: 'Vrè revi, echanj ki fini, tan pou reponn ak afich biznis.' }, '★ 5.0', { en: 'from real trades', fr: 'de vrais échanges', ht: 'soti nan vrè echanj' }],
+      { en: 'Real reviews, finished trades, response time and business posters.', fr: 'Vrais avis, échanges terminés, délai de réponse et affiches.', ht: 'Vrè revi, echanj ki fini, tan pou reponn ak afich biznis.' }, ['star', '5.0'], { en: 'from real trades', fr: 'de vrais échanges', ht: 'soti nan vrè echanj' }],
     ['id', '5', { en: 'Your ID, checked inside the app', fr: 'Votre pièce, vérifiée dans l\'appli', ht: 'Pyès ou, verifye nan aplikasyon an' },
-      { en: 'Photos and a live video with the app camera. Only our team sees them.', fr: 'Photos et vidéo en direct avec la caméra de l\'appli. Seule notre équipe les voit.', ht: 'Foto ak videyo an dirèk ak kamera aplikasyon an. Se ekip nou an sèlman ki wè yo.' }, '🪪 ID', { en: '+ live video', fr: '+ vidéo en direct', ht: '+ videyo an dirèk' }],
+      { en: 'Photos and a live video with the app camera. Only our team sees them.', fr: 'Photos et vidéo en direct avec la caméra de l\'appli. Seule notre équipe les voit.', ht: 'Foto ak videyo an dirèk ak kamera aplikasyon an. Se ekip nou an sèlman ki wè yo.' }, ['id', 'ID'], { en: '+ live video', fr: '+ vidéo en direct', ht: '+ videyo an dirèk' }],
   ];
   const track = h('div', { class: 'xs-track', tabindex: '0', 'aria-label': tx3({ en: 'How it works, slide by slide', fr: 'Comment ça marche', ht: 'Kijan li mache, youn apre lòt' }) },
     S.map(([img, n, title, text, chipB, chipS], i) => h('div', { class: 'xs-slide', 'data-i': i },
       h('div', { class: 'xs-phone' }, h('div', { class: 'xphone' }, h('img', { src: `img/app/${img}-${L}.jpg`, alt: tx3(title), loading: i ? 'lazy' : 'eager', ...(i ? {} : { fetchpriority: 'high' }) })),
-        h('div', { class: 'xchip' }, h('b', {}, chipB), h('small', {}, tx3(chipS)))),
+        h('div', { class: 'xchip' }, h('b', {}, icon(chipB[0]), ' ' + chipB[1]), h('small', {}, tx3(chipS)))),
       h('div', { class: 'xs-cap' }, h('span', { class: 'xs-n' }, n), h('div', {}, h('b', {}, tx3(title)), h('p', {}, tx3(text)))))));
   const dots = h('div', { class: 'xs-dots' }, S.map((_, i) => h('button', { type: 'button', 'aria-label': String(i + 1), onclick: () => goTo(i, true) })));
   let cur = 0, timer = null, user = false;
@@ -89,11 +89,24 @@ function heroSlides() {
     h('div', { class: 'xs-hint' }, tx3({ en: '← swipe →', fr: '← glissez →', ht: '← glise →' })));
 }
 
+// ---------- the Live MarketPlace: sellers and buyers, side by side ----------
+function liveMarketArt() {
+  const L = HL();
+  const side = (img, cls, title, text) => h('figure', { class: 'lm-side ' + cls },
+    h('div', { class: 'aframe' }, h('img', { src: `img/app/${img}-${L}.jpg`, alt: tx3(title), loading: 'lazy', width: '390', height: '844' })),
+    h('figcaption', {}, h('b', {}, tx3(title)), h('span', {}, tx3(text))));
+  return h('div', { class: 'lm' },
+    side('live-sellers', 'sell', { en: 'Sellers', fr: 'Vendeurs', ht: 'Vandè yo' }, { en: 'You buy USDT: lowest price first', fr: 'Vous achetez des USDT : prix le plus bas d\'abord', ht: 'Ou achte USDT: pi ba pri an premye' }),
+    h('div', { class: 'lm-mid' }, h('img', { src: 'img/brand/usdt.png', alt: 'USDT', width: '56', height: '56' }), h('div', { class: 'lm-swap' }, icon('swap')),
+      h('div', { class: 'lm-g' }, 'G'), h('small', {}, tx3({ en: 'Live', fr: 'En direct', ht: 'Live' }))),
+    side('live-buyers', 'buy', { en: 'Buyers', fr: 'Acheteurs', ht: 'Achtè yo' }, { en: 'You sell USDT: highest price first', fr: 'Vous vendez des USDT : prix le plus haut d\'abord', ht: 'Ou vann USDT: pi wo pri an premye' }));
+}
+
 // ---------- page ----------
 function homeView(app, loginCard, quickTest, adsBox) {
   const go2 = (id) => () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const sec = (id, kicker, title, sub, ...body) => h('section', { class: 'hsec', id }, h('div', { class: 'hkick' }, tx3(kicker)), h('h2', { class: 'htitle' }, tx3(title)), sub ? h('p', { class: 'hsub' }, tx3(sub)) : null, ...body);
-  const feat = (ic, title, text) => h('div', { class: 'feat' }, h('div', { class: 'feat-ic' }, ic), h('h3', {}, tx3(title)), h('p', {}, tx3(text)));
+  const feat = (ic, title, text) => h('div', { class: 'feat' }, h('div', { class: 'feat-ic' }, icon(ic)), h('h3', {}, tx3(title)), h('p', {}, tx3(text)));
   const fee = (Number(cfg.fee_rate || 0.005) * 100).toFixed(1);
   const join = { en: 'Create my free account', fr: 'Créer mon compte gratuit', ht: 'Kreye kont mwen gratis' };
 
@@ -102,18 +115,19 @@ function homeView(app, loginCard, quickTest, adsBox) {
     h('section', { class: 'xhero' },
       h('div', { class: 'xh-in' },
         h('div', { class: 'xh-text' },
-          h('div', { class: 'xh-pill' }, '🇭🇹 ', tx3({ en: 'Made for Haiti · MonCash · NatCash · Banks', fr: 'Fait pour Haïti · MonCash · NatCash · Banques', ht: 'Fèt pou Ayiti · MonCash · NatCash · Bank' })),
-          h('h1', {}, tx3({ en: 'Buy and sell USDT ', fr: 'Achetez et vendez des USDT ', ht: 'Achte ak vann USDT ' }), h('em', {}, tx3({ en: 'without fear of scammers.', fr: 'sans peur des arnaqueurs.', ht: 'san w pa pè vòlè.' }))),
-          h('p', { class: 'xh-lead' }, tx3({ en: 'The seller\'s crypto is locked before you pay a single gourde. You pay a real, ID-checked person by MonCash, NatCash or bank. The crypto is unlocked only when the money arrives.',
-            fr: 'La crypto du vendeur est verrouillée avant que vous payiez une seule gourde. Vous payez une vraie personne vérifiée par MonCash, NatCash ou banque. La crypto est libérée seulement quand l\'argent arrive.',
-            ht: 'Kripto vandè a kadnase anvan ou peye yon sèl goud. Ou peye yon moun reyèl ki verifye idantite l, pa MonCash, NatCash oswa labank. Kripto a dekadnase sèlman lè lajan an rive.' })),
+          h('div', { class: 'xh-pill' }, icon('flag-ht'), ' ', tx3({ en: 'Buy USDT/USDC with peace of mind · MonCash · NatCash · Bank transfer', fr: 'Achetez des USDT/USDC en toute tranquillité · MonCash · NatCash · Virement bancaire', ht: 'Achte USDT/USDC ak trankilite · MonCash · NatCash · Transfè bank' })),
+          h('h1', {}, tx3({ en: 'Buy and sell USDT ', fr: 'Achetez et vendez des USDT ', ht: 'Achte ak vann USDT ' }), h('em', {}, tx3({ en: 'with confidence, stress-free.', fr: 'en confiance, sans stress.', ht: 'ak konfyans, san w kè sote.' }))),
+          h('p', { class: 'xh-lead' }, tx3({ en: 'We check that every seller really has all the crypto shown in their profile. The buyer chooses how much to buy, we lock that amount and the seller cannot touch it, before you pay a single gourde. The buyer pays a real, ID-checked seller by MonCash, NatCash or bank. The buyer confirms the payment, the seller checks it, and the crypto is unlocked to the buyer.',
+            fr: 'Nous vérifions que chaque vendeur a vraiment toute la crypto affichée sur son profil. L\'acheteur choisit combien il veut acheter, nous verrouillons ce montant et le vendeur ne peut pas y toucher, avant que vous payiez une seule gourde. L\'acheteur paie un vrai vendeur vérifié par MonCash, NatCash ou banque. L\'acheteur confirme le paiement, le vendeur le vérifie, et la crypto est libérée vers l\'acheteur.',
+            ht: 'Nou verifye ke chak vandè gen tout kantite kripto ki disponib nan pwofil li. Achtè a chwazi kantite li vle achte a, nou kadnase kantite sa a, epi vandè a pa ka manyen l, anvan ou peye yon sèl goud. Achtè a peye yon vandè reyèl ki verifye idantite l, pa MonCash, NatCash oswa labank. Achtè a konfime li fè peman an, vandè a verifye l, epi kripto a dekadnase al jwenn achtè a.' })),
+          h('p', { class: 'xh-sat' }, tx3({ en: 'Everyone satisfied, in complete safety.', fr: 'Tout le monde satisfait, en toute sécurité.', ht: 'Tout moun satisfè, an sekirite.' })),
           h('div', { class: 'xh-cta' },
             h('button', { class: 'btn xbtn', onclick: go2('join') }, tx3(join) + ' →'),
-            h('button', { class: 'btn xghost', onclick: go2('how') }, '▶ ' + tx3({ en: 'See how it works', fr: 'Voir comment ça marche', ht: 'Gade kijan sa mache' }))),
+            h('button', { class: 'btn xghost', onclick: go2('how') }, icon('play'), ' ' + tx3({ en: 'See how it works', fr: 'Voir comment ça marche', ht: 'Gade kijan sa mache' }))),
           h('div', { class: 'xh-trust' },
-            h('span', {}, '🔒 ', tx3({ en: 'Crypto locked first', fr: 'Crypto verrouillée d\'abord', ht: 'Kripto kadnase anvan' })),
-            h('span', {}, '🪪 ', tx3({ en: 'ID + live video for everyone', fr: 'ID + vidéo pour tous', ht: 'ID + videyo pou tout moun' })),
-            h('span', {}, '⚖️ ', tx3({ en: 'A team that settles problems', fr: 'Une équipe qui règle les problèmes', ht: 'Yon ekip ki rezoud pwoblèm' }))),
+            h('span', {}, h('i', {}, icon('lock')), tx3({ en: 'The seller\'s crypto is locked to protect the buyer against fraud', fr: 'La crypto du vendeur est verrouillée pour protéger l\'acheteur contre la fraude', ht: 'Kripto vandè a kadnase pou sekirize achtè a kont fwod' })),
+            h('span', {}, h('i', {}, icon('id')), tx3({ en: 'ID + identity video for every user', fr: 'Pièce d\'identité + vidéo d\'identification pour chaque utilisateur', ht: 'ID + videyo idantifikasyon pou tout itilizatè' })),
+            h('span', {}, h('i', {}, icon('headset')), tx3({ en: 'Ayiti P2P customer service solves every problem, fast', fr: 'Le service client Ayiti P2P règle chaque problème, vite', ht: 'Sèvis kliyantèl Ayiti P2P a rezoud tout pwoblèm rapid vit' }))),
           h('div', { class: 'xh-pay' }, h('small', {}, tx3({ en: 'Pay with', fr: 'Payez avec', ht: 'Peye ak' })),
             ...['MONCASH', 'NATCASH'].map((k) => (cfg.pay_logos || {})[k] ? h('img', { src: cfg.pay_logos[k], alt: k }) : h('b', {}, k)),
             ...['sogebank', 'unibank', 'bnc'].map((k) => h('img', { src: `img/bank/${k}-sq.png`, alt: k, class: 'bk' })))),
@@ -127,11 +141,11 @@ function homeView(app, loginCard, quickTest, adsBox) {
           h('li', {}, h('b', {}, '1'), h('span', {}, tx3({ en: 'Your phone and email: we send you a code.', fr: 'Votre téléphone et e-mail : nous envoyons un code.', ht: 'Telefòn ou ak imel ou: nou voye yon kòd ba ou.' }))),
           h('li', {}, h('b', {}, '2'), h('span', {}, tx3({ en: 'Your ID and a short live video, right in the app.', fr: 'Votre pièce et une courte vidéo, dans l\'application.', ht: 'Pyès idantite w ak yon ti videyo an dirèk, nan aplikasyon an.' }))),
           h('li', {}, h('b', {}, '3'), h('span', {}, tx3({ en: 'Buy or sell USDT with checked people. Safely.', fr: 'Achetez ou vendez des USDT avec des personnes vérifiées. En sécurité.', ht: 'Achte oswa vann USDT ak moun ki verifye. San pè.' })))),
-        h('p', { class: 'xj-note' }, '🛡️ ', tx3({ en: 'Only our team sees your ID. We never hold your gourdes.', fr: 'Seule notre équipe voit votre pièce. Nous ne gardons jamais vos gourdes.', ht: 'Se ekip nou an sèlman ki wè pyès ou. Nou pa janm kenbe goud ou.' }))),
+        h('p', { class: 'xj-note' }, icon('shield'), ' ', tx3({ en: 'Only our team sees your ID. We never hold your gourdes.', fr: 'Seule notre équipe voit votre pièce. Nous ne gardons jamais vos gourdes.', ht: 'Se ekip nou an sèlman ki wè pyès ou. Nou pa janm kenbe goud ou.' }))),
       h('div', { class: 'xj-card' }, loginCard)),
     // ---------- the golden rule ----------
     h('section', { class: 'xrule' },
-      h('div', { class: 'xr-ic' }, '🛡️'),
+      h('div', { class: 'xr-ic' }, icon('shield')),
       h('div', {},
         h('h2', {}, tx3({ en: 'If they really have USDT, they will sell it on Ayiti P2P.', fr: 'S\'ils ont vraiment des USDT, ils les vendront sur Ayiti P2P.', ht: 'Si yon moun gen vrè USDT, l ap vann li sou Ayiti P2P.' })),
         h('p', {}, tx3({ en: 'Here the crypto is locked before you pay, so a real seller loses nothing. Someone who refuses and asks you to send money first, on WhatsApp or anywhere else, probably does not have it. Never send your hard-earned money to anyone outside an order.',
@@ -142,14 +156,14 @@ function homeView(app, loginCard, quickTest, adsBox) {
       { en: 'A real swap, step by step, with real numbers. Press any step, or drag the bar. Change the language at the top: Kreyòl, Français, English.', fr: 'Un vrai échange, étape par étape, avec de vrais chiffres. Touchez une étape ou glissez la barre.', ht: 'Yon vrè echanj, etap pa etap, ak vrè chif. Peze nenpòt etap, oswa glise ba a. Chanje lang lan anwo a: Kreyòl, Français, English.' }, filmHow()),
     appShots(sec),
     sec('sellers', { en: 'For sellers', fr: 'Pour les vendeurs', ht: 'Pou vandè yo' }, { en: 'Your business, in a real shop window.', fr: 'Votre commerce, dans une vraie vitrine.', ht: 'Biznis ou, nan yon vrè vitrin.' },
-      { en: 'Build a business profile buyers trust: your posters, your area, your response time, your badges and real reviews from finished trades.', fr: 'Créez un profil de commerce de confiance : vos affiches, votre zone, votre délai de réponse, vos badges et de vrais avis.', ht: 'Fè yon pwofil biznis moun ka fè konfyans: afich ou, zòn ou, tan ou pran pou reponn, badj ou ak vrè revi ki soti nan echanj ki fini.' },
+      { en: 'Every seller can build a beautiful, trusted profile for their business: your posters, a profile photo and a cover photo, where you are, how fast you answer, and the badges you get for good service.', fr: 'Chaque vendeur peut créer un beau profil de confiance pour son commerce : vos affiches, une photo de profil et une photo de couverture, où vous êtes, votre délai de réponse, et les badges reçus pour un bon service.', ht: 'Tout vandè ka kreye yon bèl pwofil konfyans pou biznis yo. Mete afich ou, foto pwofil ak foto kouvèti, kote w ap viv, tan ou pran pou reponn, ak badj ou resevwa pou bon sèvis.' },
       h('div', { class: 'xbiz' },
         h('div', { class: 'xbiz-list' }, [
-          ['🏆', { en: 'Badges you earn', fr: 'Des badges mérités', ht: 'Badj ou merite' }, { en: 'ID verified, Trusted trader, Top seller, Fast. Earned with real trades, never bought.', fr: 'ID vérifié, Fiable, Top vendeur, Rapide. Gagnés par de vrais échanges.', ht: 'ID verifye, Moun serye, Pi bon vandè, Rapid. Ou genyen yo ak vrè echanj, ou pa achte yo.' }],
-          ['🖼️', { en: 'Up to 6 posters', fr: 'Jusqu\'à 6 affiches', ht: 'Jiska 6 afich' }, { en: 'Show your shop, your flyer and your hours. Buyers see them before they trade.', fr: 'Montrez votre boutique, votre flyer et vos horaires.', ht: 'Montre boutik ou, flyer ou ak lè ou travay. Achtè yo wè yo anvan yo fè echanj.' }],
-          ['⏱', { en: 'Your response time', fr: 'Votre délai de réponse', ht: 'Tan ou pran pou reponn' }, { en: 'Tell buyers how fast you answer, and promise a time on each order.', fr: 'Dites aux acheteurs à quelle vitesse vous répondez.', ht: 'Di achtè yo konbyen tan ou pran pou reponn, epi pwomèt yon tan sou chak kòmand.' }],
-          ['⭐', { en: 'Real reviews', fr: 'De vrais avis', ht: 'Vrè revi' }, { en: 'Only people who finished a trade with you can review you.', fr: 'Seules les personnes ayant fini un échange avec vous peuvent noter.', ht: 'Se sèlman moun ki fin fè yon echanj avè w ki ka ba ou nòt.' }],
-        ].map(([ic, t1, t2]) => h('div', { class: 'xbiz-item' }, h('span', {}, ic), h('div', {}, h('b', {}, tx3(t1)), h('p', {}, tx3(t2)))))),
+          ['award', { en: 'Good Service badges', fr: 'Badges Bon Service', ht: 'Badj Bon Sèvis' }, { en: 'ID verified, Trusted trader, Top seller, Fast. Earned with real trades, never bought.', fr: 'ID vérifié, Fiable, Top vendeur, Rapide. Gagnés par de vrais échanges.', ht: 'ID verifye, Moun serye, Pi bon vandè, Rapid. Ou genyen yo ak vrè echanj, ou pa achte yo.' }],
+          ['image', { en: 'Up to 6 posters', fr: 'Jusqu\'à 6 affiches', ht: 'Jiska 6 afich' }, { en: 'Show your shop, your flyer and your hours. Buyers see them before they trade.', fr: 'Montrez votre boutique, votre flyer et vos horaires.', ht: 'Montre boutik ou, flyer ou ak lè ou travay. Achtè yo wè yo anvan yo fè echanj.' }],
+          ['clock', { en: 'Your response time', fr: 'Votre délai de réponse', ht: 'Tan ou pran pou reponn' }, { en: 'Tell buyers how fast you answer, and promise a time on each order.', fr: 'Dites aux acheteurs à quelle vitesse vous répondez.', ht: 'Di achtè yo konbyen tan ou pran pou reponn, epi pwomèt yon tan sou chak kòmand.' }],
+          ['star', { en: 'Customer feedback', fr: 'Avis des clients', ht: 'Feedback kliyan yo' }, { en: 'Only people who finished a trade with you can review you.', fr: 'Seules les personnes ayant fini un échange avec vous peuvent noter.', ht: 'Se sèlman moun ki fin fè yon echanj avè w ki ka ba ou nòt.' }],
+        ].map(([ic, t1, t2]) => h('div', { class: 'xbiz-item' }, h('span', {}, icon(ic)), h('div', {}, h('b', {}, tx3(t1)), h('p', {}, tx3(t2)))))),
         h('div', { class: 'aframe xbiz-shot' }, h('img', { src: `img/app/profile-${HL()}.jpg`, alt: '', loading: 'lazy', width: '390', height: '844' })))),
 
     sec('problem', { en: 'The problem we solve', fr: 'Le problème que nous réglons', ht: 'Pwoblèm nou rezoud' },
@@ -163,27 +177,31 @@ function homeView(app, loginCard, quickTest, adsBox) {
         fr: 'Nous verrouillons la crypto que la personne vend. Vous lui envoyez l\'argent et confirmez l\'envoi. Elle confirme la réception. Nous libérons alors la crypto vers vous. Tant qu\'elle est verrouillée, personne ne peut y toucher.',
         ht: 'Nou kadnase kantite kripto moun nan ap vann nan. Ou voye lajan an ba li, epi ou konfime ou voye l. Li menm, li konfime li resevwa l. Lè sa a, nou dekadnase kripto a epi li ale jwenn ou. Depi kripto a kadnase, pèsonn pa ka manyen l jiskaske kòmand lan anile oswa li konfime.' },
       h('div', { class: 'feats' },
-        feat('🔐', { en: 'The seller\'s crypto is locked', fr: 'La crypto du vendeur est verrouillée', ht: 'Kripto vandè a kadnase' }, { en: 'When a swap starts, we lock the seller\'s USDT. The seller cannot touch it, and neither can you, until the swap ends.', fr: 'Au début de l\'échange, nous verrouillons les USDT du vendeur. Personne n\'y touche jusqu\'à la fin.', ht: 'Lè yon echanj kòmanse, nou kadnase USDT vandè a. Ni vandè a, ni ou menm pa ka manyen l jiskaske echanj lan fini.' }),
-        feat('💸', { en: 'You pay the seller directly', fr: 'Vous payez le vendeur directement', ht: 'Ou peye vandè a dirèk' }, { en: 'Gourdes go straight from your MonCash, NatCash or bank to the seller. We never hold gourdes.', fr: 'Les gourdes vont directement de votre MonCash, NatCash ou banque au vendeur. Nous ne gardons jamais de gourdes.', ht: 'Goud yo soti nan MonCash, NatCash oswa labank ou dirèk bay vandè a. Nou pa janm kenbe goud.' }),
-        feat('✅', { en: 'Both confirm, then we unlock', fr: 'Les deux confirment, puis on libère', ht: 'Toude konfime, epi nou dekadnase' }, { en: 'You confirm you sent it. The seller confirms it arrived. Then the USDT is unlocked and goes to your wallet.', fr: 'Vous confirmez l\'envoi. Le vendeur confirme la réception. Puis les USDT sont libérés vers votre portefeuille.', ht: 'Ou konfime ou voye l. Vandè a konfime li rive. Epi USDT a dekadnase, li ale nan pòtfèy ou.' }),
-        feat('⏱️', { en: 'Clocks keep it moving', fr: 'Des délais clairs', ht: 'Gen tan pou chak etap' }, { en: 'You have 30 minutes to pay. If the seller goes quiet after you paid, a dispute opens by itself. A clock never unlocks crypto alone.', fr: '30 minutes pour payer. Si le vendeur ne répond plus, un litige s\'ouvre tout seul. Un délai ne libère jamais la crypto tout seul.', ht: 'Ou gen 30 minit pou peye. Si vandè a pa reponn apre ou peye, yon diskisyon louvri pou kont li. Tan pa janm dekadnase kripto pou kont li.' }),
-        feat('🧾', { en: 'Proof, not promises', fr: 'Des preuves, pas des promesses', ht: 'Prèv, pa pwomès' }, { en: 'Chat, payment code and receipts stay in the order. In a dispute, both sides upload proof and our team decides.', fr: 'Chat, code et reçus restent dans la commande. En litige, l\'équipe décide sur preuves.', ht: 'Chat, kòd peman ak resi yo rete nan kòmand lan. Si gen diskisyon, toude bò voye prèv, epi ekip la deside.' }),
-        feat('🚫', { en: 'Scammers get banned', fr: 'Les arnaqueurs sont bannis', ht: 'Vòlè yo bloke' }, { en: 'Fake proof or no-shows bring strikes and bans. Banned phones, names and accounts cannot come back.', fr: 'Fausses preuves ou absences : avertissements et bannissement.', ht: 'Fo prèv oswa moun ki disparèt jwenn sanksyon epi yo bloke. Telefòn, non ak kont ki bloke pa ka tounen.' }))),
+        feat('lock', { en: 'The seller\'s crypto is locked', fr: 'La crypto du vendeur est verrouillée', ht: 'Kripto vandè a kadnase' }, { en: 'When a swap starts, we lock the seller\'s USDT. The seller cannot touch it, and neither can you, until the swap ends.', fr: 'Au début de l\'échange, nous verrouillons les USDT du vendeur. Personne n\'y touche jusqu\'à la fin.', ht: 'Lè yon echanj kòmanse, nou kadnase USDT vandè a. Ni vandè a, ni ou menm pa ka manyen l jiskaske echanj lan fini.' }),
+        feat('send', { en: 'You pay the seller directly', fr: 'Vous payez le vendeur directement', ht: 'Ou peye vandè a dirèk' }, { en: 'Gourdes go straight from your MonCash, NatCash or bank to the seller. We never hold gourdes.', fr: 'Les gourdes vont directement de votre MonCash, NatCash ou banque au vendeur. Nous ne gardons jamais de gourdes.', ht: 'Goud yo soti nan MonCash, NatCash oswa labank ou dirèk bay vandè a. Nou pa janm kenbe goud.' }),
+        feat('check', { en: 'Both confirm, then we unlock', fr: 'Les deux confirment, puis on libère', ht: 'Toude konfime, epi nou dekadnase' }, { en: 'You confirm you sent it. The seller confirms it arrived. Then the USDT is unlocked and goes to your wallet.', fr: 'Vous confirmez l\'envoi. Le vendeur confirme la réception. Puis les USDT sont libérés vers votre portefeuille.', ht: 'Ou konfime ou voye l. Vandè a konfime li rive. Epi USDT a dekadnase, li ale nan pòtfèy ou.' }),
+        feat('clock', { en: 'Clocks keep it moving', fr: 'Des délais clairs', ht: 'Gen tan pou chak etap' }, { en: 'You have 30 minutes to pay. If the seller goes quiet after you paid, a dispute opens by itself. A clock never unlocks crypto alone.', fr: '30 minutes pour payer. Si le vendeur ne répond plus, un litige s\'ouvre tout seul. Un délai ne libère jamais la crypto tout seul.', ht: 'Ou gen 30 minit pou peye. Si vandè a pa reponn apre ou peye, yon diskisyon louvri pou kont li. Tan pa janm dekadnase kripto pou kont li.' }),
+        feat('receipt', { en: 'Proof, not promises', fr: 'Des preuves, pas des promesses', ht: 'Prèv, pa pwomès' }, { en: 'Chat, payment code and receipts stay in the order. In a dispute, both sides upload proof and our team decides.', fr: 'Chat, code et reçus restent dans la commande. En litige, l\'équipe décide sur preuves.', ht: 'Chat, kòd peman ak resi yo rete nan kòmand lan. Si gen diskisyon, toude bò voye prèv, epi ekip la deside.' }),
+        feat('ban', { en: 'Scammers get banned', fr: 'Les arnaqueurs sont bannis', ht: 'Vòlè yo bloke' }, { en: 'Fake proof or no-shows bring strikes and bans. Banned phones, names and accounts cannot come back.', fr: 'Fausses preuves ou absences : avertissements et bannissement.', ht: 'Fo prèv oswa moun ki disparèt jwenn sanksyon epi yo bloke. Telefòn, non ak kont ki bloke pa ka tounen.' }))),
     sec('anywhere', { en: 'From anywhere', fr: 'De partout', ht: 'Nenpòt kote' },
-      { en: 'Have USDT? Swap it for gourdes, from anywhere.', fr: 'Vous avez des USDT ? Échangez-les contre des gourdes, de partout.', ht: 'Ou gen USDT? Chanje l pou goud, nenpòt kote ou ye.' }, null,
+      { en: 'Have USDT? Change it to gourdes in your NatCash or MonCash, wherever you are.', fr: 'Vous avez des USDT ? Changez-les en gourdes sur votre NatCash ou MonCash, où que vous soyez.', ht: 'Si ou genyen USDT, chanje l an goud nan NatCash/MonCash ou, nenpòt kote ou ye.' }, null,
       h('div', { class: 'fam' },
         h('div', { class: 'fam-flow' },
-          h('div', { class: 'fam-node' }, h('span', {}, '🌎'), h('b', {}, tx3({ en: 'You', fr: 'Vous', ht: 'Ou menm' })), h('small', {}, tx3({ en: 'Sell USDT', fr: 'Vendez des USDT', ht: 'Vann USDT' }))),
-          h('div', { class: 'fam-arrow' }, '→'),
-          h('div', { class: 'fam-node mid' }, h('span', {}, '🔒'), h('b', {}, tx3({ en: 'Locked', fr: 'Verrouillé', ht: 'Kadnase' })), h('small', {}, tx3({ en: 'Until the gourdes arrive', fr: 'Jusqu\'à l\'arrivée des gourdes', ht: 'Jiskaske goud yo rive' }))),
-          h('div', { class: 'fam-arrow' }, '→'),
-          h('div', { class: 'fam-node' }, h('span', {}, '🇭🇹'), h('b', {}, tx3({ en: 'Gourdes', fr: 'Gourdes', ht: 'Goud' })), h('small', {}, tx3({ en: 'Into the MonCash, NatCash or bank you choose', fr: 'Sur le MonCash, NatCash ou banque choisi', ht: 'Nan MonCash, NatCash oswa labank ou chwazi a' })))),
+          h('div', { class: 'fam-node' }, h('div', { class: 'fam-art' }, h('img', { src: 'img/brand/person-usdt.svg', alt: '', class: 'fam-person', width: '120', height: '120' }), h('img', { src: 'img/brand/usdt.png', alt: 'USDT', class: 'fam-coin', width: '40', height: '40' })),
+            h('b', {}, tx3({ en: 'You have USDT: sell it for gourdes', fr: 'Vous avez des USDT : vendez-les contre des gourdes', ht: 'Ou gen USDT, vann li pou goud' }))),
+          h('div', { class: 'fam-arrow' }, icon('arrow-r')),
+          h('div', { class: 'fam-node mid' }, h('div', { class: 'fam-art' }, h('div', { class: 'fam-lock' }, icon('lock'))),
+            h('b', {}, tx3({ en: 'The amount stays locked until you receive it in gourdes', fr: 'Le montant reste verrouillé jusqu\'à ce que vous le receviez en gourdes', ht: 'Kantite a kadnase jiskaske ou resevwa kantite a an goud' }))),
+          h('div', { class: 'fam-arrow' }, icon('arrow-r')),
+          h('div', { class: 'fam-node' }, h('div', { class: 'fam-art' }, h('img', { src: 'img/brand/gourdes-250.webp', alt: tx3({ en: 'Gourdes', fr: 'Gourdes', ht: 'Goud' }), class: 'fam-note', width: '220', height: '94' })),
+            h('b', {}, icon('flag-ht'), ' ', tx3({ en: 'Into the MonCash, NatCash or bank account you choose', fr: 'Sur le MonCash, NatCash ou compte bancaire choisi', ht: 'Nan MonCash, NatCash oswa kont bank ou chwazi a' })))),
         h('ul', { class: 'ow-list' },
           h('li', {}, tx3({ en: 'Open an account from any country, with any phone number. Same ID check for everyone.', fr: 'Ouvrez un compte depuis n\'importe quel pays. Même vérification pour tous.', ht: 'Louvri yon kont nenpòt peyi, ak nenpòt nimewo. Menm verifikasyon pou tout moun.' })),
           h('li', {}, tx3({ en: 'Big sellers can link more accounts: another person\'s MonCash or NatCash can be linked only if that person also has a verified account here and says yes.', fr: 'Les gros vendeurs peuvent lier d\'autres comptes, seulement si la personne a aussi un compte vérifié et accepte.', ht: 'Gwo vandè ka konekte plis kont: kont MonCash oswa NatCash yon lòt moun, sèlman si moun sa a gen yon kont verifye isit la tou, epi li dakò.' })),
           h('li', {}, tx3({ en: 'We only lock and unlock crypto between users. We never hold gourdes.', fr: 'Nous ne faisons que verrouiller et libérer la crypto. Jamais de gourdes chez nous.', ht: 'Nou sèlman kadnase epi dekadnase kripto ant moun yo. Nou pa janm kenbe goud.' }))))),
-    sec('market', { en: 'Live market', fr: 'Marché en direct', ht: 'Mache an dirèk' }, { en: 'Real prices right now.', fr: 'Les vrais prix maintenant.', ht: 'Vrè pri kounye a.' },
-      { en: 'Prices are in gourdes (HTG) for 1 USDT. Pick the best price, then swap.', fr: 'Prix en gourdes (HTG) pour 1 USDT.', ht: 'Pri yo an goud (HTG) pou 1 USDT. Chwazi pi bon pri a, epi fè echanj lan.' }, adsBox),
+    sec('market', { en: 'Ayiti P2P - Live MarketPlace', fr: 'Ayiti P2P - Live MarketPlace', ht: 'Ayiti P2P - Live MarketPlace' }, { en: 'Live exchange rate', fr: 'Taux de change en direct', ht: 'To dechanj live' },
+      { en: 'Prices are in gourdes (HTG) for 1 USDT. Sellers on one side, buyers on the other. Pick the best price, then swap.', fr: 'Prix en gourdes (HTG) pour 1 USDT. Les vendeurs d\'un côté, les acheteurs de l\'autre. Choisissez le meilleur prix.', ht: 'Pri yo an goud (HTG) pou 1 USDT. Vandè yo sou yon bò, achtè yo sou lòt bò a. Chwazi pi bon pri a, epi fè echanj lan.' },
+      liveMarketArt(), adsBox),
     sec('faq', { en: 'Questions', fr: 'Questions', ht: 'Kesyon' }, { en: 'Good to know', fr: 'Bon à savoir', ht: 'Bon pou w konnen' }, null,
       h('div', { class: 'faq' }, [
         [{ en: 'What is USDT?', fr: 'C\'est quoi l\'USDT ?', ht: 'Kisa USDT ye?' }, { en: 'USDT is a digital dollar. 1 USDT is made to stay worth about 1 US dollar. You can keep it, send it anywhere, or swap it for gourdes.', fr: 'L\'USDT est un dollar numérique. 1 USDT vaut environ 1 dollar américain.', ht: 'USDT se yon dola dijital. 1 USDT fèt pou vo apeprè 1 dola ameriken. Ou ka kenbe l, voye l nenpòt kote, oswa chanje l pou goud.' }],

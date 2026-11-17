@@ -316,6 +316,10 @@
     'Upload failed. Check your internet and try again.': ['Voye a pa mache. Tcheke entènèt ou epi eseye ankò.', 'L\'envoi a échoué. Vérifiez votre connexion et réessayez.'],
     'Could not read that photo.': ['Nou pa ka li foto sa a.', 'Impossible de lire cette photo.'], 'Could not read that photo. Use JPG or PNG.': ['Nou pa ka li foto sa a. Sèvi ak JPG oswa PNG.', 'Impossible de lire cette photo. Utilisez JPG ou PNG.'],
     'We are checking your ID': ['N ap tcheke ID ou', 'Nous vérifions votre identité'],
+    'Your cover photo: your shop, your logo, your city': ['Foto kouvèti ou: boutik ou, logo ou, vil ou', 'Votre photo de couverture : votre boutique, votre logo, votre ville'],
+    'Cover photo (background)': ['Foto kouvèti (background)', 'Photo de couverture (arrière-plan)'], 'Choose a cover photo': ['Chwazi yon foto kouvèti', 'Choisir une photo de couverture'],
+    'No cover photo': ['Pa gen foto kouvèti', 'Pas de photo de couverture'], 'Profile photo': ['Foto pwofil', 'Photo de profil'],
+    'Your face or your business logo. People trust a real face: profiles with a photo get more orders.': ['Figi w oswa logo biznis ou. Moun fè yon vrè figi konfyans: pwofil ki gen foto jwenn plis kòmand.', 'Votre visage ou le logo de votre commerce. Les gens font confiance à un vrai visage : les profils avec photo reçoivent plus de commandes.'],
     'Other country (type the full number with +)': ['Lòt peyi (ekri tout nimewo a ak +)', 'Autre pays (tapez le numéro complet avec +)'],
     'Phone number': ['Nimewo telefòn', 'Numéro de téléphone'], 'Phone or email': ['Telefòn oswa imèl', 'Téléphone ou e-mail'],
     'No account yet. Create your free account here.': ['Ou poko gen kont. Kreye kont gratis ou isit la.', 'Pas encore de compte. Créez votre compte gratuit ici.'],
@@ -512,6 +516,7 @@
     ['^The whole ad is worth (.+) HTG\\. Make the minimum order lower than that, or the amount bigger\\.$', 'Tout piblisite a vo $1 HTG. Mete kòmand minimòm lan pi ba pase sa, oswa mete plis kantite.', 'L\'annonce entière vaut $1 HTG. Baissez la commande minimum, ou augmentez le montant.'],
     ['^Per order: (.+) – (.+) HTG$', 'Pou chak kòmand: $1 – $2 HTG', 'Par commande : $1 – $2 HTG'],
     ['^(\\d[\\d,]*) trades?$', '$1 echanj', '$1 échanges'],
+    ['^(\\d[\\d,]*) trades? · ([\\d.]+)★$', '$1 echanj · $2★', '$1 échanges · $2★'],
     ['^(\\d+)% completed$', '$1% fini', '$1 % terminés'],
     ['^⏱ releases in ~(\\d+) min$', '⏱ dekadnase nan ~$1 min', '⏱ libère en ~$1 min'],
     ['^Code sent\\. It works for (\\d+) minutes\\.$', 'Kòd la voye. Li bon pou $1 minit.', 'Code envoyé. Valable $1 minutes.'],
@@ -604,6 +609,9 @@
 
   const SKIP = 'script,style,code,.nt,.film2,.bub,.chatmsg';
   function walk(root) {
+    try { tr2(root); } finally { window.iconizeTree && window.iconizeTree(root); } // translate first, then emojis become clean icons
+  }
+  function tr2(root) {
     if (typeof lang === 'undefined' || idx[lang] == null) return;
     const L = lang;
     if (root.nodeType === 3) { fixText(root, L); return; }
@@ -619,8 +627,8 @@
     const roots = ['#app', '#nav', '#tabs', '#toast', '#banner', '.modal-wrap', 'body'];
     const mo = new MutationObserver((list) => {
       for (const m of list) {
-        if (m.type === 'characterData') { if (!m.target.parentElement?.closest('.film2')) fixText(m.target, lang); continue; }
-        if (m.target.closest && m.target.closest('.film2')) continue;
+        if (m.type === 'characterData') { if (!m.target.parentElement?.closest('.film2') && idx[lang] != null) fixText(m.target, lang); window.iconizeTree && window.iconizeTree(m.target); continue; }
+        if (m.target.closest && m.target.closest('.film2')) { m.addedNodes.forEach((n) => window.iconizeTree && window.iconizeTree(n)); continue; }
         m.addedNodes.forEach((n) => walk(n));
       }
     });

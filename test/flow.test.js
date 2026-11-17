@@ -776,3 +776,29 @@ test('log in with phone OR email, any country; wrong tab gets a clear answer', a
   // blocked countries stay blocked
   assert.equal((await call('POST', '/auth/request-code', { mode: 'signup', phone: '+989121234567' })).status, 403);
 });
+
+test('help: anyone can write to the team, the owner answers in the app and by email; cover photo on the business page', async () => {
+  const sms = await import('../src/sms.js');
+  const mails = []; sms.setMailer(async (to, subject, text) => { mails.push({ to, subject, text }); });
+  process.env.ADMIN_EMAIL = 'owner@example.com';
+  assert.equal((await call('POST', '/help/ask', { message: 'Kijan pou m achte?' })).status, 400, 'logged out needs an email');
+  await ok('POST', '/help/ask', { message: 'Kijan pou m achte?', contact: 'visitor@example.com', lang: 'ht' });
+  const t = await ok('POST', '/help/ask', { message: 'My MonCash payment is late', lang: 'en' }, tk('uk'));
+  assert.ok(mails.some((m) => m.to === 'owner@example.com'), 'the owner is told by email');
+  assert.equal((await call('GET', '/admin/help', null, tk('uk'))).status, 403);
+  const list = await ok('GET', '/admin/help', null, tk('admin'));
+  assert.ok(list.length >= 2);
+  const r = await ok('POST', `/admin/help/${t.id}/reply`, { reply: 'It is on its way. The crypto stays locked.' }, tk('admin'));
+  assert.equal(r.emailed, true);
+  assert.ok(mails.some((m) => m.to === 'grace@example.com' && /on its way/.test(m.text)));
+  const mine = await ok('GET', '/help/mine', null, tk('uk'));
+  assert.equal(mine[0].reply, 'It is on its way. The crypto stays locked.');
+  sms.setMailer(null);
+
+  const jpg = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(300, 7)]).toString('base64');
+  await ok('PUT', '/me/profile', { display_name: 'Deal509', cover: jpg }, tk('uk'));
+  assert.equal((await fetch(`${url}/api/cover/${U.uk.id}`)).status, 200);
+  assert.equal((await ok('GET', '/public/profile/' + U.uk.id)).has_cover, true);
+  await ok('PUT', '/me/profile', { display_name: 'Deal509', cover: null }, tk('uk'));
+  assert.equal((await fetch(`${url}/api/cover/${U.uk.id}`)).status, 404);
+});

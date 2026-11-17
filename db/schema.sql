@@ -27,6 +27,8 @@ CREATE TABLE users (
   bio           text,
   avatar        bytea,
   avatar_mime   text,
+  cover         bytea,                  -- business cover (background) photo
+  cover_mime    text,
   kyc_challenge text,
   closed_at     timestamptz,            -- the person closed their account                   -- code the person must say in their ID video
   binance_uid   text,                   -- where to receive crypto by Binance internal transfer
@@ -377,3 +379,6 @@ CREATE TABLE provider_status (provider text PRIMARY KEY, down boolean NOT NULL D
 CREATE TABLE order_reports (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid NOT NULL REFERENCES orders(id), reporter_id uuid NOT NULL REFERENCES users(id), kind text NOT NULL, note text, status text NOT NULL DEFAULT 'OPEN', created_at timestamptz NOT NULL DEFAULT now());
 
 CREATE TABLE app_settings (key text PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE support_tickets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid REFERENCES users(id), contact text, lang text, message text NOT NULL,
+  page text, reply text, replied_by uuid REFERENCES users(id), replied_at timestamptz, status text NOT NULL DEFAULT 'OPEN', created_at timestamptz NOT NULL DEFAULT now());

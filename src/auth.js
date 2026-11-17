@@ -11,7 +11,7 @@ export function makeToken(userId, days = 7) {
   return `${body}.${sign(body)}`;
 }
 
-function readToken(tok) {
+export function readToken(tok) {
   if (!tok) return null;
   const [body, sig] = tok.split('.');
   if (!body || !sig) return null;

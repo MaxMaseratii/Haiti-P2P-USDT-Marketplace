@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="A person selling USDT on their phone">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3f6ec"/><stop offset="1" stop-color="#c4ead8"/></linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f8b"/><stop offset="1" stop-color="#155366"/></linearGradient>
+    <clipPath id="c"><circle cx="120" cy="120" r="116"/></clipPath>
+  </defs>
+  <circle cx="120" cy="120" r="116" fill="url(#bg)"/>
+  <g clip-path="url(#c)">
+    <!-- body -->
+    <path d="M36 240c4-46 34-72 84-72s80 26 84 72z" fill="url(#shirt)"/>
+    <path d="M104 166h32l-4 18h-24z" fill="#7a4a24"/>
+    <!-- neck + head -->
+    <rect x="106" y="138" width="28" height="34" rx="10" fill="#7a4a24"/>
+    <ellipse cx="120" cy="104" rx="36" ry="42" fill="#8a5630"/>
+    <ellipse cx="84" cy="108" rx="6" ry="9" fill="#7a4a24"/>
+    <ellipse cx="156" cy="108" rx="6" ry="9" fill="#7a4a24"/>
+    <!-- hair -->
+    <path d="M84 98c-2-30 16-46 37-46 22 0 38 15 36 44-6-12-16-18-36-18-18 0-30 6-37 20z" fill="#1d1612"/>
+    <!-- face -->
+    <circle cx="106" cy="108" r="3.4" fill="#2a1a10"/><circle cx="134" cy="108" r="3.4" fill="#2a1a10"/>
+    <path d="M108 126c7 6 17 6 24 0" stroke="#2a1a10" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+    <!-- arm + phone -->
+    <path d="M150 240l-6-46c-1-10 4-18 12-20l16-4c9-2 16 5 15 14l-6 56z" fill="#1a6178"/>
+    <rect x="150" y="148" width="40" height="66" rx="8" fill="#14211c" transform="rotate(-8 170 181)"/>
+    <rect x="155" y="154" width="30" height="50" rx="5" fill="#ffffff" transform="rotate(-8 170 181)"/>
+    <g transform="rotate(-8 170 181)">
+      <circle cx="170" cy="170" r="9" fill="#26a17b"/>
+      <path d="M165 166.5h10M170 166.5v9" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="160" y="184" width="20" height="4" rx="2" fill="#26a17b"/>
+      <rect x="163" y="192" width="14" height="3.5" rx="1.75" fill="#c9d6cf"/>
+    </g>
+    <path d="M160 196c-6 2-10 8-8 14l4 4 18-6-2-10z" fill="#8a5630"/>
+  </g>
+</svg>

@@ -26,8 +26,11 @@ for (const sql of [
   // automatic ID check: 3 face pictures taken during the video, and the robot's answer on each ID
   'ALTER TABLE kyc_files DROP CONSTRAINT IF EXISTS kyc_files_kind_check',
   "ALTER TABLE kyc_files ADD CONSTRAINT kyc_files_kind_check CHECK (kind IN ('FRONT','BACK','VIDEO','FACE1','FACE2','FACE3'))",
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS cover bytea', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS cover_mime text',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_status text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_result jsonb',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_at timestamptz', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS face_vec real[]',
+  `CREATE TABLE IF NOT EXISTS support_tickets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid REFERENCES users(id), contact text, lang text, message text NOT NULL,
+     page text, reply text, replied_by uuid REFERENCES users(id), replied_at timestamptz, status text NOT NULL DEFAULT 'OPEN', created_at timestamptz NOT NULL DEFAULT now())`,
   'CREATE TABLE IF NOT EXISTS app_settings (key text PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_receiver boolean NOT NULL DEFAULT false',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS receiver_phone text',

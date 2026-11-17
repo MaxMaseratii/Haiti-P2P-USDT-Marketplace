@@ -38,7 +38,7 @@ export const publicUser = (u) => ({
   id: u.id, phone: u.phone, full_name: u.full_name, role: u.role, tier: u.tier,
   strikes: u.strikes, wallet_addr: u.wallet_addr,
   binance_uid: u.binance_uid || null, payout_network: u.payout_network || null, payout_addr: u.payout_addr || null,
-  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, email: u.email || null,
+  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, has_cover: !!u.cover_mime, email: u.email || null,
   department: u.department || null, area: u.area || null, response_min: u.response_min || null,
   terms_ok: u.terms_version === config.termsVersion,
 });
@@ -102,7 +102,7 @@ export async function publicProfile(id) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw notFound('Profile not found.');
   const u = (await q(
     `SELECT u.id, COALESCE(u.display_name, u.full_name) AS name, (u.display_name IS NOT NULL) AS is_business, u.bio, u.department, u.area, u.response_min,
-            (u.avatar_mime IS NOT NULL) AS has_avatar, u.created_at AS member_since, ${STATS_SQL('u')}
+            (u.avatar_mime IS NOT NULL) AS has_avatar, (u.cover_mime IS NOT NULL) AS has_cover, u.created_at AS member_since, ${STATS_SQL('u')}
        FROM users u WHERE u.id=$1 AND u.banned=false AND u.closed_at IS NULL`, [id])).rows[0];
   if (!u) throw notFound('Profile not found.');
   const [reviews, ads] = await Promise.all([
@@ -115,7 +115,7 @@ export async function publicProfile(id) {
 }
 
 const NO_CONTACT = /(https?:|www\.|@|\+?\d[\d\s().-]{6,}\d)/i;
-export async function setProfile(user, { display_name, bio, avatar, department, area, response_min }) {
+export async function setProfile(user, { display_name, bio, avatar, cover, department, area, response_min }) {
   const dn = String(display_name ?? '').trim(), b = String(bio ?? '').trim(), ar = String(area ?? '').trim();
   if (dn && (dn.length < 2 || dn.length > 40)) throw bad('Public name must be 2 to 40 letters.');
   if (b.length > 300) throw bad('About text is too long (max 300).');
@@ -132,10 +132,22 @@ export async function setProfile(user, { display_name, bio, avatar, department, 
     buf = Buffer.from(m[2], 'base64'); mime = m[1];
     if (buf.length > 200 * 1024) throw bad('Photo is too big.');
   }
+  // Cover (background) photo for the business page: wide, made smaller in the browser first.
+  if (cover) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(cover));
+    if (!m) throw bad('Cover photo must be a JPG, PNG or WEBP image.');
+    const cb = Buffer.from(m[2], 'base64');
+    if (cb.length > 450 * 1024) throw bad('Cover photo is too big.');
+    await q('UPDATE users SET cover=$2, cover_mime=$3 WHERE id=$1', [user.id, cb, m[1]]);
+  }
+  if (cover === null) await q('UPDATE users SET cover=NULL, cover_mime=NULL WHERE id=$1', [user.id]);
   if (avatar === null) await q('UPDATE users SET avatar=NULL, avatar_mime=NULL WHERE id=$1', [user.id]);
   else if (buf) await q('UPDATE users SET avatar=$2, avatar_mime=$3 WHERE id=$1', [user.id, buf, mime]);
   await q('UPDATE users SET display_name=$2, bio=$3, department=$4, area=$5, response_min=$6 WHERE id=$1', [user.id, dn || null, b || null, dep, ar || null, rm]);
   return { ok: true };
+}
+export async function getCover(id) {
+  return (await q('SELECT cover, cover_mime FROM users WHERE id=$1 AND cover IS NOT NULL', [id])).rows[0];
 }
 export async function getAvatar(id) {
   const r = await q('SELECT avatar, avatar_mime FROM users WHERE id=$1 AND avatar IS NOT NULL', [id]);

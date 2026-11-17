@@ -49,7 +49,7 @@ const stopTimer = () => { clearInterval(timer); timer = null; };
 function go(hash) { if (location.hash.slice(1) === hash) route(); else location.hash = hash; }
 window.addEventListener('hashchange', route);
 $('#lang').value = lang;
-$('#lang').addEventListener('change', (e) => { lang = e.target.value; localStorage.setItem('lang', lang); route(); });
+$('#lang').addEventListener('change', (e) => { lang = e.target.value; localStorage.setItem('lang', lang); window.HelpBot && HelpBot.reset(); route(); });
 
 async function route() {
   stopTimer();
@@ -82,14 +82,14 @@ function renderNav() {
   document.body.classList.toggle('in', !!token);
   if (!token) { $('#tabs').replaceChildren(); return; }
   const cur = (location.hash.slice(1) || 'home').split('/')[0];
-  const items = [['home', 'Home'], ['market', 'Market'], ['ads', 'My ads'], ['orders', 'My orders'], ['linked', 'Linked accounts'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
+  const items = [['home', 'Home'], ['market', 'MarketPlace'], ['ads', 'My ads'], ['orders', 'My orders'], ['linked', 'Linked accounts'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
   if (me && ['AGENT', 'ADMIN'].includes(me.user.role)) items.push(['staff', 'Staff']);
   if (me && me.user.role === 'ADMIN') items.push(['admin', 'Admin']);
   for (const [k, label] of items) nav.append(h('button', { class: cur === k ? 'on' : '', onclick: () => go(k) }, t(label)));
   nav.append(h('button', { onclick: logout }, t('Log out')));
   // Phone: a bank-app style bar at the bottom with the 5 main places.
   const tabs = $('#tabs');
-  tabs.replaceChildren(...[['home', '🏠', 'Home'], ['market', '📈', 'Market'], ['orders', '🧾', 'Orders'], ['wallet', '👛', 'Wallet'], ['profile', '👤', 'Profile']]
+  tabs.replaceChildren(...[['home', '🏠', 'Home'], ['market', '📈', 'MarketPlace'], ['orders', '🧾', 'Orders'], ['wallet', '👛', 'Wallet'], ['profile', '👤', 'Profile']]
     .map(([k, ic, label]) => h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, ic), h('span', {}, t(label)))));
 }
 
@@ -235,7 +235,7 @@ async function marketView(app) {
   });
   [asset, pay].forEach((s) => s.addEventListener('change', load));
   app.append(h('div', { class: 'card' },
-    h('h2', {}, t('Market')),
+    h('h2', { class: 'nt' }, 'Ayiti P2P - Live MarketPlace'),
     h('div', { class: 'seg' },
       h('button', { class: 'buy' + (marketSide === 'SELL' ? ' on' : ''), onclick: () => { marketSide = 'SELL'; route(); } }, t('Buy USDT')),
       h('button', { class: 'sell' + (marketSide === 'BUY' ? ' on' : ''), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
@@ -291,7 +291,8 @@ async function publicProfileView(app, id) {
   };
   app.append(h('div', { class: 'pprof' },
     h('div', { class: 'back', onclick: () => history.length > 1 ? history.back() : go('market') }, '← ' + t('Back')),
-    h('div', { class: 'card pp-head' },
+    p.has_cover ? h('div', { class: 'pp-cover' }, h('img', { src: '/api/cover/' + p.id, alt: '' })) : null,
+    h('div', { class: 'card pp-head' + (p.has_cover ? ' oncover' : '') },
       h('div', { class: 'pp-av' }, avatarEl(p.id, p.name, p.has_avatar, 'xl'), p.id_verified ? h('span', { class: 'pp-tick', title: 'ID verified' }, '✓') : null),
       h('div', { class: 'pp-id' },
         h('h1', {}, p.name),
@@ -1242,6 +1243,21 @@ function shrinkPoster(file) {
 }
 
 // "My business profile": what buyers see before they trade with you.
+// A wide cover photo (3:1), cut to the middle and made smaller before upload.
+function shrinkCover(file) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const W = 1500, H = 500, c = document.createElement('canvas'); c.width = W; c.height = H;
+      const k = Math.max(W / img.width, H / img.height), w = W / k, hh = H / k;
+      c.getContext('2d').drawImage(img, (img.width - w) / 2, (img.height - hh) / 2, w, hh, 0, 0, W, H); URL.revokeObjectURL(url);
+      let q = 0.82, d = c.toDataURL('image/jpeg', q); while (d.length > 560000 && q > 0.4) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+      ok(d);
+    };
+    img.onerror = () => no(new Error('Could not read that picture.')); img.src = url;
+  });
+}
+
 async function businessCard(u) {
   const pubP = await api('GET', '/public/profile/' + u.id).catch(() => ({ posters: [] }));
   let photo, rmin = u.response_min || null;
@@ -1250,6 +1266,10 @@ async function businessCard(u) {
   const dep = h('select', {}, h('option', { value: '' }, '—'), (cfg.departments || []).map((d) => h('option', { value: d, selected: d === u.department }, d)));
   const area = h('input', { value: u.area || '', maxlength: 60, placeholder: 'City or area, e.g. Delmas, Cap-Haïtien, Miami' });
   const face = h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl'));
+  let cover; // undefined = no change, data URL = new, null = remove
+  const coverBox = h('div', { class: 'coverbox' + (u.has_cover ? ' has' : '') }, u.has_cover ? h('img', { src: '/api/cover/' + u.id + '?v=' + Date.now(), alt: '' }) : h('span', {}, t('Your cover photo: your shop, your logo, your city')));
+  const coverIn = h('input', { type: 'file', accept: 'image/*', class: 'hidden' });
+  coverIn.addEventListener('change', act(async () => { if (!coverIn.files[0]) return; cover = await shrinkCover(coverIn.files[0]); coverBox.className = 'coverbox has'; coverBox.replaceChildren(h('img', { src: cover, alt: '' })); paintMeter(); }));
   const pick = (capture) => { const f = h('input', { type: 'file', accept: 'image/*', class: 'hidden', ...(capture ? { capture: 'user' } : {}) });
     f.addEventListener('change', act(async () => { if (!f.files[0]) return; photo = await shrinkPhoto(f.files[0]); face.replaceChildren(h('div', { class: 'avatar xl' }, h('img', { src: photo, alt: '' }))); paintMeter(); })); return f; };
   const chips = h('div', { class: 'chips' }, (cfg.response_mins || [5, 10, 15, 30, 60]).map((m) => h('button', { type: 'button', class: 'chip' + (m === rmin ? ' on' : ''), onclick: (e) => {
@@ -1269,7 +1289,7 @@ async function businessCard(u) {
     posters.length < 6 ? h('label', { class: 'poster add' }, addIn, h('span', {}, '＋'), h('small', {}, 'Add poster')) : null);
   const meter = h('div', { class: 'meter' }), tips = h('div', { class: 'mute small nt' });
   function paintMeter() {
-    const items = [[u.has_avatar || !!photo, { en: 'a photo of your face', fr: 'une photo de votre visage', ht: 'yon foto figi w' }], [!!pub.value.trim(), { en: 'a public name', fr: 'un nom public', ht: 'yon non piblik' }],
+    const items = [[u.has_avatar || !!photo, { en: 'a profile photo', fr: 'une photo de profil', ht: 'yon foto pwofil' }], [(u.has_cover && cover !== null) || !!cover, { en: 'a cover photo', fr: 'une photo de couverture', ht: 'yon foto kouvèti' }], [!!pub.value.trim(), { en: 'a public name', fr: 'un nom public', ht: 'yon non piblik' }],
       [bio.value.trim().length >= 20, { en: 'a few words about you', fr: 'quelques mots sur vous', ht: 'kèk mo sou ou' }], [!!dep.value, { en: 'your area', fr: 'votre zone', ht: 'zòn ou' }],
       [!!rmin, { en: 'your response time', fr: 'votre délai de réponse', ht: 'tan ou pran pou reponn' }], [posters.length > 0, { en: 'a business poster', fr: 'une affiche', ht: 'yon afich biznis' }]];
     const done = items.filter((x) => x[0]).length, pct = Math.round(100 * done / items.length);
@@ -1284,9 +1304,12 @@ async function businessCard(u) {
     h('div', { class: 'bc-top' }, h('div', {}, h('h3', { class: 'ct' }, 'My business profile'), h('p', { class: 'mute' }, 'This is your shop window. Buyers check it before they trade.')),
       h('button', { class: 'btn alt sm', onclick: () => go('u/' + u.id) }, '👁 ' + t('See my public page'))),
     meter, tips,
+    h('label', {}, t('Cover photo (background)')), coverBox,
+    h('div', { class: 'gactions' }, h('label', { class: 'btn alt sm filebtn' }, coverIn, t('Choose a cover photo')),
+      h('button', { class: 'btn alt sm', type: 'button', onclick: () => { cover = null; coverBox.className = 'coverbox'; coverBox.replaceChildren(h('span', {}, t('No cover photo'))); paintMeter(); } }, t('Remove'))),
     h('div', { class: 'facebox' }, face, h('div', {},
-      h('b', {}, '📸 A photo of your face'),
-      h('p', { class: 'mute small' }, 'Optional, but people trust a real face. Profiles with a face photo get more orders.'),
+      h('b', {}, '📸 ' + t('Profile photo')),
+      h('p', { class: 'mute small' }, t('Your face or your business logo. People trust a real face: profiles with a photo get more orders.')),
       h('div', { class: 'gactions' }, h('label', { class: 'btn sm filebtn' }, pick(true), 'Take a selfie'), h('label', { class: 'btn alt sm filebtn' }, pick(false), 'Choose a photo')))),
     h('label', {}, 'Public name or company'), pub,
     h('label', {}, 'About you'), bio,
@@ -1294,7 +1317,7 @@ async function businessCard(u) {
     h('label', {}, 'How fast do you usually answer an order?'), chips,
     h('label', {}, 'Business posters (up to 6)'), h('p', { class: 'mute small' }, 'Your flyer, your shop, your prices, your hours. No phone numbers or links: keep the deal in the app.'), grid,
     h('button', { class: 'btn big-btn', onclick: act(async () => {
-      await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo, department: dep.value || null, area: area.value, response_min: rmin });
+      await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo, ...(cover !== undefined ? { cover } : {}), department: dep.value || null, area: area.value, response_min: rmin });
       me = await api('GET', '/me'); toast('Profile saved.'); route();
     }) }, 'Save my profile'));
 }

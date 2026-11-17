@@ -25,6 +25,8 @@ import * as disputes from './services/disputes.js';
 import { addBlock } from './services/screening.js';
 import * as providers from './services/providers.js';
 import * as idcheck from './services/idcheck.js';
+import * as help from './services/help.js';
+import { readToken } from './auth.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((v) => { if (v !== undefined) res.json(v); }).catch(next);
 
@@ -128,6 +130,19 @@ api.get('/avatar/:id', wrap(async (req, res) => {
   res.set('Content-Type', a.avatar_mime).set('Cache-Control', 'public, max-age=300').send(a.avatar);
 }));
 
+api.get('/cover/:id', wrap(async (req, res) => {
+  const a = /^[0-9a-f-]{36}$/.test(req.params.id) ? await users.getCover(req.params.id) : null;
+  if (!a) { res.status(404).end(); return; }
+  res.set('Content-Type', a.cover_mime).set('Cache-Control', 'public, max-age=300').send(a.cover);
+}));
+
+// Help: anyone can write to the team (logged in or not). Logged in = we know who it is.
+api.post('/help/ask', otp.ipLimit, wrap(async (req) => {
+  const h = req.headers.authorization || '', tk = h.startsWith('Bearer ') ? readToken(h.slice(7)) : null;
+  const user = tk ? (await q('SELECT * FROM users WHERE id=$1 AND NOT banned', [tk.uid])).rows[0] : null;
+  return help.ask(user || null, req.body || {});
+}));
+
 // Everything below needs login.
 api.use(auth);
 
@@ -164,6 +179,7 @@ api.get('/links/to-check', wrap(async (req) => links.toCheck(req.user)));
 api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, req.params.orderId, req.body?.received === true)));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.post('/me/close', wrap(async (req) => users.closeAccount(req.user)));
+api.get('/help/mine', wrap(async (req) => help.mine(req.user)));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/me/accept-terms', wrap(async (req) => users.acceptTerms(req.user)));
 api.post('/me/posters', wrap(async (req) => users.addPoster(req.user, req.body || {})));
@@ -238,6 +254,10 @@ api.use('/staff', staff);
 
 const admin = express.Router();
 admin.use(needRole('ADMIN'));
+// help messages from users
+admin.get('/help', wrap(async (req) => help.list(String(req.query.status || 'OPEN').toUpperCase())));
+admin.post('/help/:id/reply', wrap(async (req) => help.reply(req.user, req.params.id, req.body?.reply)));
+admin.post('/help/:id/close', wrap(async (req) => help.close(req.params.id)));
 // automatic ID check: on/off switch, what the robot approved, undo
 admin.get('/idcheck', wrap(async () => ({ ...(await idcheck.settings()), recent: await idcheck.recentAuto(20) })));
 admin.post('/idcheck', wrap(async (req) => idcheck.setSettings({ auto_approve: !!req.body?.auto_approve })));

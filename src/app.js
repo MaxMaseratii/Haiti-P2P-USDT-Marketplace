@@ -48,6 +48,7 @@ export function buildApp() {
   app.use('/api', apiLimit);
   app.use('/api/orders/:id/evidence/upload', express.json({ limit: '8mb' }));
   app.use('/api/me/posters', express.json({ limit: '1mb' })); // business posters (made smaller in the browser first)
+  app.use('/api/me/profile', express.json({ limit: '1mb' })); // profile photo + cover photo
   app.use('/api/kyc/file', express.raw({ type: () => true, limit: '26mb' })); // ID photos and video arrive as raw bytes
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', geoGuard, api);

@@ -37,7 +37,7 @@ const providers = {
       to = (await q('SELECT email FROM users WHERE phone=$1', [phone])).rows[0]?.email;
     }
     if (!to) throw new Error('No email for this phone.');
-    await sendEmail(to, 'Ayiti P2P Swap', text);
+    await sendEmail(to, 'Ayiti P2P', text);
   },
 
   async twilio(phone, text) {

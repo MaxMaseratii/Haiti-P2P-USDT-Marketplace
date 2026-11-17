@@ -916,7 +916,7 @@ async function linkedView(app) {
     h('div', { class: 'card' }, h('h2', {}, 'Linked accounts'),
       h('p', {}, 'Receive gourdes into more MonCash, NatCash or bank accounts. For example when one account is full.'),
       h('ol', { class: 'gsteps' },
-        h('li', {}, 'The other person opens their own Ayiti P2P Swap account and finishes the ID check.'),
+        h('li', {}, 'The other person opens their own Ayiti P2P account and finishes the ID check.'),
         h('li', {}, 'You ask them here, with their phone number.'),
         h('li', {}, 'They accept in their app and choose which of their accounts to share.'),
         h('li', {}, 'When a buyer pays into that account, the owner confirms in their app that the gourdes arrived.')),

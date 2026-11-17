@@ -2,7 +2,7 @@
 const LEGAL = {
   terms: {
     ht: ['Tèm ak Kondisyon', [
-      ['1. Kiyès nou ye', 'Ayiti P2P Swap se yon platfòm ki konekte moun ki vle chanje kripto (USDT, USDC) ak goud. Nou se yon fasilitatè. Nou pa yon bank, ni yon biwo transfè lajan.'],
+      ['1. Kiyès nou ye', 'Ayiti P2P se yon platfòm ki konekte moun ki vle chanje kripto (USDT, USDC) ak goud. Nou se yon fasilitatè. Nou pa yon bank, ni yon biwo transfè lajan.'],
       ['2. Kisa nou fè', 'Pandan yon echanj, nou kadnase kripto vandè a nan yon kontra entèlijan (yon pwogram sou blockchain lan ki swiv règ fiks). Nou dekadnase l lè achtè a ak vandè a konfime, oswa lè ekip nou an deside nan yon diskisyon. Nou pa janm resevwa, kenbe, ni voye goud. Goud yo pase dirèk ant itilizatè yo, pa MonCash, NatCash oswa labank.'],
       ['3. Kiyès ki ka sèvi ak li', 'Ou dwe gen 18 an oswa plis. Ou dwe verifye idantite w. Yon sèl kont pou chak moun. Moun ki nan peyi ki anba sanksyon total pa ka louvri kont.'],
       ['4. Sa ou pwomèt', 'Ou bay vrè enfòmasyon. Kont MonCash, NatCash oswa labank ou sèvi ak yo dwe nan non w, oswa nan non yon moun ki verifye isit la epi ki dakò. Ou pa sèvi ak platfòm nan pou vòlè, twonpe moun, oswa kache orijin lajan. Ou pa fè echanj andeyò aplikasyon an.'],
@@ -13,10 +13,10 @@ const LEGAL = {
       ['9. Sispansyon', 'Nou ka sispann oswa fèmen yon kont si gen fwod, fo prèv, vyolasyon tèm yo, oswa si lalwa mande l.'],
       ['10. Limit responsablite', 'Nou fè tout sa nou kapab pou platfòm nan an sekirite, men nou pa responsab pou aksyon yon itilizatè fè andeyò aplikasyon an, ni pou pwoblèm sou rezo MonCash, NatCash, bank oswa blockchain.'],
       ['11. Chanjman', 'Nou ka chanje tèm sa yo. N ap avèti w nan aplikasyon an anvan chanjman enpòtan.'],
-      ['12. Mak ak logo', 'MonCash (Digicel), NatCash (Natcom), Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Ayiti P2P Swap pa fè pati konpayi sa yo, e yo pa apwouve l.'],
+      ['12. Mak ak logo', 'MonCash (Digicel), NatCash (Natcom), Binance ak non ak logo bank yo se pou mèt yo. Nou montre yo sèlman pou di ki fason moun peye. Ayiti P2P pa fè pati konpayi sa yo, e yo pa apwouve l.'],
     ]],
     en: ['Terms and Conditions', [
-      ['1. Who we are', 'Ayiti P2P Swap is a platform that connects people who want to swap crypto (USDT, USDC) and gourdes. We are a facilitator. We are not a bank or a money transfer office.'],
+      ['1. Who we are', 'Ayiti P2P is a platform that connects people who want to swap crypto (USDT, USDC) and gourdes. We are a facilitator. We are not a bank or a money transfer office.'],
       ['2. What we do', 'During a swap we lock the seller\'s crypto in a smart contract (a program on the blockchain that follows fixed rules). We unlock it when buyer and seller confirm, or when our team decides a dispute. We never receive, hold or send gourdes. Gourdes move directly between users by MonCash, NatCash or bank.'],
       ['3. Who can use it', 'You must be 18 or older and verify your identity. One account per person. People in fully sanctioned countries cannot open an account.'],
       ['4. Your promises', 'You give true information. The MonCash, NatCash or bank accounts you use are in your name, or in the name of a verified user here who agreed. You do not use the platform to steal, scam, or hide where money comes from. You do not trade outside the app.'],
@@ -27,7 +27,7 @@ const LEGAL = {
       ['9. Suspension', 'We may suspend or close an account for fraud, fake proof, breaking these terms, or when the law requires it.'],
       ['10. Liability', 'We do our best to keep the platform safe, but we are not responsible for what users do outside the app, or for problems on MonCash, NatCash, bank or blockchain networks.'],
       ['11. Changes', 'We may change these terms. We will tell you in the app before important changes.'],
-      ['12. Names and logos', 'MonCash (Digicel), NatCash (Natcom), Binance and the bank names and logos belong to their owners. We show them only to say which payment methods people use. Ayiti P2P Swap is not part of, or approved by, these companies.'],
+      ['12. Names and logos', 'MonCash (Digicel), NatCash (Natcom), Binance and the bank names and logos belong to their owners. We show them only to say which payment methods people use. Ayiti P2P is not part of, or approved by, these companies.'],
     ]],
   },
   privacy: {
@@ -52,7 +52,7 @@ const LEGAL = {
   },
   kyc: {
     ht: ['Pwosesis Idantifikasyon', [
-      ['Poukisa', 'Pou tout moun sou Ayiti P2P Swap se moun reyèl. Sa bloke vòlè ak fo kont.'],
+      ['Poukisa', 'Pou tout moun sou Ayiti P2P se moun reyèl. Sa bloke vòlè ak fo kont.'],
       ['Etap 1: Telefòn', 'Ou resevwa yon kòd OTP pa SMS pou konfime nimewo w.'],
       ['Etap 2: Chwazi pyès idantite w', 'Kat idantite nasyonal (CIN), paspò, oswa lisans kondwi. Li dwe valid, ak foto w sou li.'],
       ['Etap 3: Foto pyès idantite w', 'Devan (ak dèyè pou kat yo). Mete l sou yon tab, 4 kwen yo vizib, pa gen refleksyon limyè.'],
@@ -62,7 +62,7 @@ const LEGAL = {
       ['Poukisa yo ka refize', 'Foto pa klè, pyès ekspire, non pa menm, videyo pa montre menm moun nan, oswa fraz la pa bon. Ou ka eseye ankò.'],
     ]],
     en: ['Identity Verification', [
-      ['Why', 'So everybody on Ayiti P2P Swap is a real person. This blocks scammers and fake accounts.'],
+      ['Why', 'So everybody on Ayiti P2P is a real person. This blocks scammers and fake accounts.'],
       ['Step 1: Phone', 'You get an OTP code by SMS to confirm your number.'],
       ['Step 2: Choose your ID', 'National ID card (CIN), passport, or driver\'s license. It must be valid and show your photo.'],
       ['Step 3: Photos of your ID', 'Front (and back for cards). On a table, all 4 corners visible, no light reflection.'],

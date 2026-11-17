@@ -1,4 +1,4 @@
-# Ayiti P2P Swap
+# Ayiti P2P
 
 A Haiti-only marketplace where people buy and sell USDT/USDC with gourdes (HTG).
 
@@ -8,7 +8,7 @@ A Haiti-only marketplace where people buy and sell USDT/USDC with gourdes (HTG).
 - If something is wrong, a staff agent reads the proof and decides.
 - **The platform never holds gourdes.**
 
-This is an MVP built from the "Ayiti P2P Swap Spec". It runs real money on Arbitrum (`ESCROW_MODE=EVM`) with the included smart contract. The contract is **unaudited**. Fake-money mode (`ESCROW_MODE=MOCK`) is kept only for the automated tests and a laptop (`ALLOW_TEST_MODE=true`); a public server refuses to start in it.
+This is an MVP built from the "Ayiti P2P Spec". It runs real money on Arbitrum (`ESCROW_MODE=EVM`) with the included smart contract. The contract is **unaudited**. Fake-money mode (`ESCROW_MODE=MOCK`) is kept only for the automated tests and a laptop (`ALLOW_TEST_MODE=true`); a public server refuses to start in it.
 
 > ## Read this before anything else
 > - **Default mode is a simulation.** Money is a number in a database table. The smart-contract escrow exists (`contracts/`, `ESCROW_MODE=EVM`) and is tested on a local test chain only. **It has not been audited and has never run on a public network.** Do not put real USDT through this before an outside audit.

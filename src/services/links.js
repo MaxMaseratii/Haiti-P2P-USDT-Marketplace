@@ -39,7 +39,7 @@ export async function invite(user, { phone }) {
   if (m.tier < 1) throw conflict(`${m.full_name} must finish the ID check before you can link their account.`);
   try {
     const l = (await q(`INSERT INTO account_links (owner_id, member_id) VALUES ($1,$2) RETURNING id`, [user.id, m.id])).rows[0];
-    try { await sendSms(phone, `Ayiti P2P Swap: ${user.full_name} asks to use one of your payment accounts to receive gourdes. Log in to Ayiti P2P Swap to accept or refuse.`); } catch {}
+    try { await sendSms(phone, `Ayiti P2P: ${user.full_name} asks to use one of your payment accounts to receive gourdes. Log in to Ayiti P2P to accept or refuse.`); } catch {}
     return l;
   } catch (e) { if (e.code === '23505') throw conflict('You already asked this person.'); throw e; }
 }
@@ -100,7 +100,7 @@ export async function notifyMember(order) {
   await q(`UPDATE orders SET receiver_said=NULL, receiver_at=NULL WHERE id=$1`, [order.id]);
   await q(`INSERT INTO chat_messages (order_id, sender_id, body) VALUES ($1,NULL,$2)`,
     [order.id, `${pm.member_name} owns the receiving account. We asked them to check for ${htg} HTG and confirm in the app.`]);
-  try { await sendSms(pm.phone, `Ayiti P2P Swap: check your ${pm.bank_name || pm.type} for ${htg} HTG (code ${order.pay_reference}). Then log in and confirm.`); } catch {}
+  try { await sendSms(pm.phone, `Ayiti P2P: check your ${pm.bank_name || pm.type} for ${htg} HTG (code ${order.pay_reference}). Then log in and confirm.`); } catch {}
   return true;
 }
 

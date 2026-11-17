@@ -444,7 +444,7 @@ export async function runTimers() {
   // Locks that were not confirmed yet (the first try failed): try again.
   for (const { id } of (await q(`SELECT id FROM orders WHERE state='ORDER_CREATED'`)).rows) { await confirmLock(id); }
   // 5. Real chain: read deposits and withdrawals, keep ad reserves equal on chain.
-  try { await escrow.tick(); } catch (e) { console.error('chain tick', e.message); }
+  try { await escrow.tick(); } catch (e) { console.error('chain tick', String(e.shortMessage || e.message).replace(/\/v2\/[A-Za-z0-9_-]+/g, '/v2/***').slice(0, 300)); }
   try { Object.assign(done, await links.renew()); } catch (e) { console.error('link renew', e.message); }
   return done;
 }

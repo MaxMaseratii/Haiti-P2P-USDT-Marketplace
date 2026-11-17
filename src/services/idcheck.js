@@ -48,7 +48,7 @@ function lev(a, b) {
 // Every part of the account name must be printed on the ID (small reading mistakes allowed).
 export function nameOnId(fullName, text) {
   const need = words(fullName).filter((w) => w.length >= 2), have = words(text);
-  const found = need.filter((w) => have.some((x) => x === w || (w.length >= 3 && x.includes(w)) || (w.length >= 4 && lev(w, x) <= (w.length >= 8 ? 2 : 1))));
+  const found = need.filter((w) => have.some((x) => x === w || (w.length >= 3 && x.includes(w)) || (w.length >= 3 && Math.abs(x.length - w.length) <= 1 && lev(w, x) <= (w.length >= 8 ? 2 : 1))));
   return { ok: need.length > 0 && found.length === need.length, found, missing: need.filter((w) => !found.includes(w)) };
 }
 const alnum = (s) => clean(s).replace(/O/g, '0').replace(/[IL]/g, '1').replace(/[^A-Z0-9]/g, '');

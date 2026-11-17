@@ -981,6 +981,28 @@ function shrinkId(file) {
   });
 }
 
+// Face pictures for the automatic ID check, taken from a video (when the live pictures are missing,
+// or the person uploaded a video): jump to 3 moments and keep a still picture of each.
+async function framesFromVideo(blob, have = {}) {
+  const out = { ...have };
+  try {
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(blob);
+    await new Promise((ok) => { v.onloadeddata = ok; v.onerror = ok; setTimeout(ok, 5000); });
+    const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+    const at = [2, 5, 8].map((t, i) => (dur ? Math.min(t, dur * [0.2, 0.5, 0.8][i]) : t));
+    for (let i = 0; i < 3; i++) {
+      const kind = 'FACE' + (i + 1); if (out[kind]) continue;
+      await new Promise((ok) => { v.onseeked = ok; v.currentTime = at[i]; setTimeout(ok, 3000); });
+      if (!v.videoWidth) continue;
+      const k = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight)), c = document.createElement('canvas');
+      c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      const b = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.88)); if (b && b.size > 2000) out[kind] = b;
+    }
+    URL.revokeObjectURL(v.src);
+  } catch {}
+  return out;
+}
+
 // Live camera inside the app: shows the back camera, the person presses the button, we keep the picture.
 function cameraShot(label) {
   return new Promise((resolve, reject) => {
@@ -1048,6 +1070,8 @@ async function idCheckCard() {
     const f = vFile.files[0]; if (!f) return;
     vBox.classList.remove('hidden'); vBox.replaceChildren(h('video', { src: URL.createObjectURL(f), controls: true, playsinline: true }));
     await uploadVideo(f);
+    const fr = await framesFromVideo(f);
+    for (const kind of ['FACE1', 'FACE2', 'FACE3']) if (fr[kind]) await sendFile(kind, fr[kind]).catch(() => {});
   }));
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const record = act(async () => {
@@ -1085,7 +1109,8 @@ async function idCheckCard() {
       vBox.replaceChildren(h('video', { src: URL.createObjectURL(blob), controls: true, playsinline: true }));
       if (secs < 12) throw new Error('Too short. Follow the steps on the screen and say the whole sentence.');
       await uploadVideo(blob);
-      for (const kind of ['FACE1', 'FACE2', 'FACE3']) if (faces[kind]) await sendFile(kind, faces[kind]).catch(() => {});
+      const all = Object.keys(faces).length >= 3 ? faces : await framesFromVideo(blob, faces);
+      for (const kind of ['FACE1', 'FACE2', 'FACE3']) if (all[kind]) await sendFile(kind, all[kind]).catch(() => {});
     });
     stop.onclick = () => rec.state !== 'inactive' && rec.stop();
     rec.start(1000);

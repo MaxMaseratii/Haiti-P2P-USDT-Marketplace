@@ -89,7 +89,21 @@ if (!config.tokenSecret || config.tokenSecret === 'dev-only-secret' || config.to
       console.log('Owner account created for', phone.slice(0, 5) + '…');
     } else {
       if (u.role !== 'ADMIN') await client.query(`UPDATE users SET role='ADMIN', tier=3 WHERE id=$1`, [u.id]);
-      if (!u.email && email) await client.query('UPDATE users SET email=$2 WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email)=$2)', [u.id, email]);
+      if (!u.email && email) {
+        // The owner's email may sit on a test account the owner made with a wrong phone (no trades, no money):
+        // close that account and give the email to the owner account.
+        const other = (await client.query(`SELECT o.id FROM users o WHERE lower(o.email)=$1 AND o.id<>$2 AND o.role='USER'
+            AND NOT EXISTS (SELECT 1 FROM orders x WHERE x.buyer_id=o.id OR x.seller_id=o.id) AND NOT EXISTS (SELECT 1 FROM ads a WHERE a.user_id=o.id)
+            AND NOT EXISTS (SELECT 1 FROM wallet_balances w WHERE w.user_id=o.id AND (w.available>0 OR w.locked>0))`, [email, u.id])).rows[0];
+        if (other) {
+          await client.query(`UPDATE users SET email=NULL, closed_at=COALESCE(closed_at, now()) WHERE id=$1`, [other.id]);
+          await client.query(`UPDATE kyc SET status='REJECTED', reviewed_at=now() WHERE user_id=$1 AND status='PENDING'`, [other.id]);
+          console.log('Owner email moved from an unused account to the owner account.');
+        }
+        await client.query('UPDATE users SET email=$2 WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email)=$2)', [u.id, email]);
+      }
+      if (process.env.OWNER_NAME) await client.query(`UPDATE users SET full_name=$2 WHERE id=$1 AND full_name='Ayiti P2P Owner'`, [u.id, process.env.OWNER_NAME]);
+      if (process.env.OWNER_NAME) await client.query(`UPDATE kyc SET name_on_id=$2 WHERE user_id=$1 AND id_doc_ref='owner' AND name_on_id='Ayiti P2P Owner'`, [u.id, process.env.OWNER_NAME]);
     }
   }
 }

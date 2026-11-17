@@ -81,7 +81,7 @@ export async function createOrder(user, { ad_id, amount, payment_method_id, pay_
     const buyer = buyerId === user.id ? user : owner;
     const seller = sellerId === user.id ? user : owner;
     if (!isMock() && (!buyer.wallet_addr || !seller.wallet_addr))
-      throw bad('Both traders must link a wallet first (Wallet page).', 'WALLET');
+      throw bad('Both traders must link a wallet first (Deposit page).', 'WALLET');
     await checkUserCanTrade(c, buyer, Number(total), { asSeller: false });
     await checkUserCanTrade(c, seller, Number(total), { asSeller: true });
 

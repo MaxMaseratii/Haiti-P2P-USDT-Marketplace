@@ -281,6 +281,10 @@ export async function addPaymentMethod(user, { type, account_name, account_ref, 
       `SELECT name_on_id FROM kyc WHERE user_id=$1 AND status='APPROVED' ORDER BY created_at DESC LIMIT 1`, [user.id])).rows[0];
     // Name on the payment account must match the ID. No match, not verified.
     const verified = !!k && namesMatch(k.name_on_id, account_name);
+    // Removed earlier by the same person: bring it back instead of refusing.
+    const back = await c.query(`UPDATE payment_methods SET active=true, account_name=$3, bank_name=$4, verified=$5
+      WHERE user_id=$1 AND type=$2 AND account_ref=$6 AND NOT active AND NOT is_receiver RETURNING *`, [user.id, type, account_name.trim(), bank_name, verified, account_ref.trim()]);
+    if (back.rowCount) return back.rows[0];
     try {
       const r = await c.query(
         `INSERT INTO payment_methods (user_id, type, account_name, account_ref, verified, bank_name)
@@ -295,6 +299,22 @@ export async function addPaymentMethod(user, { type, account_name, account_ref, 
 
 export async function myPaymentMethods(userId) {
   return (await q('SELECT * FROM payment_methods WHERE user_id=$1 ORDER BY created_at', [userId])).rows;
+}
+
+// The person removes one of their own accounts. Not while an open order or a live ad still uses it.
+export async function removePaymentMethod(user, id) {
+  return tx(async (c) => {
+    const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2 AND NOT is_receiver FOR UPDATE', [id, user.id])).rows[0];
+    if (!pm) throw notFound();
+    const open = (await c.query(`SELECT 1 FROM orders WHERE payment_method_id=$1
+      AND state NOT IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT') LIMIT 1`, [id])).rowCount;
+    if (open) throw bad('An open order uses this account. Wait until it is finished.');
+    const ad = (await c.query(`SELECT 1 FROM ads WHERE status <> 'CLOSED' AND (payment_method_id=$1 OR $1 = ANY(pay_methods)) LIMIT 1`, [id])).rowCount;
+    if (ad) throw bad('One of your ads uses this account. Close that ad first (Ads).');
+    await c.query('UPDATE payment_methods SET active=false WHERE id=$1', [id]);
+    await c.query(`UPDATE account_links SET status='ENDED' WHERE payment_method_id=$1 AND status IN ('ACTIVE','UNPAID')`, [id]);
+    return { ok: true };
+  });
 }
 
 export async function setPaymentVerified(id, verified) {
@@ -341,7 +361,7 @@ export async function closeAccount(user) {
     if (open) throw conflict('You still have an open order. Finish it first.', 'OPEN_ORDER');
     if ((await c.query(`SELECT 1 FROM ads WHERE user_id=$1 AND status <> 'CLOSED' LIMIT 1`, [user.id])).rowCount) throw conflict('Close your ads first (My ads).', 'OPEN_AD');
     const bal = (await c.query('SELECT COALESCE(SUM(available + locked),0)::numeric AS b FROM wallet_balances WHERE user_id=$1', [user.id])).rows[0].b;
-    if (Number(bal) > 0) throw conflict('Withdraw all your crypto first (Wallet).', 'BALANCE');
+    if (Number(bal) > 0) throw conflict('Withdraw all your crypto first (Withdraw).', 'BALANCE');
     await c.query(`UPDATE account_links SET status='ENDED' WHERE (owner_id=$1 OR member_id=$1) AND status <> 'ENDED'`, [user.id]);
     await c.query('UPDATE users SET closed_at=now() WHERE id=$1', [user.id]);
     return { ok: true };

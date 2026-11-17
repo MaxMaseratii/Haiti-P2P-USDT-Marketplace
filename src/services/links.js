@@ -1,22 +1,23 @@
 // Linked accounts. A trader can receive gourdes into another person's MonCash, NatCash or bank account,
 // but only if that person has their own account here, passed the ID check, and accepts the link.
-// That person then confirms in the app when the money arrives. The trader pays LINK_FEE_USDT per link every 30 days.
+// That person then confirms in the app when the money arrives. The trader pays LINK_FEE_USDT once for each extra account (not monthly).
 // We only swap crypto and gourdes between users. We never hold gourdes.
 import { tx, q } from '../db.js';
 import { bad, forbidden, notFound, conflict } from '../errors.js';
 import { config, isMock } from '../config.js';
 import * as wallet from './wallet.js';
 import { sendSms } from '../sms.js';
+import * as evm from '../escrow-evm.js';
 
 async function charge(c, userId) {
   const fee = config.linkFeeUsdt;
   if (Number(fee) <= 0) return;
-  if (Number(await wallet.available(c, userId, 'USDT')) < Number(fee)) throw bad(`A linked account costs ${fee} USDT a month. Add USDT to your wallet first.`, 'FEE');
+  if (Number(await wallet.available(c, userId, 'USDT')) < Number(fee)) throw bad(`Each extra account costs ${fee} USDT, one time. Add USDT to your account first.`, 'FEE');
   await wallet.debit(c, userId, 'USDT', fee);
   await wallet.credit(c, config.platformUserId, 'USDT', fee);
 }
 
-const VIEW = `SELECT l.id, l.status, l.paid_until, l.created_at, l.owner_id, l.member_id,
+const VIEW = `SELECT l.id, l.status, l.paid_at, l.created_at, l.owner_id, l.member_id,
     COALESCE(o.display_name, o.full_name) AS owner_name, o.phone AS owner_phone,
     m.full_name AS member_name, m.phone AS member_phone,
     pm.id AS payment_method_id, pm.type, pm.account_ref, pm.account_name, pm.bank_name
@@ -53,14 +54,14 @@ export async function accept(user, linkId, { payment_method_id }) {
     const pm = (await c.query('SELECT * FROM payment_methods WHERE id=$1 AND user_id=$2 AND verified AND NOT is_receiver AND active', [payment_method_id, user.id])).rows[0];
     if (!pm) throw bad('Pick one of your verified payment accounts.');
     const used = (await c.query(`SELECT COUNT(*)::int n FROM account_links WHERE owner_id=$1 AND status='ACTIVE'`, [l.owner_id])).rows[0].n;
-    let paidUntil = null;
-    if (used >= config.linkFree) {
-      if (!isMock()) throw conflict('Paid linked accounts are not open yet with real money.');
-      await charge(c, l.owner_id);
-      paidUntil = new Date(Date.now() + 30 * 86400000);
+    // Free ones first (LINK_FREE). After that: a one-time fee. Test ledger: taken now.
+    // Real money: the account waits as UNPAID until the trader pays it from the app (one signature).
+    let status = 'ACTIVE', paidAt = null;
+    if (used >= config.linkFree && Number(config.linkFeeUsdt) > 0) {
+      if (isMock()) { await charge(c, l.owner_id); paidAt = new Date(); } else status = 'UNPAID';
     }
-    await c.query(`UPDATE account_links SET status='ACTIVE', payment_method_id=$2, paid_until=$3 WHERE id=$1`, [linkId, pm.id, paidUntil]);
-    return { ok: true };
+    await c.query(`UPDATE account_links SET status=$4, payment_method_id=$2, paid_at=$3 WHERE id=$1`, [linkId, pm.id, paidAt, status]);
+    return { ok: true, status };
   });
 }
 
@@ -83,13 +84,26 @@ export async function linkedAccounts(userId) {
                    WHERE l.owner_id=$1 AND l.status='ACTIVE'`, [userId])).rows;
 }
 
-export async function renew() {
-  let renewed = 0, ended = 0;
-  for (const l of (await q(`SELECT id, owner_id FROM account_links WHERE status='ACTIVE' AND paid_until IS NOT NULL AND paid_until < now()`)).rows) {
-    try { await tx(async (c) => { await charge(c, l.owner_id); await c.query(`UPDATE account_links SET paid_until = now() + interval '30 days' WHERE id=$1`, [l.id]); }); renewed++; }
-    catch { await q(`UPDATE account_links SET status='ENDED' WHERE id=$1`, [l.id]); ended++; }
-  }
-  return { linksRenewed: renewed, linksEnded: ended };
+// The fee is one time now: nothing to renew any more.
+export async function renew() { return {}; }
+
+// Real money: the trader pays the one-time fee with a signed transfer to the platform wallet (we pay the gas).
+// The flat withdraw fee is part of it: 2.50 signed = 1.50 sent + 1.00 network fee, both to the platform.
+async function unpaid(user, linkId) {
+  const l = (await q(`SELECT * FROM account_links WHERE id=$1 AND owner_id=$2`, [linkId, user.id])).rows[0];
+  if (!l) throw notFound();
+  if (l.status !== 'UNPAID') throw conflict('Nothing to pay for this account.');
+  return l;
+}
+export async function payPrep(user, linkId) {
+  await unpaid(user, linkId);
+  return { ...(await evm.withdrawPrep(user.id, 'USDT', config.linkFeeUsdt, await evm.feeRecipient())), link_fee: config.linkFeeUsdt };
+}
+export async function pay(user, linkId, { deadline, signature }) {
+  await unpaid(user, linkId);
+  const r = await evm.relayWithdraw(user.id, 'USDT', config.linkFeeUsdt, await evm.feeRecipient(), Number(deadline), signature);
+  await q(`UPDATE account_links SET status='ACTIVE', paid_at=now() WHERE id=$1 AND status='UNPAID'`, [linkId]);
+  return { ok: true, txHash: r.txHash };
 }
 
 // When a buyer says "paid" into a linked account, tell the account owner to check and confirm.

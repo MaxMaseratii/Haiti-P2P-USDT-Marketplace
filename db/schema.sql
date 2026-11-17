@@ -68,8 +68,9 @@ CREATE TABLE account_links (
   owner_id          uuid NOT NULL REFERENCES users(id),   -- the trader who uses the account
   member_id         uuid NOT NULL REFERENCES users(id),   -- the person who owns the account
   payment_method_id uuid,                                 -- the member's account, set when they accept
-  status            text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','ENDED')),
-  paid_until        timestamptz,
+  status            text NOT NULL DEFAULT 'PENDING' CONSTRAINT account_links_status_check CHECK (status IN ('PENDING','UNPAID','ACTIVE','ENDED')),
+  paid_until        timestamptz,                          -- old monthly fee (not used any more)
+  paid_at           timestamptz,                          -- one-time fee paid
   created_at        timestamptz NOT NULL DEFAULT now(),
   CHECK (owner_id <> member_id)
 );

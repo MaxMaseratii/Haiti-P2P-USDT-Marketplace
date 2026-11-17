@@ -74,57 +74,124 @@ async function route() {
   renderNav();
   if (me.user.terms_ok === false && !document.querySelector('.terms-gate')) termsGate();
   const [view, arg] = (location.hash.slice(1) || 'home').split('/');
-  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView, linked: linkedView, home: accountHome };
+  const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: depositView, deposit: depositView, receive: receiveView, withdraw: withdrawView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView, linked: linkedView, home: accountHome };
   try { await (views[view] || marketView)(app, arg); } catch (e) { toast(e.message, true); }
 }
 
+// Where each page sits in the dashboard: [menu key, icon, English title (translated by i18n-app.js)].
+const PAGES = {
+  home: ['home', 'grid', 'Dashboard'], market: ['market', 'chart', 'MarketPlace'], ads: ['ads', 'megaphone', 'Ads'],
+  orders: ['home', 'receipt', 'My orders'], order: ['home', 'receipt', 'Order'],
+  deposit: ['home', 'download', 'Deposit to sell'], receive: ['home', 'inbox', 'Receive'], withdraw: ['home', 'upload', 'Withdraw'],
+  profile: ['profile', 'user', 'My account'], 'profile/account': ['profile', 'user', 'My account'], 'profile/business': ['profile/business', 'building', 'Business profile'],
+  'profile/pay': ['profile/pay', 'bank', 'Payment accounts'], 'profile/password': ['profile/password', 'lock', 'Password'],
+  linked: ['linked', 'link', 'Add extra accounts to receive'], safety: ['safety', 'shield', 'Safety'],
+  staff: ['staff', 'scale', 'Staff'], admin: ['admin', 'gear', 'Admin'], dispute: ['staff', 'scale', 'Dispute'],
+};
+const isPublicHash = () => { const x = location.hash; return x === '#welcome' || x === '#login' || x.startsWith('#u/') || (!token && x.startsWith('#legal')); };
+// The Live MarketPlace: logged in = the real market page. Not logged in = the live market on the home page.
+function goLive() {
+  if (token) return go('market');
+  const j = () => document.getElementById('market')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (location.hash === '#welcome' || !location.hash) j(); else { location.hash = 'welcome'; setTimeout(j, 600); }
+}
+const liveBtn = () => h('button', { type: 'button', class: 'livebtn', onclick: goLive }, h('span', { class: 'livedot' }), h('span', {}, 'Live MarketPlace'));
+
 function renderNav() {
   const nav = $('#nav'); nav.replaceChildren();
+  const dash = !!token && !isPublicHash();
   document.body.classList.toggle('in', !!token);
-  // The logo is the home page: your account when logged in, the public page when not.
-  const brand = document.querySelector('header .brand'); if (brand) brand.setAttribute('href', token ? '#home' : '#welcome');
+  document.body.classList.toggle('dash', dash);
+  // The logo always opens the public home page (with the Live MarketPlace). The dashboard has its own menu.
+  const brand = document.querySelector('header .brand'); if (brand) brand.setAttribute('href', '#welcome');
   const acct = $('#acct'); acct.replaceChildren();
+  const side = $('#side'); side.replaceChildren();
+  const tabs = $('#tabs');
   if (!token) {
-    $('#tabs').replaceChildren();
+    tabs.replaceChildren();
+    nav.append(liveBtn());
     acct.append(
       h('a', { class: 'btn sm joinbtn', href: '#welcome', onclick: (e) => { e.preventDefault(); const j = () => document.getElementById('join')?.scrollIntoView({ behavior: 'smooth' }); if (location.hash === '#welcome') j(); else { location.hash = 'welcome'; setTimeout(j, 500); } } }, t('Create account')),
       h('button', { type: 'button', class: 'mebtn', title: t('Log in'), 'aria-label': t('Log in'), onclick: () => go('login') }, icon('user')));
     return;
   }
-  const cur = (location.hash.slice(1) || 'home').split('/')[0];
-  const items = [['market', 'MarketPlace'], ['orders', 'My orders'], ['ads', 'My ads'], ['wallet', 'Wallet']];
-  if (me && ['AGENT', 'ADMIN'].includes(me.user.role)) items.push(['staff', 'Staff']);
-  if (me && me.user.role === 'ADMIN') items.push(['admin', 'Admin']);
-  for (const [k, label] of items) nav.append(h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, t(label)));
-  // The person button: your account menu.
+  const hash = location.hash.slice(1) || 'home';
+  const [view, sub] = hash.split('/');
+  const page = PAGES[view + '/' + sub] || PAGES[view] || PAGES.home;
+  const curKey = page[0];
   const u = me?.user || {};
   const nm = u.display_name || u.full_name || '';
-  const face = u.has_avatar ? h('img', { src: '/api/avatar/' + u.id + '?v=1', alt: '' }) : h('span', {}, (nm.trim()[0] || '?').toUpperCase());
+  const staff = ['AGENT', 'ADMIN'].includes(u.role);
+  const face = (cls) => u.has_avatar ? h('img', { class: cls, src: '/api/avatar/' + u.id + '?v=1', alt: '' }) : h('span', { class: cls }, (nm.trim()[0] || '?').toUpperCase());
+
+  // ---- the account menu (person button) ----
   const menu = h('div', { class: 'amenu', hidden: true });
   const row = (ic, label, fn) => h('button', { type: 'button', class: 'amrow', onclick: () => { menu.hidden = true; fn(); } }, icon(ic), h('span', {}, t(label)));
   menu.append(
     h('div', { class: 'amhead' }, h('b', {}, nm), h('small', {}, u.phone || ''),
       h('div', { class: 'ambadges' }, h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, u.tier >= 1 ? t('ID verified') : t('ID not checked yet')),
         u.business_status === 'APPROVED' ? h('span', { class: 'pill biz' }, t('Commercial Seller')) : null)),
+    row('grid', 'Dashboard', () => go('home')),
     row('user', 'My account', () => go('profile')),
-    row('building', 'Business profile', () => go('profile/business')),
     row('bank', 'Payment accounts', () => go('profile/pay')),
     row('lock', 'Password', () => go('profile/password')),
-    row('link', 'Linked accounts', () => go('linked')),
-    row('shield', 'Safety', () => go('safety')),
-    row('doc', 'Legal', () => go('legal/terms')),
-    ...(['AGENT', 'ADMIN'].includes(u.role) ? [row('scale', 'Staff', () => go('staff'))] : []),
-    ...(u.role === 'ADMIN' ? [row('gear', 'Admin', () => go('admin'))] : []),
+    row('globe', 'Home page', () => go('welcome')),
     h('div', { class: 'amsep' }),
     row('logout', 'Log out', logout));
-  const btn = h('button', { type: 'button', class: 'mebtn on', 'aria-label': t('My account'), onclick: (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; } }, face);
-  acct.append(btn, menu);
+  const chip = h('button', { type: 'button', class: 'uchip', 'aria-label': t('My account'), onclick: (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; } },
+    face('uav'), h('span', { class: 'ucopy' }, h('b', {}, nm.split(' ')[0]), h('small', {}, u.tier >= 1 ? t('ID verified') : t('ID not checked yet'))));
   if (!window.__amClose) { window.__amClose = true; document.addEventListener('click', (e) => { const m = document.querySelector('.amenu'); if (m && !m.hidden && !e.target.closest('.amenu')) m.hidden = true; }); }
-  // Phone: a bank-app style bar at the bottom with the main places (the logo is the home page).
-  const tabs = $('#tabs');
-  tabs.replaceChildren(...[['market', 'chart', 'MarketPlace'], ['orders', 'receipt', 'Orders'], ['ads', 'megaphone', 'Ads'], ['wallet', 'wallet', 'Wallet'], ['profile', 'user', 'Profile']]
-    .map(([k, ic, label]) => h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, icon(ic)), h('span', {}, t(label)))));
+
+  if (!dash) {
+    // Logged in, on the public home page: a clear way back to the dashboard.
+    nav.append(liveBtn());
+    acct.append(h('button', { type: 'button', class: 'btn sm joinbtn', onclick: () => go('home') }, icon('grid'), ' ' + t('My dashboard')), chip, menu);
+    tabs.replaceChildren();
+    return;
+  }
+
+  // ---- top bar: where you are + help + you ----
+  nav.append(h('div', { class: 'crumb' }, h('span', {}, t(u.business_status === 'APPROVED' ? 'Business account' : 'Personal account')), h('i', {}, '/'), h('b', {}, t(page[2]))));
+  acct.append(
+    h('button', { type: 'button', class: 'ibtn', title: t('Help'), 'aria-label': t('Help'), onclick: () => window.HelpBot && HelpBot.open() }, icon('help')),
+    chip, menu);
+
+  // ---- the side menu (computer) ----
+  const item = (key, ic, label, fn) => h('button', { type: 'button', class: curKey === key ? 'on' : '', onclick: fn || (() => go(key)) }, icon(ic), h('span', {}, t(label)));
+  side.append(
+    h('a', { class: 'sbrand', href: '#welcome', title: t('Home page') }, h('span', { class: 'logo' }, h('svg', {})), h('span', {}, 'Ayiti P2P', h('small', {}, 'P2P · USDT · USDC'))),
+    h('div', { class: 'slabel' }, t('Menu')),
+    h('nav', { class: 'snav' },
+      item('home', 'grid', 'Dashboard'),
+      item('market', 'chart', 'MarketPlace'),
+      item('ads', 'megaphone', 'Ads')),
+    h('div', { class: 'slabel' }, t('Account')),
+    h('nav', { class: 'snav' },
+      item('profile', 'user', 'My account'),
+      item('profile/business', 'building', 'Business profile'),
+      item('profile/pay', 'bank', 'Payment accounts'),
+      item('linked', 'link', 'Add extra accounts to receive'),
+      item('profile/password', 'lock', 'Password')),
+    h('div', { class: 'slabel' }, t('Help')),
+    h('nav', { class: 'snav' },
+      item('safety', 'shield', 'Safety'),
+      item('help', 'help', 'Help', () => window.HelpBot && HelpBot.open()),
+      item('legal', 'doc', 'Legal', () => go('legal/terms')),
+      ...(staff ? [item('staff', 'scale', 'Staff')] : []),
+      ...(u.role === 'ADMIN' ? [item('admin', 'gear', 'Admin')] : [])),
+    h('div', { class: 'sfoot' },
+      h('div', { class: 'smini' }, face('uav'), h('div', {}, h('b', {}, nm), h('small', {}, h('span', {}, u.business_status === 'APPROVED' ? 'Commercial Seller' : 'Personal account'), ' · ', h('span', {}, u.tier >= 1 ? 'ID verified' : 'ID not checked yet')))),
+      h('button', { type: 'button', class: 'slogout', onclick: logout }, icon('logout'), h('span', {}, t('Log out')))));
+  // Same logo mark as the header.
+  const mark = document.querySelector('header .brand .logo svg'); if (mark) side.querySelector('.sbrand .logo').replaceChildren(mark.cloneNode(true));
+
+  // ---- phone: a bank-app style bar at the bottom ----
+  tabs.replaceChildren(...[['home', 'grid', 'Dashboard'], ['market', 'chart', 'MarketPlace'], ['ads', 'megaphone', 'Ads'], ['profile', 'user', 'Profile']]
+    .map(([k, ic, label]) => h('button', { class: curKey === k || (k === 'profile' && String(curKey).startsWith('profile')) ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, icon(ic)), h('span', {}, t(label)))));
 }
+
+// Page title row, like a bank app: title, one line under it, and buttons on the right.
+const pageHead = (title, sub, ...actions) => h('div', { class: 'phead' }, h('div', {}, h('h1', {}, title), sub ? h('p', {}, sub) : null), actions.length ? h('div', { class: 'pactions' }, ...actions) : null);
 
 // ---------- auth ----------
 // Phone with a country list, so nobody has to know the "+" format. Anyone anywhere can open an account
@@ -439,7 +506,7 @@ const PAY_NAME = { MONCASH: 'MonCash', NATCASH: 'NatCash', BANK: 'Bank' };
 const payBadge = (p) => h('span', { class: 'paybadge' }, (cfg.pay_logos || {})[p] ? h('img', { src: cfg.pay_logos[p], alt: '' }) : p === 'BANK' ? h('span', { class: 'pbi' }, '🏦') : null, h('b', {}, PAY_NAME[p] || p));
 const payChips = (a) => h('div', { class: 'paychips' }, (a.pay_types || [a.pay_type]).map(payBadge));
 
-const accLabel = (p) => (p.linked ? '🔗 ' + p.account_name + ' (linked) · ' : '') + `${p.bank_name || PAY_NAME[p.type] || p.type} · ${p.account_ref}` + (p.linked ? '' : ` · ${p.account_name}`);
+const accLabel = (p) => (p.linked ? p.account_name + ' (extra) · ' : '') + `${p.bank_name || PAY_NAME[p.type] || p.type} · ${p.account_ref}` + (p.linked ? '' : ` · ${p.account_name}`);
 
 function takeAd(a) {
   const P = Number(a.price_htg);
@@ -511,7 +578,7 @@ function takeAd(a) {
     h('div', { class: 'sumbox' }, h('div', { class: 'mute' }, a.side === 'SELL' ? 'You pay' : 'You receive'), total, other, feeLine)];
   if (a.side === 'SELL') body.push(h('label', {}, 'How will you pay?'), paySeg);
   if (a.side === 'BUY') {
-    body.push(h('label', {}, 'Where should the buyer send the gourdes?'), h('p', { class: 'mute' }, 'One of your accounts, or a linked account (see "Linked accounts").'), mine.length ? pm : null,
+    body.push(h('label', {}, 'Where should the buyer send the gourdes?'), h('p', { class: 'mute' }, 'One of your accounts, or an extra account (see "Add extra accounts to receive").'), mine.length ? pm : null,
       mine.length ? h('button', { class: 'linkbtn', onclick: () => addBox.classList.toggle('hidden') }, '+ Add another number or account') : null, addBox);
   }
   body.push(h('button', { class: 'btn big-btn', onclick: act(async () => {
@@ -521,50 +588,6 @@ function takeAd(a) {
   }) }, 'Continue'));
   body.push(h('p', { class: 'mute center' }, '🔒 We lock the seller\'s USDT before you pay. ', h('a', { href: '#safety' }, 'How it works')));
   $('#app').replaceChildren(h('div', { class: 'card narrow' }, body));
-}
-
-// ---------- my ads ----------
-async function adsView(app) {
-  const mine = await api('GET', '/my/ads');
-  const f = {};
-  const field = (key, label, el) => { f[key] = el; return [h('label', {}, label), el]; };
-  const pms = me.payment_methods.filter((p) => p.verified && p.active !== false);
-  const tick = (value, label, sub) => h('label', { class: 'tick' }, h('input', { type: 'checkbox', value, checked: true }), h('span', {}, h('b', {}, label), sub ? h('small', { class: 'mute' }, ' ' + sub) : null));
-  // Sell ad: tick every account you accept money in. Buy ad: tick every way you can pay.
-  const sellBox = h('div', {}, h('label', {}, 'I accept payment in (tick all you want)'),
-    pms.length ? h('div', { class: 'ticks' }, pms.map((p) => tick(p.id, (p.linked ? '🔗 ' : '') + (p.bank_name || PAY_NAME[p.type]), `${p.account_ref} · ${p.account_name}` + (p.linked ? ' (linked)' : ''))))
-      : h('p', { class: 'mute' }, 'Add a verified MonCash, NatCash or bank account in Profile first.'));
-  const buyBox = h('div', { class: 'hidden' }, h('label', {}, 'I can pay with (tick all you want)'),
-    h('div', { class: 'ticks' }, ['MONCASH', 'NATCASH', 'BANK'].map((tp) => tick(tp, PAY_NAME[tp]))));
-  app.append(h('div', { class: 'card' }, h('h2', {}, t('Post an ad')),
-    h('div', { class: 'row' },
-      h('div', {}, field('side', 'I want to', h('select', {}, h('option', { value: 'SELL' }, 'SELL USDT/USDC (I get HTG)'), h('option', { value: 'BUY' }, 'BUY USDT/USDC (I pay HTG)')))),
-      h('div', {}, field('asset', 'Asset', h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC')))),
-    ),
-    h('div', { class: 'row' },
-      h('div', {}, field('price_htg', 'Price (HTG per 1)', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('amount', 'Amount', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('min_order_htg', 'Min order (HTG)', h('input', { inputmode: 'decimal' }))),
-      h('div', {}, field('max_order_htg', 'Max order (HTG)', h('input', { inputmode: 'decimal' })))),
-    sellBox, buyBox,
-    h('p', { class: 'mute' }, `Sell ads lock your USDT now. A ${Number(cfg.fee_rate) * 100}% fee is taken from the seller, in USDT.`),
-    Number(cfg.lock_fee) > 0 ? h('p', { class: 'mute' }, `The buyer pays a ${cfg.lock_fee} USDT lock fee per order. It comes out of the USDT they get.`) : null,
-    h('button', { class: 'btn', onclick: act(async () => {
-      const b = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value]));
-      if (b.side === 'SELL') b.payment_method_ids = [...sellBox.querySelectorAll('input:checked')].map((x) => x.value);
-      else b.pay_types = [...buyBox.querySelectorAll('input:checked')].map((x) => x.value);
-      if (!(b.payment_method_ids || b.pay_types).length) throw new Error('Tick at least one payment method.');
-      await api('POST', '/ads', b); toast('Ad posted.'); route();
-    }) }, t('Post an ad'))));
-  f.side.addEventListener('change', () => { sellBox.classList.toggle('hidden', f.side.value !== 'SELL'); buyBox.classList.toggle('hidden', f.side.value !== 'BUY'); });
-  app.append(h('div', { class: 'card scroll' }, h('h2', {}, t('My ads')), mine.length ? h('table', {},
-    h('thead', {}, h('tr', {}, ['Side', t('Price'), t('Available'), 'Payment', 'Held', 'Status', ''].map((x) => h('th', {}, x)))),
-    h('tbody', {}, mine.map((a) => h('tr', {},
-      h('td', {}, a.side + ' ' + a.asset), h('td', {}, money(a.price_htg)), h('td', {}, usd(a.remaining)), h('td', {}, payChips(a)), h('td', {}, usd(a.reserved)),
-      h('td', {}, a.status),
-      h('td', {}, a.status === 'ACTIVE' ? h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/ads/${a.id}/status`, { status: 'PAUSED' }); route(); }) }, 'Pause') : null,
-        a.status === 'PAUSED' ? h('button', { class: 'btn alt', onclick: act(async () => { await api('POST', `/ads/${a.id}/status`, { status: 'ACTIVE' }); route(); }) }, 'Resume') : null,
-        a.status !== 'CLOSED' ? h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', `/ads/${a.id}/status`, { status: 'CLOSED' }); route(); }) }, 'Close') : null))))) : h('p', { class: 'mute' }, 'None yet.')));
 }
 
 // ---------- orders ----------
@@ -586,16 +609,6 @@ function stepper(s) {
   const bad = ['DISPUTED', 'REFUNDING', 'REFUNDED', 'CANCELLED_TIMEOUT'].includes(s);
   const names = ['Locked', 'Pay', 'Seller checks', 'Release', 'Done'];
   return h('div', { class: 'steps' }, names.map((n, i) => h('div', { class: 'step' + (i < at ? ' done' : i === at ? (bad ? ' bad' : ' now') : '') }, i === 3 && ['REFUNDING', 'REFUNDED'].includes(s) ? 'Refund' : n)));
-}
-
-async function ordersView(app) {
-  const list = await api('GET', '/orders');
-  app.append(h('div', { class: 'card scroll' }, h('h2', {}, t('My orders')), list.length ? h('table', {},
-    h('thead', {}, h('tr', {}, ['When', 'Role', t('Amount'), 'HTG', t('Status'), ''].map((x) => h('th', {}, x)))),
-    h('tbody', {}, list.map((o) => h('tr', {},
-      h('td', {}, new Date(o.created_at).toLocaleString()), h('td', {}, o.buyer_id === me.user.id ? t('Buyer') : t('Seller')),
-      h('td', {}, usd(o.amount) + ' ' + o.asset), h('td', {}, money(o.total_htg)), h('td', {}, statePill(o.state, o.buyer_id === me.user.id ? 'BUYER' : 'SELLER')),
-      h('td', {}, h('button', { class: 'btn alt', onclick: () => go('order/' + o.id) }, 'Open')))))) : h('p', { class: 'mute' }, 'No orders yet.')));
 }
 
 // New or changed terms: the person must accept them before using the app again. No way around it.
@@ -966,50 +979,6 @@ async function chainWithdraw(asset, amount, to) {
 }
 
 
-// Where do you want to receive crypto? Binance UID and/or a wallet on a network.
-function payoutCard() {
-  const u = me.user, nets = cfg.networks || [];
-  const uid = h('input', { inputmode: 'numeric', placeholder: 'Binance UID, for example 123456789', value: u.binance_uid || '' });
-  const net = h('select', {}, nets.map((n) => h('option', { value: n.id, selected: n.id === (u.payout_network || cfg.network) }, n.label)));
-  const addr = h('input', { placeholder: 'Wallet address on that network', value: u.payout_addr || '' });
-  const hint = h('div', { class: 'mute' });
-  const paint = () => { const n = nets.find((x) => x.id === net.value) || {}; hint.textContent = (n.fee || '') + (n.auto ? '. Automatic payouts work on this network.' : '. Saved for staff payouts. Not automatic yet.'); };
-  net.addEventListener('change', paint); paint();
-  return h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Where do I receive crypto?'),
-    h('p', { class: 'mute' }, 'Binance UID is the easiest: a Binance to Binance transfer has no network fee. Or use a wallet.'),
-    h('label', { class: 'withlogo' }, h('img', { src: 'img/brand/binance.png', alt: '' }), 'Binance UID'), uid,
-    h('label', {}, 'Or a wallet: choose the network'), net, hint,
-    h('label', {}, 'Wallet address'), addr,
-    h('div', { class: 'warn-note', style: 'margin-top:10px' }, 'Be careful. If you pick the wrong network, the money can be lost forever. Always check the network and the address.'),
-    h('div', { class: 'gactions', style: 'margin-top:12px' },
-      h('button', { class: 'btn', onclick: act(async () => { await api('PUT', '/me/payout', { binance_uid: uid.value, network: addr.value ? net.value : undefined, address: addr.value }); me = await api('GET', '/me'); toast('Saved.'); }) }, 'Save')));
-}
-
-// ---------- wallet ----------
-async function walletView(app) {
-  const w = me.wallet;
-  const amt = h('input', { value: '100', inputmode: 'decimal' });
-  const asset = h('select', {}, h('option', {}, 'USDT'), h('option', {}, 'USDC'));
-  const addr = h('input', { value: me.user.wallet_addr || '', placeholder: 'Your USDT wallet address (for withdrawals when live)' });
-  const wto = h('input', { value: (me.user.payout_network === 'ARBITRUM' && me.user.payout_addr) || me.user.wallet_addr || '', placeholder: '0x… (your wallet, or your Binance USDT deposit address on Arbitrum)' });
-  app.append(h('div', { class: 'card' }, h('h2', {}, t('Wallet')),
-    w.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Asset', t('Available'), 'Locked'].map((x) => h('th', {}, x)))),
-      h('tbody', {}, w.map((b) => h('tr', {}, h('td', {}, b.asset), h('td', {}, usd(b.available)), h('td', {}, usd(b.locked)))))) : h('p', { class: 'mute' }, 'Empty.'),
-    cfg.chain ? [
-      h('p', { class: 'mute' }, 'Your crypto is held in a smart contract on Arbitrum. Start with small amounts.'),
-      h('h3', {}, 'Your wallet'), h('p', {}, me.user.wallet_addr || 'Not linked yet.'),
-      h('button', { class: 'btn alt', onclick: act(async () => { await linkWalletWithSignature(); toast('Wallet linked.'); route(); }) }, 'Connect and link my wallet'),
-      h('h3', {}, 'Deposit or withdraw'), h('div', { class: 'row' }, asset, amt),
-      h('button', { class: 'btn', onclick: act(async () => chainDeposit(asset.value, amt.value)) }, t('Deposit')),
-      h('p', { class: 'mute' }, 'Deposit: your wallet pays a tiny network cost in ETH on Arbitrum (a few cents).'),
-      h('label', {}, 'Send my withdraw to (Arbitrum address)'), wto,
-      h('p', { class: 'mute' }, `Withdraw: you only sign. We pay the network cost. A flat ${cfg.withdraw_fee || '1'} ${'USDT/USDC'} network fee is taken from the amount. You need no ETH.`),
-      h('button', { class: 'btn alt', onclick: act(async () => { await chainWithdraw(asset.value, amt.value, wto.value.trim()); route(); }) }, 'Withdraw')]
-    : [h('h3', {}, 'Wallet address'), addr,
-      h('button', { class: 'btn alt', onclick: act(async () => { await api('PUT', '/me/wallet-address', { wallet_addr: addr.value.trim() }); toast('Saved.'); }) }, 'Save address')]),
-    payoutCard());
-}
-
 // ---------- profile ----------
 // Shrink a chosen photo to a small square JPEG in the browser, so uploads stay tiny.
 function shrinkPhoto(file) {
@@ -1224,90 +1193,6 @@ async function idCheckCard() {
 
 // ---------- account home: like a mobile bank app ----------
 const L3 = (o) => o[lang] || o.en;
-async function accountHome(app) {
-  const u = me.user, first = (u.display_name || u.full_name).split(' ')[0];
-  const [orders, sells, buys, check] = await Promise.all([api('GET', '/orders').catch(() => []), api('GET', '/ads?side=SELL').catch(() => []), api('GET', '/ads?side=BUY').catch(() => []), toCheckCard()]);
-  const bestSell = sells.length ? Number(sells[0].price_htg) : null, bestBuy = buys.length ? Number(buys[0].price_htg) : null;
-  const sum = (k) => me.wallet.reduce((a, w) => a + Number(w[k] || 0), 0);
-  const avail = sum('available'), locked = sum('locked'), total = avail + locked;
-  const hide = (() => { try { return localStorage.getItem('hideBal') === '1'; } catch { return false; } })();
-  const mask = (txt) => (hide ? '•••••' : txt);
-  const quick = (ic, label, fn) => h('button', { class: 'qa', onclick: fn }, h('span', { class: 'qi' }, ic), h('span', {}, label));
-  const myTurn = orders.filter((o) => (o.buyer_id === u.id && o.state === 'AWAITING_PAYMENT') || (o.seller_id === u.id && o.state === 'PAID_CLAIMED'));
-  const row = (o) => {
-    const buy = o.buyer_id === u.id;
-    return h('button', { class: 'txrow', onclick: () => go('order/' + o.id) },
-      h('span', { class: 'txi ' + (buy ? 'in' : 'out') }, buy ? '↓' : '↑'),
-      h('span', { class: 'txm' }, h('b', {}, (buy ? L3({ en: 'Bought', fr: 'Achat', ht: 'Achte' }) : L3({ en: 'Sold', fr: 'Vente', ht: 'Vann' })) + ' ' + usd2(o.amount) + ' ' + o.asset),
-        h('small', {}, new Date(o.created_at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + t((STATE_TEXT[o.state] || [o.state])[0]))),
-      h('span', { class: 'txa ' + (buy ? 'in' : 'out') }, (buy ? '−' : '+') + money(o.total_htg, 0) + ' HTG'));
-  };
-  app.append(
-    h('div', { class: 'bank' },
-      h('div', { class: 'hello' }, L3({ en: 'Hello', fr: 'Bonjour', ht: 'Bonjou' }) + ', ' + first + ' 👋'),
-      u.tier < 1 ? h('button', { class: 'kycbar', onclick: () => go('profile') }, h('b', {}, L3({ en: 'Verify your identity', fr: 'Vérifiez votre identité', ht: 'Verifye idantite w' })),
-        h('span', {}, L3({ en: 'Needed before your first swap. Takes 3 minutes. →', fr: 'Nécessaire avant votre premier échange. 3 minutes. →', ht: 'Ou bezwen l anvan premye echanj ou. Li pran 3 minit. →' }))) : null,
-      h('div', { class: 'balcard' },
-        h('div', { class: 'bc-top' }, h('span', {}, L3({ en: 'Total balance', fr: 'Solde total', ht: 'Balans total' })),
-          h('button', { class: 'eye', onclick: () => { try { localStorage.setItem('hideBal', hide ? '0' : '1'); } catch {} route(); } }, hide ? '🙈' : '👁')),
-        h('div', { class: 'bc-amt' }, mask(usd2(total)), h('small', {}, ' USDT')),
-        h('div', { class: 'bc-htg' }, bestBuy ? '≈ ' + mask(money(total * bestBuy, 0)) + ' HTG' : ''),
-        h('div', { class: 'bc-row' },
-          h('div', {}, h('small', {}, L3({ en: 'Available', fr: 'Disponible', ht: 'Disponib' })), h('b', {}, mask(usd2(avail)))),
-          h('div', {}, h('small', {}, '🔒 ' + L3({ en: 'Locked in swaps', fr: 'Verrouillé', ht: 'Kadnase' })), h('b', {}, mask(usd2(locked)))))),
-      h('div', { class: 'qas' },
-        quick('↓', L3({ en: 'Buy', fr: 'Acheter', ht: 'Achte' }), () => { marketSide = 'SELL'; go('market'); }),
-        quick('↑', L3({ en: 'Sell', fr: 'Vendre', ht: 'Vann' }), () => { marketSide = 'BUY'; go('market'); }),
-        quick('＋', L3({ en: 'Deposit', fr: 'Dépôt', ht: 'Depo' }), () => go('wallet')),
-        quick('➜', L3({ en: 'Withdraw', fr: 'Retrait', ht: 'Retire' }), () => go('wallet'))),
-      check,
-      myTurn.length ? h('div', { class: 'card guide go' }, h('h3', { class: 'ct' }, L3({ en: 'Waiting for you', fr: 'En attente de vous', ht: 'Y ap tann ou' })),
-        h('div', { class: 'txlist' }, myTurn.map(row))) : null,
-      h('div', { class: 'prices' },
-        h('div', {}, h('small', {}, L3({ en: 'Best price to buy', fr: 'Meilleur prix d\'achat', ht: 'Pi bon pri pou achte' })), h('b', {}, bestSell ? money(bestSell) : '—'), h('small', {}, 'HTG / USDT')),
-        h('div', {}, h('small', {}, L3({ en: 'Best price to sell', fr: 'Meilleur prix de vente', ht: 'Pi bon pri pou vann' })), h('b', {}, bestBuy ? money(bestBuy) : '—'), h('small', {}, 'HTG / USDT'))),
-      h('div', { class: 'card' }, h('div', { class: 'dhead' }, h('h3', { class: 'ct' }, L3({ en: 'Recent transactions', fr: 'Transactions récentes', ht: 'Dènye tranzaksyon' })),
-        orders.length ? h('button', { class: 'linkbtn', onclick: () => go('orders') }, L3({ en: 'See all', fr: 'Tout voir', ht: 'Wè tout' })) : null),
-        orders.length ? h('div', { class: 'txlist' }, orders.slice(0, 6).map(row)) : h('p', { class: 'mute' }, L3({ en: 'No transactions yet. Tap Buy or Sell to start.', fr: 'Aucune transaction. Touchez Acheter ou Vendre.', ht: 'Poko gen tranzaksyon. Peze Achte oswa Vann pou kòmanse.' })))));
-}
-
-// ---------- linked accounts (another verified person's MonCash/NatCash/bank) ----------
-async function linkedView(app) {
-  const d = await api('GET', '/links');
-  const fee = d.fee, ph = h('input', { inputmode: 'tel', placeholder: '+509 3700 1234' });
-  const own = me.payment_methods.filter((p) => !p.linked && p.verified);
-  const pay = (p) => `${p.bank_name || PAY_NAME[p.type] || ''} ${p.account_ref || ''}`.trim();
-  const endBtn = (l, label) => h('button', { class: 'btn alt sm', onclick: () => modal(label + '?', h('p', {}, 'The account cannot be used for new orders after this.'),
-    [{ label: 'Keep' }, { label, cls: 'danger', run: async () => { await api('POST', `/links/${l.id}/end`); me = await api('GET', '/me'); route(); } }]) }, label);
-  app.append(...[
-    h('div', { class: 'card' }, h('h2', {}, 'Linked accounts'),
-      h('p', {}, 'Receive gourdes into more MonCash, NatCash or bank accounts. For example when one account is full.'),
-      h('ol', { class: 'gsteps' },
-        h('li', {}, 'The other person opens their own Ayiti P2P account and finishes the ID check.'),
-        h('li', {}, 'You ask them here, with their phone number.'),
-        h('li', {}, 'They accept in their app and choose which of their accounts to share.'),
-        h('li', {}, 'When a buyer pays into that account, the owner confirms in their app that the gourdes arrived.')),
-      h('p', { class: 'mute' }, `Each linked account costs ${fee} USDT a month, taken from your wallet. Your own accounts are free.`)),
-    d.asked.length ? h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'People asking to use your account'),
-      h('div', { class: 'accs' }, d.asked.map((l) => {
-        if (l.status === 'ACTIVE') return h('div', { class: 'acc' }, h('div', {}, h('b', {}, l.owner_name), h('div', { class: 'mute' }, 'Uses your ' + pay(l))), endBtn(l, 'Stop sharing'));
-        const sel = h('select', {}, own.map((p) => h('option', { value: p.id }, accLabel(p))));
-        return h('div', { class: 'acc' }, h('div', {}, h('b', {}, l.owner_name), h('div', { class: 'mute' }, `${l.owner_phone} wants to receive gourdes into one of your accounts. You will confirm each payment.`),
-          own.length ? sel : h('div', { class: 'mute' }, 'Add a verified account in Profile first.')),
-          h('div', { class: 'gactions', style: 'flex:none' },
-            h('button', { class: 'btn good sm', onclick: act(async () => { if (!own.length) throw new Error('Add a verified account in Profile first.'); await api('POST', `/links/${l.id}/accept`, { payment_method_id: sel.value }); route(); }) }, 'Accept'),
-            endBtn(l, 'Refuse')));
-      }))) : null,
-    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My linked accounts'),
-      d.mine.length ? h('div', { class: 'accs' }, d.mine.map((l) => h('div', { class: 'acc' },
-        h('div', {}, h('b', {}, l.member_name), h('div', { class: 'mute' }, l.status === 'ACTIVE' ? pay(l) + (l.paid_until ? ' · paid until ' + new Date(l.paid_until).toLocaleDateString() : ' · free') : 'Waiting for them to accept')),
-        h('div', { class: 'gactions', style: 'flex:none' }, h('span', { class: 'pill ' + (l.status === 'ACTIVE' ? 'good' : 'warn') }, l.status === 'ACTIVE' ? 'active' : 'waiting'), endBtn(l, l.status === 'ACTIVE' ? 'Remove' : 'Cancel')))))
-        : h('p', { class: 'mute' }, 'None yet.'),
-      h('h3', { class: 'ct', style: 'margin-top:18px' }, 'Ask someone'),
-      h('label', {}, 'Their phone number (they must already have a verified account)'), ph,
-      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => { await api('POST', '/links', { phone: ph.value }); toast('Asked. They will see it in their app.'); route(); }) }, 'Send request'))].filter(Boolean));
-}
-
 // Payments into my account that I must check (when I lent my account to someone).
 async function toCheckCard() {
   const list = await api('GET', '/links/to-check').catch(() => []);
@@ -1439,7 +1324,8 @@ async function profileView(app, part) {
         kv([[t('Name on my ID'), u.full_name], [t('Phone'), u.phone], [t('Email'), u.email || '—'], [t('Level'), String(u.tier)],
           [t('ID check'), u.tier >= 1 ? t('Done') : t('Not done yet')], [t('Account type'), u.business_status === 'APPROVED' ? t('Commercial Seller') : t('Personal (buy and sell)')]]),
         h('div', { class: 'pflinks' },
-          h('button', { class: 'mrow', onclick: () => go('linked') }, icon('link'), h('b', {}, t('Linked accounts')), h('span', { class: 'mute' }, '›')),
+          h('button', { class: 'mrow', onclick: () => go('receive') }, icon('inbox'), h('b', {}, t('Receive')), h('span', { class: 'mute' }, '›')),
+          h('button', { class: 'mrow', onclick: () => go('linked') }, icon('link'), h('b', {}, t('Add extra accounts to receive')), h('span', { class: 'mute' }, '›')),
           h('button', { class: 'mrow', onclick: () => go('safety') }, icon('shield'), h('b', {}, t('Safety')), h('span', { class: 'mute' }, '›')),
           h('button', { class: 'mrow', onclick: () => go('legal/terms') }, icon('doc'), h('b', {}, t('Legal')), h('span', { class: 'mute' }, '›')),
           h('button', { class: 'mrow', onclick: logout }, icon('logout'), h('b', {}, t('Log out')), h('span', {}, '')))));
@@ -1515,7 +1401,8 @@ function payCard(u) {
       h('p', { class: 'mute' }, 'You can add MonCash, NatCash and bank accounts, and as many numbers as you want. The name on each one must match your ID.'),
       methods.length ? h('div', { class: 'accs' }, methods.map((p) => h('div', { class: 'acc' },
         h('div', { class: 'accrow' }, accLogo(p), h('div', {}, h('b', {}, p.bank_name ? p.bank_name : PAY_NAME[p.type] || p.type), h('div', { class: 'mute' }, `${p.type === 'BANK' ? 'Account' : PAY_NAME[p.type] || p.type} ${p.account_ref} · ${p.account_name}`))),
-        h('span', { class: 'pill ' + (p.verified ? 'good' : 'warn') }, p.verified ? 'verified' : 'name does not match ID'))))
+        h('div', { class: 'gactions', style: 'flex:none' }, h('span', { class: 'pill ' + (p.verified ? 'good' : 'warn') }, p.verified ? 'verified' : 'name does not match ID'),
+          copyBtn(p.account_ref), h('button', { type: 'button', class: 'cbtn', title: t('Remove'), 'aria-label': t('Remove'), onclick: () => removeAccount(p) }, icon('trash'))))))
         : h('p', { class: 'mute' }, 'None yet. Add one after your ID check is approved.'),
       h('h3', { class: 'ct', style: 'margin-top:16px' }, 'Add an account'),
       h('label', {}, 'Type'), type, bankRow, h('label', {}, 'Name on the account'), an, h('label', {}, 'Number'), ar,

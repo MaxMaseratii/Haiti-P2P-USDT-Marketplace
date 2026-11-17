@@ -26,6 +26,10 @@ for (const sql of [
   // automatic ID check: 3 face pictures taken during the video, and the robot's answer on each ID
   'ALTER TABLE kyc_files DROP CONSTRAINT IF EXISTS kyc_files_kind_check',
   "ALTER TABLE kyc_files ADD CONSTRAINT kyc_files_kind_check CHECK (kind IN ('FRONT','BACK','VIDEO','FACE1','FACE2','FACE3'))",
+  // extra receiving accounts: one-time fee; UNPAID = accepted, waiting for the fee
+  'ALTER TABLE account_links ADD COLUMN IF NOT EXISTS paid_at timestamptz',
+  'ALTER TABLE account_links DROP CONSTRAINT IF EXISTS account_links_status_check',
+  "ALTER TABLE account_links ADD CONSTRAINT account_links_status_check CHECK (status IN ('PENDING','UNPAID','ACTIVE','ENDED'))",
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_hash text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_fails int NOT NULL DEFAULT 0',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_locked_until timestamptz',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_status text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name text',

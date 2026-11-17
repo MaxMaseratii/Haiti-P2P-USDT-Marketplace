@@ -50,6 +50,17 @@
     coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v4c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 14v3c0 1.7 2.7 3 6 3s6-1.3 6-3v-4c0-1.7-2.7-3-6-3"/>',
     swap: '<path d="M4 8h14l-4-4M20 16H6l4 4"/>',
     play: '<path d="M8 5l11 7-11 7z" fill="currentColor"/>',
+    grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    'arrow-d': '<path d="M12 5v14M6 13l6 6 6-6"/>',
+    download: '<path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3"/>',
+    upload: '<path d="M12 15V3M7 8l5-5 5 5M4 17v3h16v-3"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.5 1.5c-1 1.2-2.1 1.3-2.1 3M12 17.5h.01"/>',
+    inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 3h6l1-3h5"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+    live: '<circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/>',
   };
   const svg = (n) => n === 'flag-ht'
     ? '<svg viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="10" fill="#00209F"/><rect y="10" width="30" height="10" fill="#D21034"/><rect x="11.5" y="7" width="7" height="6" rx="1" fill="#fff"/><rect x="13.5" y="8.6" width="3" height="2.8" fill="#016a16"/></svg>'

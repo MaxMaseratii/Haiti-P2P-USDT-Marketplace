@@ -505,7 +505,7 @@ test('sign up from any country, but not from fully sanctioned ones', async () =>
   assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+5093700', full_name: 'Short Number', code: '000000' })).status, 400);
 });
 
-test('linked accounts: the other person registers, passes ID, accepts; they confirm the money; the trader pays a monthly fee', async () => {
+test('linked accounts: the other person registers, passes ID, accepts; they confirm the money; the trader pays a one-time fee per extra account', async () => {
   await signup('trd', '+13055550199', 'Rose Trader'); await kyc('trd');
   await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+13055550199'),'USDT',500)
                     ON CONFLICT (user_id, asset) DO UPDATE SET available = wallet_balances.available + 500`);
@@ -845,4 +845,33 @@ test('Commercial Sellers: apply after the ID check, owner approves, badge and fi
   await ok('DELETE', '/me/business', null, tk('ms'));
   assert.equal((await ok('GET', '/me', null, tk('ms'))).user.business_status, null);
   sms.setMailer(null);
+});
+
+test('ads: the smallest and biggest order are optional (500 HTG up to the whole ad)', async () => {
+  await signup('optS', '+50937000411', 'Opt Seller'); await kyc('optS');
+  const pm = await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Opt Seller', account_ref: '37000411' }, tk('optS'));
+  await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+50937000411'),'USDT',100)
+                    ON CONFLICT (user_id, asset) DO UPDATE SET available = 100`);
+  const a = await ok('POST', '/ads', { side: 'SELL', asset: 'USDT', price_htg: '140', amount: '50', min_order_htg: '', payment_method_ids: [pm.id] }, tk('optS'));
+  const row = (await pool.query('SELECT min_order_htg, max_order_htg FROM ads WHERE id=$1', [a.id])).rows[0];
+  assert.equal(Number(row.min_order_htg), 500); assert.equal(Number(row.max_order_htg), 7000);
+});
+
+test('payment accounts: remove one (not while an ad uses it), add it back later', async () => {
+  await signup('rmS', '+50937000421', 'Remove Seller'); await kyc('rmS');
+  const pm = await ok('POST', '/payment-methods', { type: 'NATCASH', account_name: 'Remove Seller', account_ref: '37000421' }, tk('rmS'));
+  await pool.query(`INSERT INTO wallet_balances (user_id, asset, available) VALUES ((SELECT id FROM users WHERE phone='+50937000421'),'USDT',100)
+                    ON CONFLICT (user_id, asset) DO UPDATE SET available = 100`);
+  const a = await ok('POST', '/ads', { side: 'SELL', asset: 'USDT', price_htg: '140', amount: '20', payment_method_ids: [pm.id] }, tk('rmS'));
+  const busy = await call('POST', `/payment-methods/${pm.id}/remove`, {}, tk('rmS'));
+  assert.equal(busy.status, 400);
+  await ok('POST', `/ads/${a.id}/status`, { status: 'CLOSED' }, tk('rmS'));
+  await ok('POST', `/payment-methods/${pm.id}/remove`, {}, tk('rmS'));
+  let me = await ok('GET', '/me', null, tk('rmS'));
+  assert.equal(me.payment_methods.filter((p) => p.id === pm.id).length, 0);
+  // Somebody else cannot remove it; the owner can add the same number back.
+  const back = await ok('POST', '/payment-methods', { type: 'NATCASH', account_name: 'Remove Seller', account_ref: '37000421' }, tk('rmS'));
+  assert.equal(back.id, pm.id);
+  me = await ok('GET', '/me', null, tk('rmS'));
+  assert.equal(me.payment_methods.filter((p) => p.id === pm.id).length, 1);
 });

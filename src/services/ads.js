@@ -25,8 +25,11 @@ export async function createAd(user, b) {
   const pmIds = [...new Set([].concat(b.payment_method_ids || b.payment_method_id || []))];
   const price = num(b.price_htg, 'Price');
   const amount = num(b.amount, 'Amount');
-  const minHtg = num(b.min_order_htg, 'Minimum order');
-  const maxHtg = num(b.max_order_htg, 'Maximum order');
+  // Smallest and biggest order are optional: empty = from 500 HTG (or less for a tiny ad) up to the whole ad.
+  const wholeHtg = Math.floor(Number(amount) * Number(price));
+  const blank = (v) => v === undefined || v === null || String(v).trim() === '';
+  const minHtg = blank(b.min_order_htg) ? String(Math.max(1, Math.min(500, wholeHtg))) : num(b.min_order_htg, 'Minimum order');
+  const maxHtg = blank(b.max_order_htg) ? String(Math.max(Number(minHtg), wholeHtg)) : num(b.max_order_htg, 'Maximum order');
   if (Number(maxHtg) < Number(minHtg)) throw bad('Maximum order must be at least the minimum.');
   // The whole ad must be worth at least one minimum order, or nobody could ever take it.
   if (Number(amount) * Number(price) < Number(minHtg)) throw bad(`The whole ad is worth ${(Number(amount) * Number(price)).toFixed(0)} HTG. Make the minimum order lower than that, or the amount bigger.`, 'RANGE');
@@ -34,7 +37,7 @@ export async function createAd(user, b) {
   const ad = await tx(async (c) => {
     let pmIds2 = null;
     if (side === 'SELL') {
-      if (!isMock() && !user.wallet_addr) throw bad('Link your wallet first (Wallet page).', 'WALLET');
+      if (!isMock() && !user.wallet_addr) throw bad('Link your wallet first (Deposit page).', 'WALLET');
       if (!pmIds.length) throw bad('Pick at least one of your payment accounts.');
       const usable = await links.usableAccountIds(c, user.id);
       const unverified = (await c.query('SELECT 1 FROM payment_methods WHERE id = ANY($1::uuid[]) AND user_id=$2 AND NOT verified', [pmIds, user.id])).rowCount;

@@ -150,8 +150,8 @@ const LEGAL = {
   },
   close: {
     ht: ['Fèmen Kont', [
-      ['Anvan ou fèmen', 'Ou pa dwe gen okenn kòmand ki louvri. Fèmen piblisite ou yo. Retire tout kripto ki nan kont ou.'],
-      ['Sa k ap pase', 'Ou p ap ka konekte ankò. Piblisite ou yo fèmen. Nou kenbe dosye echanj ou yo pou tan lalwa mande, pou anpeche fwod.'],
+      ['Anvan ou fèmen', 'Ou pa dwe gen okenn kòmand ki louvri. Fèmen anons lan ou yo. Retire tout kripto ki nan kont ou.'],
+      ['Sa k ap pase', 'Ou p ap ka konekte ankò. Anons ou yo fèmen. Nou kenbe dosye echanj ou yo pou tan lalwa mande, pou anpeche fwod.'],
       ['Ou chanje lide?', 'Nimewo telefòn sa a p ap ka louvri yon nouvo kont pou kont li. Kontakte ekip nou an.'],
     ]],
     en: ['Close Account', [

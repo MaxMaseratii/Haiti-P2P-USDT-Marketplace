@@ -147,6 +147,7 @@ function checkWithdraw(asset, amount, to) {
   if (units(amount) <= fee) throw bad(`The amount must be more than the ${config.withdrawFee} ${asset} network fee.`);
   return { dest, fee };
 }
+export async function feeRecipient() { return get().base.feeRecipient(); }
 export async function withdrawPrep(userId, asset, amount, to) {
   const { base } = get();
   const { dest, fee } = checkWithdraw(asset, amount, to);

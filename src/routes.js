@@ -170,7 +170,7 @@ api.use(auth);
 api.get('/me', wrap(async (req) => ({
   user: users.publicUser(req.user),
   wallet: await wallet.balances({ query: q }, req.user.id),
-  payment_methods: [...(await users.myPaymentMethods(req.user.id)).filter((p) => !p.is_receiver), ...(await links.linkedAccounts(req.user.id))],
+  payment_methods: [...(await users.myPaymentMethods(req.user.id)).filter((p) => !p.is_receiver && p.active !== false), ...(await links.linkedAccounts(req.user.id))],
 })));
 // Gasless withdraw on the real chain: get the message to sign, then send the signature. The app pays the gas.
 api.get('/wallet/withdraw-typed-data', wrap(async (req) => {
@@ -196,6 +196,9 @@ api.get('/links', wrap(async (req) => links.list(req.user)));
 api.post('/links', wrap(async (req) => links.invite(req.user, req.body || {})));
 api.post('/links/:id/accept', wrap(async (req) => links.accept(req.user, req.params.id, req.body || {})));
 api.post('/links/:id/end', wrap(async (req) => links.end(req.user, req.params.id)));
+// one-time fee for an extra receiving account (real money): get the message to sign, then send the signature
+api.get('/links/:id/pay-typed-data', wrap(async (req) => links.payPrep(req.user, req.params.id)));
+api.post('/links/:id/pay', wrap(async (req) => links.pay(req.user, req.params.id, req.body || {})));
 api.get('/links/to-check', wrap(async (req) => links.toCheck(req.user)));
 api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, req.params.orderId, req.body?.received === true)));
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
@@ -211,6 +214,7 @@ api.post('/me/posters', wrap(async (req) => users.addPoster(req.user, req.body |
 api.delete('/me/posters/:id', wrap(async (req) => users.removePoster(req.user, req.params.id)));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));
 api.get('/payment-methods', wrap(async (req) => users.myPaymentMethods(req.user.id)));
+api.post('/payment-methods/:id/remove', wrap(async (req) => users.removePaymentMethod(req.user, req.params.id)));
 
 // ---------- wallet (mock only) ----------
 api.post('/wallet/dev-deposit', wrap(async (req) => {

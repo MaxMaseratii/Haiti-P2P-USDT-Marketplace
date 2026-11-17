@@ -53,7 +53,7 @@ function get() {
   return ctx;
 }
 export const appWalletAddress = () => (ctx ? ctx.operator.address : null);
-export const resetEvm = () => { ctx?.provider.destroy(); ctx = null; };
+export const resetEvm = () => { ctx?.provider.destroy(); ctx = null; logsProv?.destroy(); logsProv = null; span = 2000; };
 
 // Send one transaction at a time so nonces never collide.
 let queue = Promise.resolve();
@@ -240,7 +240,13 @@ export const adapter = {
     }
   },
 
-  async tick() { await scanChain(); await this.syncAllReserves(); },
+  // Reading the chain and keeping reserves right are separate jobs: one failing must not stop the other.
+  async tick() {
+    let err = null;
+    try { await scanChain(); } catch (e) { err = e; }
+    await this.syncAllReserves();
+    if (err) throw err;
+  },
 };
 
 // ---------- deposits and withdrawals ----------
@@ -260,27 +266,57 @@ export async function chainStatus() {
     explorer: config.evmChainId === 42161 ? 'https://arbiscan.io/address/' + config.evmContract : config.evmChainId === 421614 ? 'https://sepolia.arbiscan.io/address/' + config.evmContract : null };
 }
 
+// Reading old blocks ("logs"): the Alchemy free plan only allows 10 blocks per request, and Arbitrum makes
+// about 4 blocks a second. So logs are read from the free public Arbitrum server in big steps, one request
+// for all 3 event kinds. If a server refuses, the step gets smaller, and at 10 blocks the main server is tried too.
+const PUBLIC_LOGS = { 42161: 'https://arb1.arbitrum.io/rpc', 421614: 'https://sepolia-rollup.arbitrum.io/rpc' };
+let logsProv = null, span = 2000;
+function logReaders() {
+  const { provider } = get();
+  const url = config.evmLogsRpcUrl || PUBLIC_LOGS[config.evmChainId];
+  if (!url || url === config.evmRpcUrl) return [provider];
+  logsProv ||= new ethers.JsonRpcProvider(url, config.evmChainId, { staticNetwork: true, cacheTimeout: -1 });
+  return [logsProv, provider];
+}
+async function readLogs(from, to) {
+  const { base } = get();
+  const topics = [['Deposited', 'Withdrawn', 'WithdrawFee'].map((n) => base.interface.getEvent(n).topicHash)];
+  const filter = { address: config.evmContract, topics, fromBlock: from, toBlock: to };
+  let last;
+  for (const [i, p] of logReaders().entries()) {
+    if (i > 0 && to - from > 9) break; // the main (Alchemy) server only for small steps
+    try { return await p.getLogs(filter); } catch (e) { last = e; }
+  }
+  throw last;
+}
+
 export async function scanChain() {
   const { provider, base, assetOf } = get();
   const head = await provider.getBlockNumber();
   const safe = head - config.evmConfirmations;
   const last = await getState('last_block');
   let from = last === undefined ? config.evmStartBlock : Number(last) + 1;
-  while (from <= safe) {
-    const to = Math.min(from + 1999, safe);
-    const logs = [...await base.queryFilter(base.filters.Deposited(), from, to), ...await base.queryFilter(base.filters.Withdrawn(), from, to),
-      ...await base.queryFilter(base.filters.WithdrawFee(), from, to)];
-    const feeTo = logs.some((l) => l.fragment.name === 'WithdrawFee') ? await base.feeRecipient() : null;
+  for (let steps = 0; from <= safe && steps < 40; steps++) {
+    const to = Math.min(from + span - 1, safe);
+    let raw;
+    try { raw = await readLogs(from, to); }
+    catch (e) {
+      if (span > 10) { span = Math.max(10, Math.floor(span / 4)); continue; } // smaller step, try again
+      throw e;
+    }
+    if (span < 2000 && to - from + 1 === span) span = Math.min(2000, span * 2); // it worked: bigger steps again
+    const logs = raw.map((l) => { const p = base.interface.parseLog(l); return p && { name: p.name, args: p.args, transactionHash: l.transactionHash, index: l.index, blockNumber: l.blockNumber }; }).filter(Boolean);
+    const feeTo = logs.some((l) => l.name === 'WithdrawFee') ? await base.feeRecipient() : null;
     for (const l of logs) {
       const token = l.args.token.toLowerCase();
       if (!assetOf[token]) continue; // a token we do not trade
       // A gasless withdraw fee stays in the contract, credited to feeRecipient (the platform account).
-      const isFee = l.fragment.name === 'WithdrawFee';
+      const isFee = l.name === 'WithdrawFee';
       if (isFee && l.args.fee === 0n) continue;
       await q(
         `INSERT INTO chain_events (tx_hash, log_index, block_number, kind, token, address, amount)
          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
-        [l.transactionHash, l.index, l.blockNumber, isFee || l.fragment.name === 'Deposited' ? 'DEPOSIT' : 'WITHDRAW', token,
+        [l.transactionHash, l.index, l.blockNumber, isFee || l.name === 'Deposited' ? 'DEPOSIT' : 'WITHDRAW', token,
           isFee ? feeTo : l.args.user, human(isFee ? l.args.fee : l.args.amount)]);
     }
     await setState('last_block', to);

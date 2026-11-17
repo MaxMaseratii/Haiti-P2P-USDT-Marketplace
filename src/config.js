@@ -45,6 +45,7 @@ export const config = {
   otpMaxTries: num('OTP_MAX_TRIES', 5),
   // ESCROW_MODE=EVM (smart contract). Needs all of these. Use a chain where USDT/USDC have 6 decimals.
   evmRpcUrl: str('EVM_RPC_URL', ''),
+  evmLogsRpcUrl: str('EVM_LOGS_RPC_URL', ''),       // where to read old blocks; empty = the free public Arbitrum server
   evmChainId: num('EVM_CHAIN_ID', 0),
   evmContract: str('EVM_ESCROW_ADDRESS', ''),
   evmStartBlock: num('EVM_START_BLOCK', 0),

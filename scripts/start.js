@@ -15,7 +15,7 @@ for (const sql of [
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar bytea', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime text',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_uid text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_network text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_addr text',
-  'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea',
+  'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_after timestamptz', 'ALTER TABLE evidence ADD COLUMN IF NOT EXISTS data bytea',
   'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_types text[]', 'ALTER TABLE ads ADD COLUMN IF NOT EXISTS pay_methods uuid[]',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_type text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS id_number text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS challenge text',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_challenge text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS closed_at timestamptz',

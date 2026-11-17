@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import { q } from '../db.js';
 import { bad, HttpError } from '../errors.js';
+import { makeToken } from '../auth.js';
 
 const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64, { N: 16384, r: 8, p: 1 }, (e, k) => (e ? no(e) : ok(k))));
 export function check(pw) {
@@ -22,8 +23,9 @@ async function same(pw, stored) {
   const a = await scrypt(String(pw || ''), Buffer.from(s, 'base64')), b = Buffer.from(h, 'base64');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+// A new password logs out every other phone and browser (their old logins stop working).
 export async function set(userId, pw) {
-  await q('UPDATE users SET pw_hash=$2, pw_fails=0, pw_locked_until=NULL WHERE id=$1', [userId, await hash(pw)]);
+  await q('UPDATE users SET pw_hash=$2, pw_fails=0, pw_locked_until=NULL, tokens_after=$3 WHERE id=$1', [userId, await hash(pw), new Date()]);
 }
 export async function login(u, pw) {
   if (!u.pw_hash) throw new HttpError(400, 'This account has no password yet. Log in with a code, then add a password in your Profile.', 'NO_PASSWORD');
@@ -38,5 +40,5 @@ export async function login(u, pw) {
 export async function change(u, { password, current }) {
   if (u.pw_hash && !(await same(current, u.pw_hash))) throw new HttpError(401, 'Your current password is not right.', 'PW_WRONG');
   await set(u.id, password);
-  return { ok: true };
+  return { ok: true, token: makeToken(u.id) }; // this browser stays logged in
 }

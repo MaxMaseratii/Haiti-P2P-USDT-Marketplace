@@ -2,14 +2,22 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
-import { geoGuard } from './auth.js';
+import { geoGuard, readToken } from './auth.js';
 import { HttpError } from './errors.js';
 import { config } from './config.js';
 
-// Simple per-IP limit for the whole API: 600 calls per 5 minutes (the app polls every few seconds).
+// The visitor's real address. The site sits behind Cloudflare, so req.ip is a Cloudflare server
+// (shared by thousands of people). Cloudflare puts the real one in CF-Connecting-IP.
+export const clientIp = (req) => {
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  return /^[0-9a-f.:]{3,45}$/i.test(cf) ? cf : (req.ip || 'x');
+};
+// Limit for the whole API: per logged-in person (many people in Haiti share one phone-company address),
+// and per address for people who are not logged in. 600 calls per 5 minutes (the app polls every few seconds).
 const seen = new Map();
 function apiLimit(req, _res, next) {
-  const ip = req.ip || 'x', now = Date.now();
+  const h = String(req.headers.authorization || ''), tk = h.startsWith('Bearer ') ? readToken(h.slice(7)) : null;
+  const ip = tk ? 'u:' + tk.uid : clientIp(req), now = Date.now();
   let e = seen.get(ip);
   if (!e || now - e.t > 300000) { e = { t: now, n: 0 }; seen.set(ip, e); }
   if (++e.n > config.apiRateLimit) return next(new HttpError(429, 'Too many requests. Slow down a little.', 'RATE'));
@@ -58,6 +66,7 @@ export function buildApp() {
     if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code });
     if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Bad JSON.', code: 'JSON' });
     // Database rule broke (illegal move, check constraint, etc.). Not a crash, but never leak details.
+    if (err?.code && /^22/.test(err.code)) return res.status(400).json({ error: 'Something in the request is not valid.', code: 'BAD_INPUT' });
     if (err?.code && /^(23|P0)/.test(err.code)) {
       console.error('db rule:', err.message);
       return res.status(409).json({ error: 'That action is not allowed right now.', code: 'DB_RULE' });

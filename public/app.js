@@ -244,6 +244,7 @@ function authCard(startMode = 'signup') {
     if (e.code === 'NO_ACCOUNT') { mode = 'signup'; paint(); toast(t('No account yet. Create your free account here.')); return true; }
     if (e.code === 'EXISTS' || e.code === 'EMAIL_USED') { const p = phoneF.value(); mode = 'login'; how = 'pw'; paint(); if (e.code === 'EXISTS') loginIn.value = p; toast(t('You already have an account. Log in here.')); return true; }
     if (e.code === 'NO_PASSWORD' || e.code === 'PW_LOCKED') { how = 'code'; paint(); toast(t(e.message)); return true; }
+    if (e.code === 'NEED_CODE') { how = 'pw2'; paint(); toast(t(e.message)); code.focus(); return true; } // staff: password + email code
     return false;
   };
   const sendCode = h('button', { class: 'btn alt', type: 'button', onclick: act(async () => {
@@ -262,7 +263,7 @@ function authCard(startMode = 'signup') {
         if (!agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
         if (pwNew.value().length < 8) throw new Error(t('Choose a password: at least 8 characters, with letters and numbers.'));
         done(await api('POST', '/auth/signup', { phone: phoneF.value(), full_name: name.value, email: byEmail ? email.value.trim() : undefined, code: code.value.trim() || undefined, accept_terms: true, password: pwNew.value() }));
-      } else if (how === 'pw') done(await api('POST', '/auth/login', { login: loginIn.value.trim(), password: pwIn.value() }));
+      } else if (how === 'pw' || how === 'pw2') done(await api('POST', '/auth/login', { login: loginIn.value.trim(), password: pwIn.value(), code: how === 'pw2' ? code.value.trim() : undefined }));
       else if (how === 'code') done(await api('POST', '/auth/login', { login: loginIn.value.trim(), code: code.value.trim() }));
       else done(await api('POST', '/auth/reset-password', { login: loginIn.value.trim(), code: code.value.trim(), password: pwReset.value() }));
     } catch (e) { if (!steer(e)) throw e; }
@@ -285,7 +286,7 @@ function authCard(startMode = 'signup') {
     const su = mode === 'signup';
     tabS.classList.toggle('on', su); tabL.classList.toggle('on', !su);
     show(fName, su); show(fEmail, su); show(agreeBox, su); show(fPhone, su); show(fPwNew, su); show(fLogin, !su); show(links, !su);
-    show(fPwIn, !su && how === 'pw'); show(fPwReset, !su && how === 'reset'); show(fCode, su || how !== 'pw');
+    show(fPwIn, !su && (how === 'pw' || how === 'pw2')); show(fPwReset, !su && how === 'reset'); show(fCode, su || how !== 'pw');
     linkCode.textContent = t(how === 'code' ? 'Log in with my password' : 'Log in with a code instead');
     linkReset.textContent = t(how === 'reset' ? 'Back to my password' : 'I forgot my password');
     goBtn.textContent = t(su ? 'Create my free account' : how === 'reset' ? 'Save my new password' : 'Log in');
@@ -886,7 +887,7 @@ function disputePanel(v, o) {
     v.evidence.length ? h('div', { class: 'docs' }, v.evidence.map((e) => h('div', { class: 'doc' },
       h('span', { class: 'chip' }, (DOC_KINDS.find((k) => k[0] === e.kind) || [0, e.kind])[1]),
       e.file_ref.startsWith('upload:') ? h('a', { href: '#', onclick: (ev) => { ev.preventDefault(); act(() => openProof(e.id))(); } }, '📎 ' + (e.orig_name || 'file')) : h('span', {}, e.file_ref),
-      h('span', { class: 'mute' }, (e.by === v.role ? 'You' : e.by === 'BUYER' ? 'Buyer' : 'Seller') + ' · ' + hm(e.created_at))))) : h('p', { class: 'mute' }, 'No documents yet.'),
+      h('span', { class: 'mute' }, h('span', {}, e.by === v.role ? 'You' : e.by === 'BUYER' ? 'Buyer' : 'Seller'), ' · ' + hm(e.created_at))))) : h('p', { class: 'mute' }, 'No documents yet.'),
     open && party ? h('div', {}, h('label', {}, 'Add proof'), kind, pick.el,
       h('button', { class: 'btn sm', onclick: act(async () => {
         if (!pick.files().length) throw new Error('Pick a file first.');
@@ -913,7 +914,7 @@ function renderChat(col, v, msgs) {
   const closed = ['COMPLETED', 'REFUNDED', 'CANCELLED_TIMEOUT'].includes(o.state) && v.role !== 'STAFF';
   const log = h('div', { class: 'chatlog' }, msgs.length ? msgs.map((m) => m.sender_id === null
     ? h('div', { class: 'sysmsg' }, m.body)
-    : h('div', { class: 'bub ' + (m.sender_id === me.user.id ? 'me' : '') }, h('div', { class: 'bt' }, m.body), h('div', { class: 'bm' }, (m.sender_id === me.user.id ? 'You' : name(m.sender_id).split(' ')[0]) + ' · ' + hm(m.created_at))))
+    : h('div', { class: 'bub ' + (m.sender_id === me.user.id ? 'me' : '') }, h('div', { class: 'bt' }, m.body), h('div', { class: 'bm' }, m.sender_id === me.user.id ? h('span', {}, 'You') : name(m.sender_id).split(' ')[0], ' · ' + hm(m.created_at))))
     : [h('div', { class: 'sysmsg' }, 'Say hello. Keep all talk here, where staff can see it if there is a problem.')]);
   const input = h('input', { placeholder: 'Write a message…', maxlength: 500 });
   const sendText = async (text) => { if (!text.trim()) return; await api('POST', `/orders/${o.id}/chat`, { body: text }); input.value = ''; route(); };
@@ -1385,7 +1386,8 @@ function passwordCard(u) {
     h('p', { class: 'mute small' }, t('At least 8 characters, with letters and numbers.')),
     h('button', { class: 'btn', onclick: act(async () => {
       if (n1.value() !== n2.value()) throw new Error(t('The two passwords are not the same.'));
-      await api('POST', '/me/password', { password: n1.value(), current: u.has_password ? cur.value() : undefined });
+      const r = await api('POST', '/me/password', { password: n1.value(), current: u.has_password ? cur.value() : undefined });
+      if (r.token) { token = r.token; localStorage.setItem('token', token); } // other phones are logged out, this one stays in
       me = await api('GET', '/me'); toast(t('Password saved.')); route();
     }) }, t('Save password')));
 }

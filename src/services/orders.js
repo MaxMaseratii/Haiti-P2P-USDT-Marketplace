@@ -35,7 +35,8 @@ async function lockOrder(c, id) {
 
 // ---------- create ----------
 export async function createOrder(user, { ad_id, amount, payment_method_id, pay_type }) {
-  if (!/^\d+(\.\d+)?$/.test(String(amount)) || Number(amount) <= 0) throw bad('Amount must be a number above 0.');
+  if (!/^\d{1,10}(\.\d{1,6})?$/.test(String(amount)) || Number(amount) <= 0) throw bad('Amount must be a number above 0 (at most 6 decimals).');
+  if (!/^[0-9a-f-]{36}$/i.test(String(ad_id || ''))) throw conflict('This ad is not available.', 'AD_GONE');
   const amt = String(amount);
 
   const orderId = await tx(async (c) => {

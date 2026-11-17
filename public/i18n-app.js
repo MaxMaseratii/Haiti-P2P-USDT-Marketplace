@@ -681,6 +681,12 @@
     'Home page': ['Paj akèy', 'Page d\'accueil'], 'Payment accounts': ['Kont peman', 'Comptes de paiement'], 'Password': ['Modpas', 'Mot de passe'],
     'Business profile': ['Pwofil biznis', 'Profil professionnel'], 'My account': ['Kont mwen', 'Mon compte'], 'Profile': ['Pwofil', 'Profil'],
     'Safety': ['Sekirite', 'Sécurité'], 'Legal': ['Legal', 'Mentions légales'], 'Account': ['Kont', 'Compte'],
+    'Staff accounts need the email code too. We sent it to your email. Type it, then press Log in again.': ['Kont ekip yo bezwen kòd imel la tou. Nou voye l nan imel ou. Ekri l, epi peze Konekte ankò.', 'Les comptes de l\'équipe ont aussi besoin du code e-mail. Nous l\'avons envoyé. Tapez-le, puis appuyez de nouveau sur Connexion.'],
+    'This public name is not allowed. Choose another one.': ['Non piblik sa a pa otorize. Chwazi yon lòt.', 'Ce nom public n\'est pas autorisé. Choisissez-en un autre.'],
+    'A Commercial Seller already uses this name. Choose another one.': ['Yon Vandè Komèsyal deja sèvi ak non sa a. Chwazi yon lòt.', 'Un vendeur commercial utilise déjà ce nom. Choisissez-en un autre.'],
+    'This person must finish the ID check before you can add their account.': ['Moun sa a dwe fini verifikasyon ID li anvan ou ka ajoute kont li.', 'Cette personne doit terminer la vérification d\'identité avant que vous puissiez ajouter son compte.'],
+    'Something in the request is not valid.': ['Gen yon bagay ki pa bon nan demann lan.', 'Quelque chose n\'est pas valide dans la demande.'],
+    'You cannot decide your own ID check.': ['Ou pa ka deside pwòp verifikasyon ID pa w.', 'Vous ne pouvez pas décider votre propre vérification.'],
   };
 
   // Text that has numbers or names inside. [English pattern, Kreyòl, Français]. $1, $2 … are the parts that change.

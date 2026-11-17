@@ -31,6 +31,7 @@ CREATE TABLE users (
   pw_hash       text,                   -- scrypt hash; NULL = log in with email codes only
   pw_fails      int NOT NULL DEFAULT 0,
   pw_locked_until timestamptz,
+  tokens_after  timestamptz,          -- logins made before this time stop working (password changed)
   business_status text,                 -- Commercial Seller: NULL (personal), PENDING, APPROVED, REJECTED
   business_name text, business_type text, business_reg text, business_note text,
   business_at   timestamptz, business_reviewed_at timestamptz,

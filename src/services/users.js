@@ -123,6 +123,14 @@ export async function setProfile(user, { display_name, bio, avatar, cover, depar
   if (b.length > 300) throw bad('About text is too long (max 300).');
   if (ar.length > 60) throw bad('Area is too long (max 60).');
   if (NO_CONTACT.test(dn) || NO_CONTACT.test(b) || NO_CONTACT.test(ar)) throw bad('No links, emails or phone numbers in your profile. Keep trades in the app.');
+  // Stop look-alike names: nobody may use the platform's name or another approved business's name.
+  if (dn) {
+    const flat = dn.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (/ayitip2p|admin|support|moderat|official|ofisyel|binance|moncash|natcash/.test(flat))
+      throw bad('This public name is not allowed. Choose another one.', 'NAME_TAKEN');
+    const taken = (await q(`SELECT 1 FROM users WHERE id<>$1 AND business_status='APPROVED' AND regexp_replace(lower(COALESCE(business_name, display_name, '')), '[^a-z0-9]', '', 'g') = $2 LIMIT 1`, [user.id, flat])).rowCount;
+    if (taken && user.business_status !== 'APPROVED') throw bad('A Commercial Seller already uses this name. Choose another one.', 'NAME_TAKEN');
+  }
   const dep = department ? String(department) : null;
   if (dep && !DEPARTMENTS.includes(dep)) throw bad('Pick your department from the list.');
   const rm = response_min == null || response_min === '' ? null : Number(response_min);
@@ -254,6 +262,7 @@ export async function decideKyc(staff, id, approve) {
     const k = (await c.query('SELECT * FROM kyc WHERE id=$1 FOR UPDATE', [id])).rows[0];
     if (!k) throw notFound();
     if (k.status !== 'PENDING') throw conflict('Already decided.');
+    if (k.user_id === staff.id) throw forbidden('You cannot decide your own ID check.');
     const u = (await c.query('SELECT * FROM users WHERE id=$1', [k.user_id])).rows[0];
     if (approve && !namesMatch(k.name_on_id, u.full_name))
       throw bad('Name on ID does not match the account name.', 'NAME_MISMATCH');

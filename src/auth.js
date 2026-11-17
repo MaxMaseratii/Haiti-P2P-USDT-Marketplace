@@ -7,7 +7,8 @@ const b64 = (b) => Buffer.from(b).toString('base64url');
 const sign = (data) => crypto.createHmac('sha256', config.tokenSecret).update(data).digest('base64url');
 
 export function makeToken(userId, days = 7) {
-  const body = b64(JSON.stringify({ uid: userId, exp: Date.now() + days * 864e5 }));
+  const now = Date.now();
+  const body = b64(JSON.stringify({ uid: userId, iat: now, exp: now + days * 864e5 }));
   return `${body}.${sign(body)}`;
 }
 
@@ -18,8 +19,9 @@ export function readToken(tok) {
   const want = Buffer.from(sign(body));
   const got = Buffer.from(sig);
   if (want.length !== got.length || !crypto.timingSafeEqual(want, got)) return null;
-  const data = JSON.parse(Buffer.from(body, 'base64url').toString());
-  return data.exp > Date.now() ? data : null;
+  let data;
+  try { data = JSON.parse(Buffer.from(body, 'base64url').toString()); } catch { return null; }
+  return data && data.exp > Date.now() ? data : null;
 }
 
 // Haiti-only. Phone must be +509 and 8 digits.
@@ -48,6 +50,8 @@ export async function auth(req, _res, next) {
     const r = await q('SELECT * FROM users WHERE id=$1', [data.uid]);
     const u = r.rows[0];
     if (!u) throw unauth();
+    // After a password change or reset, older logins (other phones, a stolen token) stop working.
+    if (u.tokens_after && !(Number(data.iat) >= new Date(u.tokens_after).getTime())) throw unauth();
     if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
     if (u.banned) throw forbidden('Account is frozen or banned.');
     if (u.suspended_until && new Date(u.suspended_until) > new Date()) throw forbidden('Account is suspended until ' + new Date(u.suspended_until).toISOString().slice(0, 10) + '.');

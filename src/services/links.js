@@ -33,11 +33,11 @@ export async function list(user) {
 export async function invite(user, { phone }) {
   if (user.tier < 1) throw forbidden('Finish your ID check first.');
   phone = String(phone || '').replace(/[\s()\-.]/g, '');
-  const m = (await q('SELECT id, tier, banned, full_name FROM users WHERE phone=$1', [phone])).rows[0];
+  const m = (await q('SELECT id, tier, banned, full_name FROM users WHERE phone=$1 AND closed_at IS NULL', [phone])).rows[0];
   if (!m) throw notFound('Nobody has an account with this phone. Ask them to open an account and finish the ID check first.');
   if (m.id === user.id) throw bad('That is your own phone. Your own accounts are in Profile.');
   if (m.banned) throw forbidden('This person cannot be linked.');
-  if (m.tier < 1) throw conflict(`${m.full_name} must finish the ID check before you can link their account.`);
+  if (m.tier < 1) throw conflict('This person must finish the ID check before you can add their account.');
   try {
     const l = (await q(`INSERT INTO account_links (owner_id, member_id) VALUES ($1,$2) RETURNING id`, [user.id, m.id])).rows[0];
     try { await sendSms(phone, `Ayiti P2P: ${user.full_name} asks to use one of your payment accounts to receive gourdes. Log in to Ayiti P2P to accept or refuse.`); } catch {}

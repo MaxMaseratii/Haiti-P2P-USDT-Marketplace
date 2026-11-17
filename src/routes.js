@@ -101,6 +101,14 @@ api.post('/auth/login', wrap(async (req) => {
   if (password !== undefined && password !== '') {
     if (!known) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
     await pw.login(known, password); // phone or email + password
+    // Staff and owner accounts: a password alone is not enough. The email code is needed too.
+    if (known.role !== 'USER') {
+      if (!code) {
+        try { await otp.requestCode(phone); } catch (e) { if (e.code !== 'OTP_WAIT') throw e; }
+        throw new HttpError(400, 'Staff accounts need the email code too. We sent it to your email. Type it, then press Log in again.', 'NEED_CODE');
+      }
+      await otp.verifyCode(phone, code, true);
+    }
   } else await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
   const u = known;
   if (!u) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
@@ -116,7 +124,7 @@ api.post('/auth/reset-password', otp.ipLimit, wrap(async (req) => {
   const phone = await whoIs(req.body || {});
   const u = await users.findByPhone(phone);
   if (!u) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
-  await otp.verifyCode(phone, code, false);
+  await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || u.role !== 'USER');
   if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
   if (u.banned) throw forbidden('Account is frozen or banned.');
   await pw.set(u.id, password);
@@ -160,7 +168,7 @@ api.get('/cover/:id', wrap(async (req, res) => {
 // Help: anyone can write to the team (logged in or not). Logged in = we know who it is.
 api.post('/help/ask', otp.ipLimit, wrap(async (req) => {
   const h = req.headers.authorization || '', tk = h.startsWith('Bearer ') ? readToken(h.slice(7)) : null;
-  const user = tk ? (await q('SELECT * FROM users WHERE id=$1 AND NOT banned', [tk.uid])).rows[0] : null;
+  const user = tk ? (await q('SELECT * FROM users WHERE id=$1 AND NOT banned AND (tokens_after IS NULL OR tokens_after <= to_timestamp($2::double precision / 1000))', [tk.uid, Number(tk.iat) || 0])).rows[0] : null;
   return help.ask(user || null, req.body || {});
 }));
 
@@ -269,7 +277,7 @@ staff.use(needRole('AGENT', 'ADMIN'));
 staff.get('/kyc', wrap(async (req) => users.listKyc(req.query.status || 'PENDING')));
 staff.get('/kyc/:id/file/:kind', wrap(async (req, res) => {
   const f = await users.kycFile(req.params.id, String(req.params.kind).toUpperCase());
-  res.set('Content-Type', f.mime).set('Cache-Control', 'private, no-store').send(f.data);
+  res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; sandbox" }).send(f.data);
 }));
 staff.post('/kyc/:id/recheck', wrap(async (req) => idcheck.recheck(req.params.id)));
 staff.post('/kyc/:id/decision', wrap(async (req) => users.decideKyc(req.user, req.params.id, !!req.body?.approve)));

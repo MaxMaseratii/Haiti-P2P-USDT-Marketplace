@@ -93,11 +93,14 @@ export async function verifyCode(phone, code, privileged = false) {
 
 // Simple per-IP limit for code requests (one server only. Use a shared store if you run many).
 const hits = new Map();
+// Uses the real visitor address behind Cloudflare. Many people share one phone-company address in Haiti,
+// so the limit is generous; each phone and each email also has its own small limit above.
 export function ipLimit(req, _res, next) {
-  const ip = req.ip || 'x';
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  const ip = /^[0-9a-f.:]{3,45}$/i.test(cf) ? cf : (req.ip || 'x');
   const now = Date.now();
   const list = (hits.get(ip) || []).filter((t) => now - t < 3600000);
-  if (list.length >= 20) return next(new HttpError(429, 'Too many requests. Try again later.', 'IP_LIMIT'));
+  if (list.length >= 60) return next(new HttpError(429, 'Too many requests. Try again later.', 'IP_LIMIT'));
   list.push(now); hits.set(ip, list);
   next();
 }

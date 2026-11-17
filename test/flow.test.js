@@ -821,9 +821,15 @@ test('passwords: set at signup, log in with phone or email + password, lock afte
   const np = await call('POST', '/auth/login', { login: '+447700900123', password: 'Whatever123' });
   assert.equal(np.body.code, 'NO_PASSWORD');
   // change it from the profile: needs the current one
-  await ok('POST', '/me/password', { password: 'Grace2026ok' }, tk('uk'));
+  const oldTk = tk('uk');
+  U.uk.token = (await ok('POST', '/me/password', { password: 'Grace2026ok' }, tk('uk'))).token;
+  // the new password logs out every other login: the old token is dead, the new one works
+  assert.equal((await call('GET', '/me', null, oldTk)).status, 401);
+  await ok('GET', '/me', null, tk('uk'));
   assert.equal((await call('POST', '/me/password', { password: 'Another2026', current: 'bad' }, tk('uk'))).status, 401);
-  await ok('POST', '/me/password', { password: 'Another2026', current: 'Grace2026ok' }, tk('uk'));
+  U.uk.token = (await ok('POST', '/me/password', { password: 'Another2026', current: 'Grace2026ok' }, tk('uk'))).token;
+  // a reset (forgot password) also kills older logins
+  assert.equal((await call('GET', '/me', null, s.token)).status, 401);
 });
 
 test('Commercial Sellers: apply after the ID check, owner approves, badge and filter on the market', async () => {
@@ -874,4 +880,29 @@ test('payment accounts: remove one (not while an ad uses it), add it back later'
   assert.equal(back.id, pm.id);
   me = await ok('GET', '/me', null, tk('rmS'));
   assert.equal(me.payment_methods.filter((p) => p.id === pm.id).length, 1);
+});
+
+test('security: staff password needs the email code too, bad ids and odd numbers are refused cleanly, no look-alike names', async () => {
+  await pool.query(`UPDATE users SET pw_hash=NULL WHERE id=$1`, [U.admin.id]);
+  await ok('POST', '/me/password', { password: 'Owner2026pass' }, tk('admin')).then((r) => { U.admin.token = r.token; });
+  const adminPhone = (await pool.query('SELECT phone FROM users WHERE id=$1', [U.admin.id])).rows[0].phone;
+  const step1 = await call('POST', '/auth/login', { login: adminPhone, password: 'Owner2026pass' });
+  assert.equal(step1.status, 400); assert.equal(step1.body.code, 'NEED_CODE');
+  assert.equal((await call('POST', '/auth/login', { login: adminPhone, password: 'Owner2026pass', code: '000000' })).status, 400); // the public test code never works for staff
+  assert.ok((await ok('POST', '/auth/login', { login: adminPhone, password: 'Owner2026pass', code: '482913' })).token);
+  // a broken or fake token is just "log in again", never a crash
+  assert.equal((await call('GET', '/me', null, 'eyJub3QiOiJqc29u.abc')).status, 401);
+  assert.equal((await call('POST', '/help/ask', { message: 'hello there' }, 'bad.token')).status, 400); // treated as not logged in: asks for an email
+  // a wrong id in the address: 4xx, not 500
+  assert.ok([400, 404].includes((await call('GET', '/orders/not-an-id', null, tk('uk'))).status));
+  assert.ok([400, 404, 409].includes((await call('POST', '/orders', { ad_id: 'x', amount: '5' }, tk('uk'))).status));
+  assert.equal((await call('GET', '/ads?side=HACK&asset=XYZ', null, tk('uk'))).status, 200);
+  // amounts: at most 6 decimals for crypto, 2 for gourdes
+  assert.equal((await call('POST', '/orders', { ad_id: '00000000-0000-0000-0000-000000000000', amount: '1.1234567' }, tk('uk'))).status, 400);
+  // public names: no copying the platform or a Commercial Seller
+  assert.equal((await call('PUT', '/me/profile', { display_name: 'Ayiti P2P Support' }, tk('uk'))).body.code, 'NAME_TAKEN');
+  assert.equal((await call('PUT', '/me/profile', { display_name: 'Admin Team' }, tk('uk'))).body.code, 'NAME_TAKEN');
+  const approved = (await pool.query(`SELECT business_name FROM users WHERE business_status='APPROVED' LIMIT 1`)).rows[0];
+  if (approved) assert.equal((await call('PUT', '/me/profile', { display_name: approved.business_name.toUpperCase() }, tk('uk'))).body.code, 'NAME_TAKEN');
+  await ok('PUT', '/me/profile', { display_name: 'Grace Kanpay' }, tk('uk'));
 });

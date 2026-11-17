@@ -6,10 +6,11 @@ import { escrow } from '../escrow.js';
 import { bad, forbidden, notFound, conflict } from '../errors.js';
 import * as wallet from './wallet.js';
 
-const num = (v, name) => {
+const num = (v, name, dec = 2, max = 1e9) => {
   if (typeof v !== 'string' && typeof v !== 'number') throw bad(`${name} is missing.`);
   const s = String(v).trim();
-  if (!/^\d+(\.\d+)?$/.test(s) || Number(s) <= 0) throw bad(`${name} must be a number above 0.`);
+  if (!new RegExp(`^\\d{1,12}(\\.\\d{1,${dec}})?$`).test(s) || Number(s) <= 0) throw bad(`${name} must be a number above 0 (at most ${dec} decimals).`);
+  if (Number(s) > max) throw bad(`${name} is too big.`);
   return s;
 };
 
@@ -23,8 +24,8 @@ export async function createAd(user, b) {
   const TYPES = ['MONCASH', 'NATCASH', 'BANK'];
   let types = [...new Set([].concat(b.pay_types || b.pay_type || []))];
   const pmIds = [...new Set([].concat(b.payment_method_ids || b.payment_method_id || []))];
-  const price = num(b.price_htg, 'Price');
-  const amount = num(b.amount, 'Amount');
+  const price = num(b.price_htg, 'Price', 2, 1e6);
+  const amount = num(b.amount, 'Amount', 6, 1e7);
   // Smallest and biggest order are optional: empty = from 500 HTG (or less for a tiny ad) up to the whole ad.
   const wholeHtg = Math.floor(Number(amount) * Number(price));
   const blank = (v) => v === undefined || v === null || String(v).trim() === '';
@@ -77,10 +78,11 @@ export async function listAds({ side, asset, pay_type, min_htg, business } = {})
   const where = [`a.status='ACTIVE'`, 'a.remaining > 0', 'u.banned = false', '(u.suspended_until IS NULL OR u.suspended_until < now())'];
   const args = [];
   const add = (sql, v) => { args.push(v); where.push(sql.replace('?', '$' + args.length)); };
+  if (side && !['SELL', 'BUY'].includes(side)) side = 'SELL';
   if (side) add('a.side = ?', side);
-  if (asset) add('a.asset = ?', asset);
-  if (pay_type) add('? = ANY(a.pay_types)', pay_type);
-  if (min_htg) add('a.max_order_htg >= ?', min_htg);
+  if (asset && ['USDT', 'USDC'].includes(asset)) add('a.asset = ?', asset);
+  if (pay_type && ['MONCASH', 'NATCASH', 'BANK'].includes(pay_type)) add('? = ANY(a.pay_types)', pay_type);
+  if (min_htg && /^\d{1,12}(\.\d{1,2})?$/.test(String(min_htg))) add('a.max_order_htg >= ?', min_htg);
   if (business) where.push("u.business_status = 'APPROVED'"); // Commercial Sellers only
   // Best price first: buyers want the lowest SELL price, sellers want the highest BUY price.
   const order = side === 'BUY' ? 'a.price_htg DESC' : 'a.price_htg ASC';

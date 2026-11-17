@@ -8,8 +8,9 @@ import { namesMatch } from './names.js';
 import { isMock, config } from '../config.js';
 import * as evm from '../escrow-evm.js';
 
-export async function signup({ phone, full_name, email = null }) {
+export async function signup({ phone, full_name, email = null, accept_terms = false }) {
   checkPhone(phone);
+  if (accept_terms !== true) throw bad('You must read and accept the Terms and Conditions to create an account.', 'TERMS');
   if (!full_name || full_name.trim().length < 3) throw bad('Enter your full name as on your ID.', 'NAME');
   return tx(async (c) => {
     if (await isBlocked(c, 'PHONE', phone)) throw forbidden('This phone is blocked.');
@@ -19,8 +20,8 @@ export async function signup({ phone, full_name, email = null }) {
     // Owner phones (ADMIN_PHONES) become ADMIN with full limits. They still must prove the phone with the SMS code.
     const isAdmin = config.adminPhones.includes(phone);
     if (email && (await c.query('SELECT 1 FROM users WHERE lower(email)=lower($1)', [email])).rowCount) throw conflict('This email is already used by another account.', 'EMAIL_USED');
-    const r = await c.query('INSERT INTO users (phone, full_name, role, tier, email) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0, email]);
+    const r = await c.query('INSERT INTO users (phone, full_name, role, tier, email, terms_version, terms_at) VALUES ($1,$2,$3,$4,$5,$6,now()) RETURNING *',
+      [phone, full_name.trim(), isAdmin ? 'ADMIN' : 'USER', isAdmin ? 3 : 0, email, config.termsVersion]);
     if (isAdmin) // owner accounts skip the ID queue: their ID check is approved right away
       await c.query(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','owner',$2,now())`, [r.rows[0].id, full_name.trim()]);
     await screenUser(c, r.rows[0].id, full_name);
@@ -38,14 +39,92 @@ export const publicUser = (u) => ({
   strikes: u.strikes, wallet_addr: u.wallet_addr,
   binance_uid: u.binance_uid || null, payout_network: u.payout_network || null, payout_addr: u.payout_addr || null,
   display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, email: u.email || null,
+  department: u.department || null, area: u.area || null, response_min: u.response_min || null,
+  terms_ok: u.terms_version === config.termsVersion,
 });
 
+export async function acceptTerms(user) {
+  await q('UPDATE users SET terms_version=$2, terms_at=now() WHERE id=$1', [user.id, config.termsVersion]);
+  return { ok: true };
+}
+
+// ---------- business profile ----------
+export const DEPARTMENTS = ['Ouest', 'Nord', 'Nord-Est', 'Nord-Ouest', 'Artibonite', 'Centre', 'Sud', 'Sud-Est', "Grand'Anse", 'Nippes', 'Diaspora'];
+export const RESPONSE_MINS = [5, 10, 15, 30, 60];
+const MAX_POSTERS = 6;
+
+function imageFrom(dataUrl, maxKb, what) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) throw bad(what + ' must be a JPG, PNG or WEBP image.');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > maxKb * 1024) throw bad(what + ' is too big.');
+  return { buf, mime: m[1] };
+}
+
+export async function addPoster(user, { image }) {
+  const { buf, mime } = imageFrom(image, 600, 'Poster');
+  const n = Number((await q('SELECT COUNT(*) FROM user_photos WHERE user_id=$1', [user.id])).rows[0].count);
+  if (n >= MAX_POSTERS) throw conflict(`You can show up to ${MAX_POSTERS} posters. Remove one first.`, 'MAX');
+  const r = await q('INSERT INTO user_photos (user_id, mime, size, data) VALUES ($1,$2,$3,$4) RETURNING id', [user.id, mime, buf.length, buf]);
+  return { id: r.rows[0].id };
+}
+export async function removePoster(user, id) {
+  const r = await q('DELETE FROM user_photos WHERE id=$1 AND user_id=$2', [id, user.id]);
+  if (!r.rowCount) throw notFound();
+  return { ok: true };
+}
+export async function getPoster(id) {
+  return (await q('SELECT mime, data FROM user_photos WHERE id=$1', [id])).rows[0];
+}
+
+// Real numbers only. Used on ads, the public profile and order pages.
+export const STATS_SQL = (u) => `
+  (SELECT COUNT(*)::int FROM orders o WHERE (o.seller_id=${u}.id OR o.buyer_id=${u}.id) AND o.state='COMPLETED') AS trades,
+  (SELECT COALESCE(ROUND(SUM(o.amount))::int, 0) FROM orders o WHERE (o.seller_id=${u}.id OR o.buyer_id=${u}.id) AND o.state='COMPLETED') AS volume,
+  (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=${u}.id) AS rating,
+  (SELECT COUNT(*)::int FROM ratings WHERE rated_id=${u}.id) AS ratings_count,
+  EXISTS (SELECT 1 FROM kyc k WHERE k.user_id=${u}.id AND k.status='APPROVED') AS id_verified,
+  (SELECT CASE WHEN good + bad = 0 THEN NULL ELSE ROUND(100.0 * good / (good + bad))::int END FROM (
+     SELECT COUNT(*) FILTER (WHERE o.state='COMPLETED' AND NOT (o.seller_id=${u}.id AND COALESCE(d.status::text,'')='RESOLVED_BUYER')) AS good,
+            COUNT(*) FILTER (WHERE (o.seller_id=${u}.id AND d.status='RESOLVED_BUYER') OR (o.buyer_id=${u}.id AND d.status='RESOLVED_SELLER')
+                                OR (o.buyer_id=${u}.id AND d.id IS NULL AND o.state IN ('REFUNDED','CANCELLED_TIMEOUT'))) AS bad
+       FROM orders o LEFT JOIN disputes d ON d.order_id=o.id
+      WHERE (o.seller_id=${u}.id OR o.buyer_id=${u}.id) AND o.state IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT')) x) AS completion_pct,
+  (SELECT ROUND(AVG(EXTRACT(EPOCH FROM (c.created_at - p.created_at)) / 60))::int
+     FROM orders o JOIN order_events p ON p.order_id=o.id AND p.to_state='PAID_CLAIMED'
+                   JOIN order_events c ON c.order_id=o.id AND c.to_state='COMPLETED'
+    WHERE o.seller_id=${u}.id) AS avg_release_min,
+  (SELECT COUNT(*)::int FROM disputes d JOIN orders o ON o.id=d.order_id WHERE o.seller_id=${u}.id OR o.buyer_id=${u}.id) AS disputes,
+  (SELECT COALESCE(array_agg(p.id ORDER BY p.created_at), '{}') FROM user_photos p WHERE p.user_id=${u}.id) AS posters`;
+
+// The public business page: anyone can look before they buy.
+export async function publicProfile(id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw notFound('Profile not found.');
+  const u = (await q(
+    `SELECT u.id, COALESCE(u.display_name, u.full_name) AS name, (u.display_name IS NOT NULL) AS is_business, u.bio, u.department, u.area, u.response_min,
+            (u.avatar_mime IS NOT NULL) AS has_avatar, u.created_at AS member_since, ${STATS_SQL('u')}
+       FROM users u WHERE u.id=$1 AND u.banned=false AND u.closed_at IS NULL`, [id])).rows[0];
+  if (!u) throw notFound('Profile not found.');
+  const [reviews, ads] = await Promise.all([
+    q(`SELECT r.stars, r.comment, r.created_at, COALESCE(x.display_name, split_part(x.full_name, ' ', 1)) AS by_name
+         FROM ratings r JOIN users x ON x.id=r.rater_id WHERE r.rated_id=$1 ORDER BY r.created_at DESC LIMIT 12`, [id]),
+    q(`SELECT id, side, asset, price_htg, remaining, min_order_htg, max_order_htg, pay_type, pay_types FROM ads
+        WHERE user_id=$1 AND status='ACTIVE' AND remaining > 0 ORDER BY created_at DESC`, [id]),
+  ]);
+  return { ...u, reviews: reviews.rows, ads: ads.rows };
+}
+
 const NO_CONTACT = /(https?:|www\.|@|\+?\d[\d\s().-]{6,}\d)/i;
-export async function setProfile(user, { display_name, bio, avatar }) {
-  const dn = String(display_name ?? '').trim(), b = String(bio ?? '').trim();
+export async function setProfile(user, { display_name, bio, avatar, department, area, response_min }) {
+  const dn = String(display_name ?? '').trim(), b = String(bio ?? '').trim(), ar = String(area ?? '').trim();
   if (dn && (dn.length < 2 || dn.length > 40)) throw bad('Public name must be 2 to 40 letters.');
-  if (b.length > 160) throw bad('About text is too long (max 160).');
-  if (NO_CONTACT.test(dn) || NO_CONTACT.test(b)) throw bad('No links, emails or phone numbers in your profile. Keep trades in the app.');
+  if (b.length > 300) throw bad('About text is too long (max 300).');
+  if (ar.length > 60) throw bad('Area is too long (max 60).');
+  if (NO_CONTACT.test(dn) || NO_CONTACT.test(b) || NO_CONTACT.test(ar)) throw bad('No links, emails or phone numbers in your profile. Keep trades in the app.');
+  const dep = department ? String(department) : null;
+  if (dep && !DEPARTMENTS.includes(dep)) throw bad('Pick your department from the list.');
+  const rm = response_min == null || response_min === '' ? null : Number(response_min);
+  if (rm != null && !RESPONSE_MINS.includes(rm)) throw bad('Pick a response time from the list.');
   let buf = null, mime = null;
   if (avatar) {
     const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(avatar));
@@ -55,7 +134,7 @@ export async function setProfile(user, { display_name, bio, avatar }) {
   }
   if (avatar === null) await q('UPDATE users SET avatar=NULL, avatar_mime=NULL WHERE id=$1', [user.id]);
   else if (buf) await q('UPDATE users SET avatar=$2, avatar_mime=$3 WHERE id=$1', [user.id, buf, mime]);
-  await q('UPDATE users SET display_name=$2, bio=$3 WHERE id=$1', [user.id, dn || null, b || null]);
+  await q('UPDATE users SET display_name=$2, bio=$3, department=$4, area=$5, response_min=$6 WHERE id=$1', [user.id, dn || null, b || null, dep, ar || null, rm]);
   return { ok: true };
 }
 export async function getAvatar(id) {

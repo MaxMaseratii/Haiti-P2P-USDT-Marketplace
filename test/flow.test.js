@@ -13,6 +13,7 @@ process.env.ESCROW_MODE = 'MOCK';
 process.env.DUAL_AGENT_HTG = '1000';      // every test order needs two agents
 process.env.WORKER_INTERVAL_SEC = '3600';
 process.env.FEE_RATE = '0.005';
+process.env.DISPUTE_WAIT_MIN = '0';   // tests open disputes right after "I paid"; one test below checks the wait
 process.env.LOCK_FEE_USDT = '0';   // one test below turns the buyer lock fee on
 process.env.API_RATE_LIMIT = '100000';
 process.env.ADMIN_PHONES = '+50937000777';
@@ -61,7 +62,7 @@ after(async () => {
 });
 
 async function signup(key, phone, name, role) {
-  const r = await ok('POST', '/auth/signup', { phone, full_name: name });
+  const r = await ok('POST', '/auth/signup', { accept_terms: true, phone, full_name: name });
   U[key] = { token: r.token, id: r.user.id, name };
   if (role) await pool.query('UPDATE users SET role=$2, tier=3 WHERE id=$1', [U[key].id, role]);
 }
@@ -89,7 +90,7 @@ test('setup: users, ID checks, payment accounts, balances, a sell ad', async () 
   await signup('buyer', '+50937000002', 'Marie Buyer');
 
   // Haiti only
-  assert.equal((await call('POST', '/auth/signup', { phone: '+963944123456', full_name: 'Sanctioned Country' })).status, 403);
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+963944123456', full_name: 'Sanctioned Country' })).status, 403);
   // not allowed to trade before ID check
   assert.equal((await call('POST', '/ads', { side: 'BUY' }, tk('buyer'))).status, 403);
 
@@ -257,7 +258,7 @@ test('dispute: agents disagree, admin settles. Seller wins. Fake proof bans the 
   assert.equal((await call('GET', '/me', null, tk('buyer'))).status, 403);
   const bl = (await pool.query(`SELECT kind FROM blocklist ORDER BY kind`)).rows.map((r) => r.kind);
   assert.ok(bl.includes('PHONE') && bl.includes('PAY_ACCOUNT'));
-  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000002', full_name: 'Marie Buyer' })).status, 403, 'blocked phone cannot come back');
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+50937000002', full_name: 'Marie Buyer' })).status, 403, 'blocked phone cannot come back');
   assert.equal((await ad(adId)).remaining, '80.000000');
 });
 
@@ -325,7 +326,7 @@ test('real SMS codes: send, expire, one use, wrong tries, rate limit', async () 
   try {
     const phone = '+50938111222';
     // no code asked yet
-    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Sms User', code: '000000' })).status, 400);
+    assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone, full_name: 'Sms User', code: '000000' })).status, 400);
     await ok('POST', '/auth/request-code', { phone });
     assert.equal(sent.length, 1);
     const code = sent[0].text.match(/\b(\d{6})\b/)[1];
@@ -333,8 +334,8 @@ test('real SMS codes: send, expire, one use, wrong tries, rate limit', async () 
     // asking again right away is refused
     assert.equal((await call('POST', '/auth/request-code', { phone })).status, 429);
     // wrong code, then the right one
-    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Sms User', code: code === '123456' ? '654321' : '123456' })).status, 400);
-    const r = await ok('POST', '/auth/signup', { phone, full_name: 'Sms User', code });
+    assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone, full_name: 'Sms User', code: code === '123456' ? '654321' : '123456' })).status, 400);
+    const r = await ok('POST', '/auth/signup', { accept_terms: true, phone, full_name: 'Sms User', code });
     assert.ok(r.token);
     // the same code cannot be used twice
     assert.equal((await call('POST', '/auth/login', { phone, code })).status, 400);
@@ -342,7 +343,7 @@ test('real SMS codes: send, expire, one use, wrong tries, rate limit', async () 
     await ok('POST', '/auth/request-code', { phone: '+50938111333' }); // different phone, no limit hit
     const c2 = sent.at(-1).text.match(/\b(\d{6})\b/)[1];
     await pool.query(`UPDATE otp_codes SET expires_at = now() - interval '1 second' WHERE phone='+50938111333'`);
-    assert.equal((await call('POST', '/auth/signup', { phone: '+50938111333', full_name: 'Late User', code: c2 })).status, 400);
+    assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+50938111333', full_name: 'Late User', code: c2 })).status, 400);
     // too many wrong tries kills the code, even the right one
     await pool.query(`DELETE FROM otp_codes WHERE phone=$1`, [phone]);
     await ok('POST', '/auth/request-code', { phone });
@@ -406,9 +407,9 @@ test('payout: Binance UID and wallet address are checked per network', async () 
 
 test('test mode: owner and staff phones cannot log in with the public code 000000', async () => {
   // owner signup needs the secret code
-  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person' })).status, 400);
-  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person', code: '000000' })).status, 400);
-  const o = await ok('POST', '/auth/signup', { phone: '+50937000777', full_name: 'Owner Person', code: '482913' });
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+50937000777', full_name: 'Owner Person' })).status, 400);
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+50937000777', full_name: 'Owner Person', code: '000000' })).status, 400);
+  const o = await ok('POST', '/auth/signup', { accept_terms: true, phone: '+50937000777', full_name: 'Owner Person', code: '482913' });
   assert.equal(o.user.role, 'ADMIN');
   assert.equal((await call('POST', '/auth/login', { phone: '+50937000777', code: '000000' })).status, 400);
   await ok('POST', '/auth/login', { phone: '+50937000777', code: '482913' });
@@ -498,10 +499,10 @@ test('ID check: needs the right files, a real ID type, and staff can see the vid
 });
 
 test('sign up from any country, but not from fully sanctioned ones', async () => {
-  const r = await call('POST', '/auth/signup', { phone: '+13055550123', full_name: 'Marie Diaspora', code: '000000' });
+  const r = await call('POST', '/auth/signup', { accept_terms: true, phone: '+13055550123', full_name: 'Marie Diaspora', code: '000000' });
   assert.equal(r.status, 200);
-  assert.equal((await call('POST', '/auth/signup', { phone: '+989121234567', full_name: 'Blocked Person', code: '000000' })).status, 403);
-  assert.equal((await call('POST', '/auth/signup', { phone: '+5093700', full_name: 'Short Number', code: '000000' })).status, 400);
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+989121234567', full_name: 'Blocked Person', code: '000000' })).status, 403);
+  assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone: '+5093700', full_name: 'Short Number', code: '000000' })).status, 400);
 });
 
 test('linked accounts: the other person registers, passes ID, accepts; they confirm the money; the trader pays a monthly fee', async () => {
@@ -600,8 +601,8 @@ test('email codes (Brevo): sign up with email, log in by phone, code goes to the
     assert.equal(r.to, 'ro***@gmail.com');
     assert.equal(mails[0].to, 'rose.pierre@gmail.com');
     const code = mails[0].text.match(/\b(\d{6})\b/)[1];
-    assert.equal((await call('POST', '/auth/signup', { phone, full_name: 'Rose Pierre', code: '000000' })).status, 400, 'no 000000 in email mode');
-    const s = await ok('POST', '/auth/signup', { phone, full_name: 'Rose Pierre', code });
+    assert.equal((await call('POST', '/auth/signup', { accept_terms: true, phone, full_name: 'Rose Pierre', code: '000000' })).status, 400, 'no 000000 in email mode');
+    const s = await ok('POST', '/auth/signup', { accept_terms: true, phone, full_name: 'Rose Pierre', code });
     assert.equal(s.user.email, 'rose.pierre@gmail.com');
     // log in later: only the phone, the code goes to the saved email (a different typed email is ignored)
     await pool.query("UPDATE otp_codes SET created_at = now() - interval '5 minutes' WHERE phone=$1", [phone]);
@@ -614,4 +615,87 @@ test('email codes (Brevo): sign up with email, log in by phone, code goes to the
     assert.equal((await call('POST', '/auth/request-code', { phone: '+50938444556', email: 'rose.pierre@gmail.com' })).status, 400);
     assert.equal((await ok('GET', '/config')).code_channel, 'email');
   } finally { config.smsProvider = 'mock'; setMailer(null); }
+});
+
+test('terms: sign-up needs "I accept"; business profile, posters and the public page', async () => {
+  assert.equal((await call('POST', '/auth/signup', { phone: '+50937000601', full_name: 'Paul Nottermes' })).status, 400, 'no terms, no account');
+  await signup('bp', '+50937000601', 'Paul Biznis'); await kyc('bp');
+  const me = await ok('GET', '/me', null, tk('bp'));
+  assert.equal(me.user.terms_ok, true);
+  await pool.query(`UPDATE users SET terms_version='old' WHERE id=$1`, [U.bp.id]);
+  assert.equal((await ok('GET', '/me', null, tk('bp'))).user.terms_ok, false);
+  await ok('POST', '/me/accept-terms', null, tk('bp'));
+  assert.equal((await ok('GET', '/me', null, tk('bp'))).user.terms_ok, true);
+  assert.equal((await call('PUT', '/me/profile', { display_name: 'Paul Cambio', department: 'Mars', response_min: 5 }, tk('bp'))).status, 400, 'unknown department');
+  assert.equal((await call('PUT', '/me/profile', { display_name: 'Paul Cambio', area: 'call 3712 3456', department: 'Ouest' }, tk('bp'))).status, 400, 'no phone numbers');
+  await ok('PUT', '/me/profile', { display_name: 'Paul Cambio', bio: 'Fast and honest. 7 days a week.', department: 'Ouest', area: 'Delmas 33', response_min: 10 }, tk('bp'));
+  const img = 'data:image/png;base64,' + PNG.toString('base64');
+  const p1 = await ok('POST', '/me/posters', { image: img }, tk('bp'));
+  for (let i = 0; i < 5; i++) await ok('POST', '/me/posters', { image: img }, tk('bp'));
+  assert.equal((await call('POST', '/me/posters', { image: img }, tk('bp'))).status, 409, 'max 6 posters');
+  await ok('DELETE', `/me/posters/${p1.id}`, null, tk('bp'));
+  const pub = await call('GET', `/public/profile/${U.bp.id}`);
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.name, 'Paul Cambio');
+  assert.equal(pub.body.department, 'Ouest'); assert.equal(pub.body.area, 'Delmas 33'); assert.equal(pub.body.response_min, 10);
+  assert.equal(pub.body.id_verified, true); assert.equal(pub.body.posters.length, 5);
+  assert.ok(!('phone' in pub.body) && !('full_name' in pub.body), 'no private data on the public page');
+  const poster = await fetch(url + '/api/public/poster/' + pub.body.posters[0]);
+  assert.equal(poster.status, 200); assert.equal(poster.headers.get('content-type'), 'image/png');
+  // a personal (non-business) profile shows a short name only
+  await signup('pp', '+50937000602', 'Marie Claire Joseph');
+  const pb = await ok('GET', `/public/profile/${U.pp.id}`);
+  assert.equal(pb.name, 'Marie J.');
+  assert.match(pb.name, /^\S+ \S\.$/);
+});
+
+test('payment delays: wait before a dispute, seller "not arrived yet" hold, provider outage, seller ETA, review comment, report', async () => {
+  const { config } = await import('../src/config.js');
+  await signup('dS', '+50937000701', 'Rene Vandè'); await signup('dB', '+50937000702', 'Lise Achtè');
+  await kyc('dS'); await kyc('dB');
+  const pm = await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Rene Vandè', account_ref: '37300701' }, tk('dS'));
+  await ok('POST', '/payment-methods', { type: 'MONCASH', account_name: 'Lise Achtè', account_ref: '37300702' }, tk('dB'));
+  await ok('POST', '/wallet/dev-deposit', { asset: 'USDT', amount: '100' }, tk('dS'));
+  const a = await ok('POST', '/ads', { side: 'SELL', pay_type: 'MONCASH', price_htg: '140', amount: '50', min_order_htg: '500', max_order_htg: '10000', payment_method_id: pm.id }, tk('dS'));
+  const o = await ok('POST', '/orders', { ad_id: a.id, amount: '10' }, tk('dB'));
+  // seller says how fast they will check
+  assert.equal((await call('POST', `/orders/${o.id}/eta`, { minutes: 7 }, tk('dS'))).status, 400);
+  assert.equal((await call('POST', `/orders/${o.id}/eta`, { minutes: 10 }, tk('dB'))).status, 403, 'only the seller');
+  await ok('POST', `/orders/${o.id}/eta`, { minutes: 10 }, tk('dS'));
+  assert.equal((await order(o.id)).seller_eta_min, 10);
+  await ok('POST', `/orders/${o.id}/paid`, null, tk('dB'));
+  config.disputeWaitMin = 20;
+  try {
+    const r = await call('POST', `/orders/${o.id}/dispute`, { reason: 'I paid but nothing happened' }, tk('dB'));
+    assert.equal(r.status, 409); assert.equal(r.body.code, 'TOO_SOON');
+  } finally { config.disputeWaitMin = 0; }
+  // seller: money not in my account yet -> more time, and no dispute during the hold
+  assert.equal((await call('POST', `/orders/${o.id}/delay`, null, tk('dB'))).status, 403);
+  const d = await ok('POST', `/orders/${o.id}/delay`, null, tk('dS'));
+  assert.ok(new Date(d.delay_until) > new Date(Date.now() + 100 * 60000));
+  const held = await call('POST', `/orders/${o.id}/dispute`, { reason: 'Seller is lying to me' }, tk('dB'));
+  assert.equal(held.body.code, 'DELAY_HOLD');
+  // the hold is capped at DELAY_MAX_HOURS after "I paid"
+  await pool.query(`UPDATE orders SET paid_at = now() - interval '24 hours', delay_until = now() - interval '1 minute' WHERE id=$1`, [o.id]);
+  assert.equal((await call('POST', `/orders/${o.id}/delay`, null, tk('dS'))).body.code, 'DELAY_MAX');
+  // MonCash outage: disputes wait, and the "seller silent" timer does not open one
+  await ok('POST', '/admin/providers', { provider: 'MONCASH', down: true, note: 'MonCash delays today' }, tk('admin'));
+  assert.equal((await ok('GET', '/config')).provider_alerts[0].provider, 'MONCASH');
+  assert.equal((await call('POST', `/orders/${o.id}/dispute`, { reason: 'Seller is lying to me' }, tk('dB'))).body.code, 'PROVIDER_DOWN');
+  await pool.query(`UPDATE orders SET state_deadline = now() - interval '1 minute' WHERE id=$1`, [o.id]);
+  await ok('POST', '/admin/run-timers', null, tk('admin'));
+  assert.equal((await order(o.id)).state, 'PAID_CLAIMED', 'no automatic dispute during an outage');
+  assert.equal((await ok('GET', `/orders/${o.id}`, null, tk('dB'))).provider_down, true);
+  await ok('POST', '/admin/providers', { provider: 'MONCASH', down: false }, tk('admin'));
+  assert.equal((await ok('GET', '/config')).provider_alerts.length, 0);
+  // money arrived: finish, review with a comment, then report a reversal
+  await ok('POST', `/orders/${o.id}/confirm`, null, tk('dS'));
+  assert.equal((await call('POST', `/orders/${o.id}/rate`, { stars: 5, comment: 'call me 3712 3456' }, tk('dB'))).status, 400);
+  await ok('POST', `/orders/${o.id}/rate`, { stars: 5, comment: 'Fast and honest seller' }, tk('dB'));
+  const prof = await ok('GET', `/public/profile/${U.dS.id}`);
+  assert.equal(prof.reviews[0].comment, 'Fast and honest seller'); assert.equal(prof.trades, 1); assert.equal(prof.ads.length, 1);
+  await ok('POST', `/orders/${o.id}/report`, { kind: 'REVERSED', note: 'MonCash sent the money back to the buyer' }, tk('dS'));
+  const reps = await ok('GET', '/admin/reports', null, tk('admin'));
+  assert.equal(reps[0].kind, 'REVERSED');
+  await ok('POST', `/admin/reports/${reps[0].id}/close`, null, tk('admin'));
 });

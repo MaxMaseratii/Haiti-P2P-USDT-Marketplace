@@ -57,13 +57,21 @@ async function route() {
   const app = h('div', { class: 'view' }); $('#app').replaceChildren(app);
   if (!cfg.escrow_mode) cfg = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   const ban = $('#banner');
-  ban.hidden = true;
+  const alerts = cfg.provider_alerts || [];
+  ban.hidden = !alerts.length;
+  if (alerts.length) ban.textContent = '⚠️ ' + alerts.map((x) => PAY_NAME[x.provider] || x.provider).join(', ') + ': ' + t('known problem right now. Payments can arrive late. Disputes wait, and your crypto stays locked.') + (alerts[0].note ? ' ' + alerts[0].note : '');
   if (location.hash.startsWith('#legal')) { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return legalView(app, location.hash.split('/')[1]); }
   if (location.hash === '#welcome') { if (token && !me) { try { me = await api('GET', '/me'); } catch {} } renderNav(); return authView(app); } // the public home page, also for logged-in people
+  if (location.hash.startsWith('#u/')) { // public business profile: works logged in or not
+    if (token && !me) { try { me = await api('GET', '/me'); } catch {} }
+    renderNav();
+    try { return await publicProfileView(app, location.hash.split('/')[1]); } catch (e) { return app.append(h('div', { class: 'card' }, h('p', {}, e.message))); }
+  }
   if (!token && location.hash === '#safety') { renderNav(); return safetyView(app); }
   if (!token) { renderNav(); return authView(app); }
   try { const m = await api('GET', '/me'); me = m; } catch { return; }
   renderNav();
+  if (me.user.terms_ok === false && !document.querySelector('.terms-gate')) termsGate();
   const [view, arg] = (location.hash.slice(1) || 'home').split('/');
   const views = { market: marketView, ads: adsView, orders: ordersView, order: orderView, wallet: walletView, profile: profileView, staff: staffView, admin: adminView, dispute: disputeView, safety: safetyView, linked: linkedView, home: accountHome };
   try { await (views[view] || marketView)(app, arg); } catch (e) { toast(e.message, true); }
@@ -93,19 +101,43 @@ function authView(app) {
   const email = h('input', { type: 'email', placeholder: 'you@gmail.com', autocomplete: 'email' });
   const code = h('input', { placeholder: byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
+  const clean = () => phone.value.replace(/[\s()\-.]/g, '');
+  let mode = 'signup';
+  const agree = h('input', { type: 'checkbox', class: 'chk' });
+  const agreeBox = h('label', { class: 'agree' }, agree, h('span', {}, 'I am 18 or older. I read and accept the ', h('a', { href: '#legal/terms', target: '_blank' }, 'Terms and Conditions'), ' and the ', h('a', { href: '#legal/privacy', target: '_blank' }, 'Privacy Policy'),
+    '. I understand Ayiti P2P is only a facilitator: I pay and receive gourdes directly with the other person, and I only pay inside an order after the crypto is locked.'));
+  const sendCode = h('button', { class: 'btn alt', type: 'button', onclick: act(async () => {
+    if (mode === 'signup' && !agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
+    const r = await api('POST', '/auth/request-code', { phone: clean(), email: byEmail && mode === 'signup' ? email.value.trim() || undefined : undefined });
+    toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+    code.focus();
+  }) }, 'Send code');
+  const goBtn = h('button', { class: 'btn big-btn', type: 'button', onclick: act(async () => {
+    if (mode === 'signup') {
+      if (!agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
+      done(await api('POST', '/auth/signup', { phone: clean(), full_name: name.value, code: code.value.trim() || undefined, accept_terms: true }));
+    } else done(await api('POST', '/auth/login', { phone: clean(), code: code.value.trim() }));
+  }) });
+  const fName = h('div', {}, h('label', {}, 'Full name (as on your ID)'), name);
+  const fEmail = byEmail ? h('div', {}, h('label', {}, 'Email. Your code goes there.'), email) : null;
+  const note = h('p', { class: 'mute small' });
+  const tabS = h('button', { type: 'button' }, 'Create account'), tabL = h('button', { type: 'button' }, 'Log in');
+  const paint = () => {
+    const su = mode === 'signup';
+    tabS.classList.toggle('on', su); tabL.classList.toggle('on', !su);
+    fName.classList.toggle('hidden', !su); fEmail && fEmail.classList.toggle('hidden', !su); agreeBox.classList.toggle('hidden', !su);
+    goBtn.textContent = t(su ? 'Create my free account' : 'Log in');
+    note.textContent = su ? (byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video, right in the app.' : 'We send a code by SMS. Then you verify your ID with photos and a short video, right in the app.')
+      : (byEmail ? 'Enter your phone. The code goes to the email on your account.' : 'Enter your phone. We send you a code by SMS.');
+  };
+  tabS.onclick = () => { mode = 'signup'; paint(); }; tabL.onclick = () => { mode = 'login'; paint(); };
   const loginCard = h('div', { class: 'card logincard' },
-    h('h2', {}, 'Log in / Sign up'),
+    h('div', { class: 'authtabs' }, tabS, tabL),
     h('label', {}, 'Phone (with country code)'), phone,
-    h('label', {}, 'Full name (as on your ID) — sign up only'), name,
-    byEmail ? h('label', {}, 'Email — sign up only. Your code goes there.') : null, byEmail ? email : null,
-    h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, h('button', { class: 'btn alt', onclick: act(async () => {
-      const r = await api('POST', '/auth/request-code', { phone: phone.value.replace(/[\s()\-.]/g, ''), email: byEmail ? email.value.trim() || undefined : undefined });
-      toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
-    }) }, 'Send code')),
-    h('div', { class: 'gactions', style: 'margin-top:12px' },
-      h('button', { class: 'btn', onclick: act(async () => done(await api('POST', '/auth/signup', { phone: phone.value.replace(/[\s()\-.]/g, ''), full_name: name.value, code: code.value.trim() || undefined }))) }, t('Sign up')),
-      h('button', { class: 'btn alt', onclick: act(async () => done(await api('POST', '/auth/login', { phone: phone.value.replace(/[\s()\-.]/g, ''), code: code.value.trim() }))) }, t('Log in'))),
-    h('p', { class: 'mute', style: 'margin:10px 0 0;font-size:12.5px' }, byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video.' : 'We send a code by SMS to confirm your phone. Then you verify your ID with photos and a short video.'));
+    fName, fEmail, agreeBox,
+    h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, sendCode),
+    goBtn, note);
+  paint();
   const adsBox = h('div');
   // Logged in and looking at the public home page: show a way back to the account instead of the login form.
   const card = token && me ? h('div', { class: 'card logincard' }, h('h2', {}, (me.user.display_name || me.user.full_name).split(' ')[0] + ' 👋'),
@@ -146,8 +178,8 @@ async function marketView(app) {
     if (pay.value) qs.set('pay_type', pay.value);
     const ads = await api('GET', '/ads?' + qs);
     box.replaceChildren(ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
-      h('div', { class: 'who' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
-        h('div', {}, h('strong', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a)), repBadges(a))),
+      h('div', { class: 'who link', title: 'See profile', onclick: () => go('u/' + a.owner_id) }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
+        h('div', {}, h('strong', {}, a.owner_name, a.id_verified ? h('span', { class: 'vtick', title: 'ID verified' }, '✓') : null), h('div', { class: 'mute' }, whoLine(a), ' · ', h('span', { class: 'plink' }, 'See profile ›')), repBadges(a))),
       h('div', {}, h('div', { class: 'lab' }, t('Price')), h('div', { class: 'price' }, money(a.price_htg), h('small', {}, ' HTG'))),
       h('div', {}, h('div', { class: 'lab' }, 'Available · Limits'),
         h('div', {}, usd(a.remaining) + ' ' + a.asset, h('span', { class: 'mute' }, ` ≈ ${money(Number(a.remaining) * Number(a.price_htg), 0)} HTG`)),
@@ -161,21 +193,84 @@ async function marketView(app) {
     h('div', { class: 'seg' },
       h('button', { class: 'buy' + (marketSide === 'SELL' ? ' on' : ''), onclick: () => { marketSide = 'SELL'; route(); } }, t('Buy USDT')),
       h('button', { class: 'sell' + (marketSide === 'BUY' ? ' on' : ''), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
-    h('div', { class: 'row' }, asset, pay), box));
+    h('div', { class: 'row' }, asset, pay), scamRule(true), box));
   load();
 }
 
 // Trust badges for a trader. Real numbers only: a new trader is shown as new, never with a made-up score.
-function repBadges(a) {
+function repBadges(a, noLoc) {
   const out = [];
+  const trades = a.trades || 0, pct = a.completion_pct;
+  if (trades >= 50 && pct >= 97) out.push(h('span', { class: 'badge top' }, '🏆 Top seller'));
+  else if (trades >= 10 && pct >= 95) out.push(h('span', { class: 'badge top' }, '⭐ Trusted trader'));
+  if (a.id_verified) out.push(h('span', { class: 'badge ok' }, '✓ ID verified'));
   if (a.is_business) out.push(h('span', { class: 'badge' }, '🏢 Business'));
-  if (a.id_verified) out.push(h('span', { class: 'badge ok' }, '✓ ID checked'));
-  if (a.trades > 0 && a.completion_pct != null) out.push(h('span', { class: 'badge' }, a.completion_pct + '% completed'));
+  if ((a.response_min && a.response_min <= 10) || (a.avg_release_min != null && a.avg_release_min <= 10)) out.push(h('span', { class: 'badge fast' }, '⚡ Fast'));
+  if (trades > 0 && pct != null) out.push(h('span', { class: 'badge' }, pct + '% completed'));
   if (a.avg_release_min != null) out.push(h('span', { class: 'badge' }, '⏱ releases in ~' + (a.avg_release_min < 1 ? '1' : a.avg_release_min) + ' min'));
-  if (!a.trades) out.push(h('span', { class: 'badge new' }, 'New trader'));
+  else if (a.response_min) out.push(h('span', { class: 'badge' }, '⏱ replies in ~' + a.response_min + ' min'));
+  if (a.department && !noLoc) out.push(h('span', { class: 'badge loc' }, '📍 ' + (a.area ? a.area + ', ' : '') + a.department));
+  if (!trades) out.push(h('span', { class: 'badge new' }, 'New trader'));
   return h('div', { class: 'badges' }, out);
 }
 const whoLine = (a) => `${a.trades} trade${a.trades === 1 ? '' : 's'}` + (a.rating ? ` · ${a.rating}★` : '');
+
+// The golden rule. Shown on the market, before buying, and on the order page.
+function scamRule(compact) {
+  return h('div', { class: 'scamrule' + (compact ? ' sm' : '') }, h('div', { class: 'sr-ic' }, '🛡️'),
+    h('div', {}, h('b', {}, 'Buy only from people selling on Ayiti P2P.'),
+      h('span', {}, ' Someone who really has USDT or USDC will lock it here. Never send your hard-earned money to anyone outside an order. Pay only after the app shows the crypto is locked.')));
+}
+
+// ---------- public business profile: anyone can check a trader before buying ----------
+const SLA = (n) => n < 60 ? n + ' min' : (n / 60) + ' h';
+function lightbox(src) {
+  const back = h('div', { class: 'modal-back lb', onclick: () => back.remove() }, h('img', { src, alt: '' }), h('button', { class: 'lbx', onclick: () => back.remove() }, '✕'));
+  document.body.append(back);
+}
+async function publicProfileView(app, id) {
+  const p = await api('GET', '/public/profile/' + id);
+  const mine = me && me.user.id === p.id;
+  const since = new Date(p.member_since).toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const stat = (big, lab) => h('div', { class: 'pst' }, h('b', {}, big), h('span', {}, lab));
+  const stars = (n) => '★★★★★'.slice(0, Math.round(n)) + '☆☆☆☆☆'.slice(0, 5 - Math.round(n));
+  const adRow = (ad) => {
+    const full = { ...ad, owner_id: p.id, owner_name: p.name, has_avatar: p.has_avatar, bio: p.bio, member_since: p.member_since, trades: p.trades, rating: p.rating,
+      completion_pct: p.completion_pct, avg_release_min: p.avg_release_min, id_verified: p.id_verified, is_business: p.is_business, department: p.department, area: p.area, response_min: p.response_min };
+    return h('div', { class: 'pad' },
+      h('div', {}, h('div', { class: 'lab' }, ad.side === 'SELL' ? t('Sells') : t('Buys')), h('div', { class: 'price' }, money(ad.price_htg), h('small', {}, ' HTG'))),
+      h('div', {}, h('div', {}, usd(ad.remaining) + ' ' + ad.asset), h('div', { class: 'mute' }, `${money(ad.min_order_htg, 0)} – ${money(ad.max_order_htg, 0)} HTG`), payChips(ad)),
+      mine ? h('span', { class: 'mute' }, 'your ad') : token && me ? h('button', { class: 'btn sm ' + (ad.side === 'SELL' ? 'good' : 'danger'), onclick: () => takeAd(full) }, ad.side === 'SELL' ? t('Buy USDT') : t('Sell USDT'))
+        : h('button', { class: 'btn sm good', onclick: () => go('welcome') }, t('Create my free account')));
+  };
+  app.append(h('div', { class: 'pprof' },
+    h('div', { class: 'back', onclick: () => history.length > 1 ? history.back() : go('market') }, '← ' + t('Back')),
+    h('div', { class: 'card pp-head' },
+      h('div', { class: 'pp-av' }, avatarEl(p.id, p.name, p.has_avatar, 'xl'), p.id_verified ? h('span', { class: 'pp-tick', title: 'ID verified' }, '✓') : null),
+      h('div', { class: 'pp-id' },
+        h('h1', {}, p.name),
+        repBadges(p, true),
+        h('div', { class: 'pp-meta' },
+          p.department ? h('span', {}, '📍 ' + (p.area ? p.area + ', ' : '') + p.department) : null,
+          p.response_min ? h('span', {}, '⏱ ' + t('Replies in about') + ' ' + SLA(p.response_min)) : null,
+          h('span', {}, '📅 ' + t('Member since') + ' ' + since)),
+        p.bio ? h('p', { class: 'pp-bio' }, p.bio) : null,
+        mine ? h('button', { class: 'btn alt sm', onclick: () => go('profile') }, '✏️ ' + t('Edit my profile')) : null)),
+    h('div', { class: 'pst-grid' },
+      stat(p.trades, t('Trades done')),
+      stat(p.completion_pct != null ? p.completion_pct + '%' : '—', t('Completion')),
+      stat(p.avg_release_min != null ? '~' + Math.max(1, p.avg_release_min) + ' min' : '—', t('Average release')),
+      stat(p.rating ? Number(p.rating).toFixed(1) + '★' : '—', `${p.ratings_count} ${t('reviews')}`),
+      stat(p.volume ? usd2(p.volume) : '0', t('USDT traded'))),
+    p.posters.length ? h('div', { class: 'card' }, h('h3', { class: 'ct' }, t('Business posters')),
+      h('div', { class: 'posters' }, p.posters.map((pid) => h('button', { class: 'poster', onclick: () => lightbox('/api/public/poster/' + pid) }, h('img', { src: '/api/public/poster/' + pid, alt: '', loading: 'lazy' }))))) : null,
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, t('Active ads')), p.ads.length ? h('div', { class: 'pads' }, p.ads.map(adRow)) : h('p', { class: 'mute' }, t('No active ads right now.'))),
+    scamRule(),
+    h('div', { class: 'card' }, h('h3', { class: 'ct' }, t('Reviews')), p.reviews.length ? h('div', { class: 'reviews' }, p.reviews.map((rv) => h('div', { class: 'rev' },
+      h('div', { class: 'rev-top' }, h('span', { class: 'stars' }, stars(rv.stars)), h('b', {}, rv.by_name), h('span', { class: 'mute' }, new Date(rv.created_at).toLocaleDateString())),
+      rv.comment ? h('p', {}, rv.comment) : null))) : h('p', { class: 'mute' }, t('No reviews yet. Reviews come from real, finished trades only.')))));
+}
+
 
 function safetyView(app) {
   const step = (n, title, text) => h('div', { class: 'sstep' }, h('div', { class: 'snum' }, n), h('div', {}, h('b', {}, title), h('div', { class: 'mute' }, text)));
@@ -193,8 +288,10 @@ function safetyView(app) {
       h('li', {}, 'If the seller goes quiet, a dispute opens automatically.'),
       h('li', {}, 'Every message and proof is kept, so staff can see what happened.'),
       h('li', {}, 'Fake proof or scams mean a ban.')),
+    scamRule(),
     h('h3', {}, 'Stay safe yourself'),
     h('ul', { class: 'rules' },
+      h('li', {}, 'MonCash or NatCash slow? A payment can show "sent" before it arrives, or come back later. Sellers: press "Not in my account yet" instead of fighting. Buyers: keep your SMS receipt and transaction number.'),
       h('li', {}, 'Never pay outside the order. Never share your PIN or password.'),
       h('li', {}, 'Sellers: never release because of a screenshot. Look at your own account.'),
       h('li', {}, 'Buyers: write the payment code in the note, and pay the exact amount.')),
@@ -287,7 +384,9 @@ function takeAd(a) {
   const body = [h('button', { class: 'back', onclick: route }, '← Back to market'),
     h('h2', {}, `${a.side === 'SELL' ? t('Buy USDT') : t('Sell USDT')} @ ${money(a.price_htg)} HTG`),
     h('div', { class: 'tcard' }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
-      h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), a.bio ? h('div', { class: 'bio' }, a.bio) : null, repBadges(a))),
+      h('div', {}, h('b', {}, a.owner_name), h('div', { class: 'mute' }, whoLine(a) + ' · member since ' + new Date(a.member_since).toLocaleDateString([], { month: 'short', year: 'numeric' })), a.bio ? h('div', { class: 'bio' }, a.bio) : null, repBadges(a),
+        h('a', { href: '#u/' + a.owner_id, class: 'plink' }, 'See full profile, posters and reviews ›'))),
+    scamRule(true),
     h('div', { class: 'kv' }, kv([['Available', `${usd(a.remaining)} ${a.asset}  (≈ ${money(Number(a.remaining) * P, 0)} HTG)`],
       ['Per order', `${money(minH, 0)} – ${money(Number(a.max_order_htg), 0)} HTG  (≈ ${usd2(minH / P)} – ${usd2(Number(a.max_order_htg) / P)} ${a.asset})`], [a.side === 'SELL' ? 'Seller accepts' : 'Buyer pays with', types.map((x) => PAY_NAME[x]).join(', ')]])),
     h('label', {}, 'How much?'), unitSeg, amount,
@@ -380,6 +479,22 @@ async function ordersView(app) {
       h('td', {}, new Date(o.created_at).toLocaleString()), h('td', {}, o.buyer_id === me.user.id ? t('Buyer') : t('Seller')),
       h('td', {}, usd(o.amount) + ' ' + o.asset), h('td', {}, money(o.total_htg)), h('td', {}, statePill(o.state, o.buyer_id === me.user.id ? 'BUYER' : 'SELLER')),
       h('td', {}, h('button', { class: 'btn alt', onclick: () => go('order/' + o.id) }, 'Open')))))) : h('p', { class: 'mute' }, 'No orders yet.')));
+}
+
+// New or changed terms: the person must accept them before using the app again. No way around it.
+function termsGate() {
+  const agree = h('input', { type: 'checkbox', class: 'chk' });
+  const back = h('div', { class: 'modal-back terms-gate' });
+  back.append(h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+    h('h2', {}, 'Our terms changed'), h('p', { class: 'mute' }, 'Please read and accept the Terms and Conditions to keep using Ayiti P2P.'),
+    h('p', {}, h('a', { href: '#legal/terms', target: '_blank' }, '📄 Read the Terms and Conditions'), ' · ', h('a', { href: '#legal/privacy', target: '_blank' }, 'Privacy Policy')),
+    h('label', { class: 'agree' }, agree, h('span', {}, 'I read and accept the Terms and Conditions. I understand Ayiti P2P is only a facilitator.')),
+    h('div', { class: 'modal-actions' }, h('button', { class: 'btn alt', onclick: logout }, t('Log out')),
+      h('button', { class: 'btn', onclick: act(async () => {
+        if (!agree.checked) throw new Error('Tick the box to accept.');
+        await api('POST', '/me/accept-terms'); back.remove(); me = await api('GET', '/me');
+      }) }, 'I accept'))));
+  document.body.append(back);
 }
 
 // Small pop-up window used instead of the browser's plain confirm/prompt boxes.
@@ -492,10 +607,71 @@ function openCancelWindow(v) {
     [{ label: 'Keep order' }, { label: 'Yes, cancel', cls: 'danger', run: async () => { await api('POST', `/orders/${v.order.id}/cancel`); route(); } }]);
 }
 
+// Seller: "I will check within X minutes". Buyer: sees the promise.
+function etaBox(v) {
+  const o = v.order;
+  if (!['AWAITING_PAYMENT', 'PAID_CLAIMED'].includes(o.state)) return null;
+  if (v.role === 'BUYER') return o.seller_eta_min ? h('div', { class: 'etabar' }, '⏱ ', h('b', {}, `The seller will check and release within ${SLA(o.seller_eta_min)}`), ' after you pay.') : null;
+  if (v.role !== 'SELLER') return null;
+  return h('div', { class: 'card etacard' }, h('b', {}, '⏱ Tell the buyer how fast you will check'), h('p', { class: 'mute small' }, 'Buyers feel safe when they know. Keep your promise: it builds your rating.'),
+    h('div', { class: 'chips' }, [5, 10, 15, 30, 60].map((m) => h('button', { class: 'chip' + (o.seller_eta_min === m ? ' on' : ''), onclick: act(async () => { await api('POST', `/orders/${o.id}/eta`, { minutes: m }); toast('The buyer can see it.'); route(); }) }, SLA(m)))));
+}
+
+// Before a dispute: rule out a slow MonCash / NatCash / bank first.
+function preDispute(v) {
+  const o = v.order, buyer = v.role === 'BUYER';
+  if (v.provider_down) return modal('Disputes are paused for now', h('p', {}, (PAY_NAME[v.payment?.type] || 'This payment service') + ' has a known problem right now. Payments can arrive late. The crypto stays locked and safe. You can open a dispute when the service works again.'), [{ label: 'OK' }]);
+  const paidAt = o.paid_at ? new Date(o.paid_at).getTime() : Date.now();
+  const left = Math.ceil((paidAt + (v.dispute_wait_min || 0) * 60000 - Date.now()) / 60000);
+  if (left > 0) return modal('Give the payment a little time', h('div', {}, h('p', {}, `MonCash, NatCash and bank payments can take some minutes to arrive. You can open a dispute in ${left} minute${left === 1 ? '' : 's'}.`),
+    h('p', { class: 'mute' }, buyer ? 'Meanwhile, keep your receipt (the SMS and the transaction number) and chat with the seller here.' : 'Meanwhile, refresh your MonCash, NatCash or bank app and check your SMS messages.')), [{ label: 'OK' }]);
+  if (o.delay_until && new Date(o.delay_until) > new Date()) return modal('Payment delay check is on', h('p', {}, `The seller asked for more time because the money may be delayed. You can open a dispute after ${hm(o.delay_until)} if it still has not arrived.`), [{ label: 'OK' }]);
+  const items = buyer
+    ? ['I have the receipt: the SMS or screenshot with the transaction number.', 'The money left my account (it was not reversed or refused).', 'I sent the exact amount to the account shown in this order.', 'I checked that MonCash / NatCash / my bank is working normally today.']
+    : ['I refreshed my MonCash / NatCash / bank app and checked my SMS.', 'I looked for the code ' + o.pay_reference + ' and the exact amount.', 'I checked that MonCash / NatCash / my bank is working normally today.', 'I understand: if the money arrives later, I must unlock the crypto.'];
+  const boxes = items.map((x) => { const c = h('input', { type: 'checkbox', class: 'chk' }); return [c, h('label', { class: 'agree' }, c, h('span', {}, x))]; });
+  modal('Before you open a dispute', h('div', {},
+    h('p', { class: 'mute' }, 'Sometimes MonCash or NatCash shows the money as sent, but it arrives later, or it goes back to the sender. Many problems fix themselves. Check these first:'),
+    ...boxes.map((b) => b[1]),
+    !buyer ? h('p', { class: 'mute small' }, 'Not sure yet? Press "Not in my account yet" instead: it gives the payment more time and keeps the crypto locked.') : null),
+  [{ label: 'Cancel' }, { label: 'Continue to the dispute', cls: 'danger', run: async () => {
+    if (!boxes.every((b) => b[0].checked)) throw new Error('Tick every box first.');
+    openDisputeWindow(v);
+  } }]);
+}
+
+function openDelayWindow(v) {
+  modal('Money not in your account yet?', h('div', {},
+    h('p', {}, 'Sometimes MonCash, NatCash or a bank shows "sent" before the money really arrives. Press the button to give the payment more time. The crypto stays locked, and nobody can open a dispute during this time.'),
+    h('p', { class: 'mute' }, 'Each press adds 2 hours, up to 24 hours after the buyer paid. If the money arrives, unlock the crypto right away.')),
+  [{ label: 'Cancel' }, { label: 'Give the payment more time', cls: 'good', run: async () => { await api('POST', `/orders/${v.order.id}/delay`); toast('More time added. The buyer can see it.'); route(); } }]);
+}
+
+function openReportWindow(v) {
+  const kind = h('select', {}, h('option', { value: 'REVERSED' }, 'The payment was sent back (reversed)'), h('option', { value: 'OTHER' }, 'Another problem'));
+  const note = h('textarea', { rows: 4, placeholder: 'What happened? When? Which transaction number?' });
+  modal('Report a problem', h('div', {}, h('label', {}, 'What happened?'), kind, h('label', {}, 'Details'), note),
+    [{ label: 'Cancel' }, { label: 'Send report', cls: 'danger', run: async () => { await api('POST', `/orders/${v.order.id}/report`, { kind: kind.value, note: note.value }); toast('Report sent. Our team will look at it.'); route(); } }]);
+}
+
+// Stars and a short review after a finished trade.
+function rateBox(o) {
+  let stars = 0;
+  const row = h('div', { class: 'rate' });
+  const comment = h('input', { placeholder: 'A short review (optional): fast, honest, friendly…', maxlength: 200 });
+  const paint = () => row.replaceChildren(...[1, 2, 3, 4, 5].map((n) => h('button', { class: 'star' + (n <= stars ? ' on' : ''), onclick: () => { stars = n; paint(); } }, '★')));
+  paint();
+  return h('div', { class: 'ratebox' }, row, comment, h('button', { class: 'btn sm', onclick: act(async () => {
+    if (!stars) throw new Error('Pick 1 to 5 stars.');
+    await api('POST', `/orders/${o.id}/rate`, { stars, comment: comment.value }); toast('Thanks for your review.'); route();
+  }) }, 'Send review'));
+}
+
 // ----- what the person should do now -----
 function guide(v) {
   const o = v.order, r = v.role, s = o.state, buyer = r === 'BUYER', seller = r === 'SELLER';
-  const dispBtn = h('button', { class: 'btn alt sm', onclick: () => openDisputeWindow(v) }, buyer ? 'Problem? Open a dispute' : 'Not received? Open a dispute');
+  const dispBtn = h('button', { class: 'btn alt sm', onclick: () => preDispute(v) }, buyer ? 'Problem? Open a dispute' : 'Not received? Open a dispute');
+  const delayBtn = h('button', { class: 'btn alt sm', onclick: () => openDelayWindow(v) }, '⏳ Not in my account yet');
   if (r === 'STAFF') return { tone: '', title: 'Staff view', text: 'You are reading this order as staff.', actions: [] };
   if (buyer && s === 'AWAITING_PAYMENT') return { tone: 'go', title: `Pay ${money(o.total_htg)} HTG now`, steps: [
       `Open your ${v.payment ? (v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type) : 'payment'} app or bank.`, `Send exactly ${money(o.total_htg)} HTG to the account below.`,
@@ -509,7 +685,7 @@ function guide(v) {
     text: o.receiver_said === 'RECEIVED' ? 'The account owner confirmed in the app. Unlock the crypto to finish.' : o.receiver_said === 'NOT_RECEIVED' ? 'Check with them. If the money never came, open a dispute. Do not unlock.' : `${v.payment.account_name} owns the receiving account. We asked them to check and confirm in the app. You can also check with them and unlock yourself.`,
     actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Unlock the crypto'), dispBtn] };
   if (seller && s === 'PAID_CLAIMED') return { tone: 'go', title: `Did ${money(o.total_htg)} HTG arrive in your account?`, text: `Check your ${v.payment ? (v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type) : 'payment'} app or bank. Look for the code ${o.pay_reference}. Release only if you see the money.`,
-    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, I received it. Unlock the crypto'), dispBtn] };
+    actions: [h('button', { class: 'btn good', onclick: () => openReleaseWindow(v) }, 'Yes, I received it. Unlock the crypto'), delayBtn, dispBtn] };
   if (s === 'DISPUTED') return { tone: 'bad', title: 'Dispute open. A staff agent is deciding', text: 'Add your proof below. Keep chatting here, politely. Do not send money outside the app.', actions: [] };
   if (s === 'RELEASING') return { tone: 'wait', title: 'Sending the USDT', text: 'This takes a moment.', actions: [] };
   if (s === 'REFUNDING') return { tone: 'wait', title: 'Returning the USDT to the seller', text: 'This takes a moment.', actions: [] };
@@ -522,10 +698,11 @@ function guide(v) {
 function renderOrder(col, v) {
   const o = v.order, r = v.role, other = r === 'BUYER' ? v.seller : v.buyer;
   const g = guide(v);
-  const rate = g.rate && r !== 'STAFF' ? h('div', { class: 'rate' }, [1, 2, 3, 4, 5].map((n) => h('button', { class: 'star', onclick: act(async () => { await api('POST', `/orders/${o.id}/rate`, { stars: n }); toast('Thanks for your rating.'); }) }, '★' + n))) : null;
+  const rate = g.rate && r !== 'STAFF' ? rateBox(o) : null;
   const pay = v.payment && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'card ' + (r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? 'payto' : '') },
     h('h3', { class: 'ct' }, r === 'BUYER' ? 'Pay to this account' : v.payment.is_receiver ? 'Paid into a linked account' : 'Your receiving account'),
     h('div', { class: 'payhead' }, accLogo(v.payment), h('b', {}, v.payment.bank_name || PAY_NAME[v.payment.type] || v.payment.type)),
+    r === 'BUYER' && o.state === 'AWAITING_PAYMENT' ? h('div', { class: 'safepay' }, '✅ ', h('b', {}, `${usd(o.amount)} ${o.asset} is locked.`), ' It is safe to pay now. Pay only this account, only inside this order.') : null,
     v.payment.is_receiver && r === 'BUYER' ? h('p', { class: 'mute' }, `This account belongs to ${v.payment.account_name}, a verified user linked to the seller. Pay exactly this account.`) : null,
     kv([v.payment.bank_name ? ['Bank', v.payment.bank_name] : null, [v.payment.type === 'BANK' ? 'Account number' : (PAY_NAME[v.payment.type] || v.payment.type) + ' number', v.payment.account_ref], ['Account name', v.payment.account_name], ['Amount', money(o.total_htg) + ' HTG']]),
     h('div', { class: 'mute', style: 'margin-top:10px' }, r === 'BUYER' ? 'Write this code in the payment note:' : 'The buyer must write this code in the note:'),
@@ -540,6 +717,9 @@ function renderOrder(col, v) {
       stepper(o.state),
       h('div', { class: 'cp' }, avatarEl(other.id, other.full_name, other.has_avatar),
         h('div', {}, h('b', {}, other.full_name), h('div', { class: 'mute' }, r === 'BUYER' ? 'Seller' : 'Buyer', ' · ID checked ✓')), statePill(o.state, r))),
+    v.provider_down && ['AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED'].includes(o.state) ? h('div', { class: 'alertbar' }, '⚠️ ', h('b', {}, (PAY_NAME[v.payment?.type] || 'This payment service') + ' has a known problem right now.'), ' Payments can arrive late or come back. Timers wait and disputes are paused. The crypto stays locked.') : null,
+    o.delay_until && new Date(o.delay_until) > new Date() && o.state === 'PAID_CLAIMED' ? h('div', { class: 'alertbar info' }, '⏳ ', h('b', {}, 'Possible payment delay.'), ` The seller does not see the money yet. We gave more time until ${hm(o.delay_until)}. Buyer: keep your receipt and transaction number. Disputes open after that time if the money still has not arrived.`) : null,
+    etaBox(v),
     h('div', { class: 'card guide ' + g.tone },
       h('h2', {}, g.title),
       g.steps ? h('ol', { class: 'gsteps' }, g.steps.map((x) => h('li', {}, x))) : h('p', { class: 'gtext' }, g.text),
@@ -547,6 +727,10 @@ function renderOrder(col, v) {
     ['ORDER_CREATED', 'AWAITING_PAYMENT', 'PAID_CLAIMED', 'DISPUTED', 'RELEASING'].includes(o.state)
       ? h('div', { class: 'escrow' }, h('b', {}, '🔒 ' + usd(o.amount) + ' ' + o.asset + ' is locked'), h('span', {}, 'Nobody can touch it until the seller confirms the money arrived, the order is cancelled, or our team decides.')) : null,
     pay, dispute,
+    o.state === 'COMPLETED' && r !== 'STAFF' ? h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'A problem after the trade?'),
+      v.my_report ? h('p', { class: 'mute' }, `You reported this order (${new Date(v.my_report.created_at).toLocaleString()}). Our team is looking at it.`)
+        : [h('p', { class: 'mute' }, 'For example MonCash, NatCash or the bank sent the money back after the crypto was unlocked. Tell us: we can block the person and help you.'),
+          h('button', { class: 'btn alt sm', onclick: () => openReportWindow(v) }, 'Report a problem')]) : null,
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'Order details'),
       kv([['Price', money(o.price_htg) + ' HTG per ' + o.asset], ['You ' + (r === 'SELLER' ? 'sell' : 'buy'), usd(o.amount) + ' ' + o.asset], ['Total', money(o.total_htg) + ' HTG'],
         ['Platform fee', usd(o.fee_amount) + ' ' + o.asset + ' (paid by the seller)'],
@@ -750,6 +934,25 @@ function shrinkId(file) {
   });
 }
 
+// Live camera inside the app: shows the back camera, the person presses the button, we keep the picture.
+function cameraShot(label) {
+  return new Promise((resolve, reject) => {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then((stream) => {
+      const v = h('video', { autoplay: true, muted: true, playsinline: true }); v.srcObject = stream;
+      const stop = () => stream.getTracks().forEach((tr) => tr.stop());
+      const back = h('div', { class: 'modal-back camback' });
+      const done = (blob) => { stop(); back.remove(); resolve(blob); };
+      const shoot = h('button', { class: 'btn big-btn', type: 'button', onclick: () => {
+        const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+        if (!c.width) return; c.getContext('2d').drawImage(v, 0, 0); c.toBlob((b) => done(b), 'image/jpeg', 0.92);
+      } }, '📸 ' + t('Take the photo'));
+      back.append(h('div', { class: 'modal cam' }, h('h2', {}, label), h('p', { class: 'mute small' }, t('Fill the frame with the ID. All 4 corners visible. No light reflection.')),
+        h('div', { class: 'camview' }, v, h('div', { class: 'camguide' })), shoot, h('button', { class: 'btn alt', type: 'button', onclick: () => done(null) }, t('Cancel'))));
+      document.body.append(back);
+    }).catch(() => reject(new Error('Camera blocked. Allow the camera for this site, then try again.')));
+  });
+}
+
 async function idCheckCard() {
   const st = await api('GET', '/kyc/me');
   if (st.last && st.last.status === 'PENDING') return h('div', { class: 'card kyc' }, h('div', { class: 'kdone' }, h('div', { class: 'kicon' }, '⏳'),
@@ -761,17 +964,20 @@ async function idCheckCard() {
     h('div', { class: 'kbody' }, h('h3', {}, title), sub ? h('p', { class: 'mute' }, sub) : null, body));
   // photo tile
   const photoTile = (kind, label) => {
+    // The photo is taken with the camera, inside the app. No gallery, no old pictures.
+    const camOk = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     const input = h('input', { type: 'file', accept: 'image/*', capture: 'environment', class: 'hidden' });
-    const status = h('div', { class: 'mute' }, have.has(kind) ? '✓ Uploaded. Tap to change.' : 'Tap to take a photo');
-    const tile = h('label', { class: 'ptile' + (have.has(kind) ? ' ok' : '') }, input, h('div', { class: 'pic' }, '📷'), h('b', {}, label), status);
-    input.addEventListener('change', act(async () => {
-      const f = input.files[0]; if (!f) return;
-      const blob = await shrinkId(f);
+    const status = h('div', { class: 'mute' }, have.has(kind) ? '✓ Uploaded. Tap to take it again.' : 'Tap to open the camera');
+    const tile = h(camOk ? 'button' : 'label', { type: camOk ? 'button' : undefined, class: 'ptile' + (have.has(kind) ? ' ok' : '') }, camOk ? null : input, h('div', { class: 'pic' }, '📷'), h('b', {}, label), status);
+    const useBlob = (raw) => act(async () => {
+      const blob = await shrinkId(raw);
       tile.querySelector('.pic').replaceChildren(h('img', { src: URL.createObjectURL(blob), alt: '' }));
       status.textContent = 'Uploading…';
       await sendFile(kind, blob, (p) => { status.textContent = 'Uploading ' + Math.round(p * 100) + '%'; });
-      have.add(kind); tile.classList.add('ok'); status.textContent = '✓ Uploaded. Tap to change.'; paint();
-    }));
+      have.add(kind); tile.classList.add('ok'); status.textContent = '✓ Uploaded. Tap to take it again.'; paint();
+    });
+    if (camOk) tile.addEventListener('click', act(async () => { const b = await cameraShot(label); if (b) await useBlob(b)(); }));
+    else input.addEventListener('change', () => input.files[0] && useBlob(input.files[0])());
     return tile;
   };
   const front = photoTile('FRONT', 'Front of the ID'), back = photoTile('BACK', 'Back of the ID');
@@ -798,7 +1004,7 @@ async function idCheckCard() {
   const record = act(async () => {
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: true }); }
-    catch { throw new Error('Camera blocked. Allow the camera and microphone, or use "Upload a video".'); }
+    catch { throw new Error('Camera blocked. Allow the camera and microphone for this site, then try again.'); }
     const live = h('video', { autoplay: true, muted: true, playsinline: true }); live.srcObject = stream;
     const clock = h('span', { class: 'rec' }, '● 0s');
     const stop = h('button', { class: 'btn danger', type: 'button' }, 'Stop');
@@ -834,17 +1040,16 @@ async function idCheckCard() {
     card.querySelectorAll('[data-k]').forEach((el) => el.classList.toggle('ok', { type: !!idType, photos: have.has('FRONT') && (!needBack || have.has('BACK')), video: have.has('VIDEO') }[el.dataset.k]));
   }
   const s2 = step(2, 'Choose your ID', 'Use a real, valid ID with your photo.', types); s2.dataset.k = 'type';
-  const s3 = step(3, 'Take photos of your ID', 'Put the ID on a table. All 4 corners visible. No light reflection. Text must be easy to read.', h('div', { class: 'ptiles' }, front, back)); s3.dataset.k = 'photos';
+  const s3 = step(3, 'Take photos of your ID', 'With the camera in the app. Put the ID on a table: all 4 corners visible, no light reflection, text easy to read. Passport: one photo of the page with your picture.', h('div', { class: 'ptiles' }, front, back)); s3.dataset.k = 'photos';
   const s5 = step(5, 'Record a short video', 'Look at the camera. Hold your ID next to your face. Read this sentence out loud:',
     h('div', {}, h('div', { class: 'script' }, '"' + st.script + '"'),
-      h('div', { class: 'gactions' }, canRecord ? h('button', { class: 'btn', type: 'button', onclick: record }, '🎥 Record now') : null,
-        h('label', { class: 'btn alt filebtn' }, vFile, canRecord ? 'Upload a video' : '🎥 Record or upload a video')),
+      h('div', { class: 'gactions' }, canRecord ? h('button', { class: 'btn', type: 'button', onclick: record }, '🎥 Record now') : h('label', { class: 'btn filebtn' }, vFile, '🎥 Record a video')),
       vBox, vStatus)); s5.dataset.k = 'video';
   card.append(...[
     h('h2', {}, 'Verify your identity'),
     h('p', { class: 'mute' }, 'Everybody who trades here is a real, checked person. This keeps scammers out. It takes about 3 minutes.'),
     st.last && st.last.status === 'REJECTED' ? h('p', { class: 'warn-note' }, 'Your last ID was not accepted. Please try again with clear photos and a clear video.') : null,
-    step(1, 'Phone number confirmed', `${st.phone} — we sent you a code by SMS when you made your account.`, null, true),
+    step(1, 'Account confirmed', `${st.phone} — you confirmed your account with a code when you signed up.`, null, true),
     s2, s3,
     step(4, 'Your name and ID number', 'Exactly as written on the ID.', h('div', {}, h('label', {}, 'Name on the ID'), nameIn, h('label', {}, 'ID number'), numIn)),
     s5,
@@ -954,6 +1159,80 @@ async function toCheckCard() {
         h('button', { class: 'btn good sm', onclick: act(async () => { await api('POST', `/links/to-check/${o.id}`, { received: true }); route(); }) }, 'It arrived'),
         h('button', { class: 'btn alt sm', onclick: act(async () => { await api('POST', `/links/to-check/${o.id}`, { received: false }); route(); }) }, 'Not yet'))))));
 }
+// Make a poster smaller (max 1280 px) so it loads fast on a phone, but stays sharp.
+function shrinkPoster(file) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      let q = 0.85, d = c.toDataURL('image/jpeg', q);
+      while (d.length > 780000 && q > 0.4) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+      ok(d);
+    };
+    img.onerror = () => no(new Error('Could not read that picture.')); img.src = url;
+  });
+}
+
+// "My business profile": what buyers see before they trade with you.
+async function businessCard(u) {
+  const pubP = await api('GET', '/public/profile/' + u.id).catch(() => ({ posters: [] }));
+  let photo, rmin = u.response_min || null;
+  const pub = h('input', { value: u.display_name || '', placeholder: 'Optional. A company or trading name', maxlength: 40 });
+  const bio = h('textarea', { rows: 3, maxlength: 300, placeholder: 'Tell buyers why to trade with you: your hours, how fast you answer, your experience. No phone numbers or links.' }, u.bio || '');
+  const dep = h('select', {}, h('option', { value: '' }, '—'), (cfg.departments || []).map((d) => h('option', { value: d, selected: d === u.department }, d)));
+  const area = h('input', { value: u.area || '', maxlength: 60, placeholder: 'City or area, e.g. Delmas, Cap-Haïtien, Miami' });
+  const face = h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl'));
+  const pick = (capture) => { const f = h('input', { type: 'file', accept: 'image/*', class: 'hidden', ...(capture ? { capture: 'user' } : {}) });
+    f.addEventListener('change', act(async () => { if (!f.files[0]) return; photo = await shrinkPhoto(f.files[0]); face.replaceChildren(h('div', { class: 'avatar xl' }, h('img', { src: photo, alt: '' }))); paintMeter(); })); return f; };
+  const chips = h('div', { class: 'chips' }, (cfg.response_mins || [5, 10, 15, 30, 60]).map((m) => h('button', { type: 'button', class: 'chip' + (m === rmin ? ' on' : ''), onclick: (e) => {
+    rmin = rmin === m ? null : m; chips.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', Number(c.dataset.m) === rmin)); paintMeter(); }, 'data-m': m }, SLA(m))));
+  let posters = [...(pubP.posters || [])];
+  const grid = h('div', { class: 'posters edit' });
+  const addIn = h('input', { type: 'file', accept: 'image/*', class: 'hidden', multiple: true });
+  addIn.addEventListener('change', act(async () => {
+    for (const f of [...addIn.files]) {
+      if (posters.length >= 6) { toast('Up to 6 posters.', true); break; }
+      const r = await api('POST', '/me/posters', { image: await shrinkPoster(f) }); posters.push(r.id);
+    }
+    addIn.value = ''; paintPosters(); paintMeter(); toast('Poster added.');
+  }));
+  const paintPosters = () => grid.replaceChildren(...posters.map((id) => h('div', { class: 'poster' }, h('img', { src: '/api/public/poster/' + id, alt: '', onclick: () => lightbox('/api/public/poster/' + id) }),
+    h('button', { class: 'pdel', title: 'Remove', onclick: act(async () => { await api('DELETE', '/me/posters/' + id); posters = posters.filter((x) => x !== id); paintPosters(); paintMeter(); }) }, '✕'))),
+    posters.length < 6 ? h('label', { class: 'poster add' }, addIn, h('span', {}, '＋'), h('small', {}, 'Add poster')) : null);
+  const meter = h('div', { class: 'meter' }), tips = h('div', { class: 'mute small nt' });
+  function paintMeter() {
+    const items = [[u.has_avatar || !!photo, { en: 'a photo of your face', fr: 'une photo de votre visage', ht: 'yon foto figi w' }], [!!pub.value.trim(), { en: 'a public name', fr: 'un nom public', ht: 'yon non piblik' }],
+      [bio.value.trim().length >= 20, { en: 'a few words about you', fr: 'quelques mots sur vous', ht: 'kèk mo sou ou' }], [!!dep.value, { en: 'your area', fr: 'votre zone', ht: 'zòn ou' }],
+      [!!rmin, { en: 'your response time', fr: 'votre délai de réponse', ht: 'tan ou pran pou reponn' }], [posters.length > 0, { en: 'a business poster', fr: 'une affiche', ht: 'yon afich biznis' }]];
+    const done = items.filter((x) => x[0]).length, pct = Math.round(100 * done / items.length);
+    meter.replaceChildren(h('div', { class: 'meter-bar' }, h('i', { style: `width:${pct}%` })), h('b', {}, pct + '%'));
+    const miss = items.filter((x) => !x[0]).map((x) => L3(x[1]));
+    tips.textContent = miss.length ? L3({ en: 'Add ', fr: 'Ajoutez ', ht: 'Mete ' }) + miss.join(', ') + L3({ en: ' to get more buyers.', fr: ' pour avoir plus d\'acheteurs.', ht: ' pou w jwenn plis achtè.' })
+      : L3({ en: 'Your profile is complete. Buyers love that.', fr: 'Votre profil est complet. Les acheteurs adorent.', ht: 'Pwofil ou konplè. Achtè yo renmen sa.' });
+  }
+  [pub, bio, dep, area].forEach((x) => x.addEventListener('input', paintMeter));
+  paintPosters(); paintMeter();
+  return h('div', { class: 'card bizcard' },
+    h('div', { class: 'bc-top' }, h('div', {}, h('h3', { class: 'ct' }, 'My business profile'), h('p', { class: 'mute' }, 'This is your shop window. Buyers check it before they trade.')),
+      h('button', { class: 'btn alt sm', onclick: () => go('u/' + u.id) }, '👁 ' + t('See my public page'))),
+    meter, tips,
+    h('div', { class: 'facebox' }, face, h('div', {},
+      h('b', {}, '📸 A photo of your face'),
+      h('p', { class: 'mute small' }, 'Optional, but people trust a real face. Profiles with a face photo get more orders.'),
+      h('div', { class: 'gactions' }, h('label', { class: 'btn sm filebtn' }, pick(true), 'Take a selfie'), h('label', { class: 'btn alt sm filebtn' }, pick(false), 'Choose a photo')))),
+    h('label', {}, 'Public name or company'), pub,
+    h('label', {}, 'About you'), bio,
+    h('div', { class: 'row' }, h('div', {}, h('label', {}, 'Department'), dep), h('div', {}, h('label', {}, 'City or area'), area)),
+    h('label', {}, 'How fast do you usually answer an order?'), chips,
+    h('label', {}, 'Business posters (up to 6)'), h('p', { class: 'mute small' }, 'Your flyer, your shop, your prices, your hours. No phone numbers or links: keep the deal in the app.'), grid,
+    h('button', { class: 'btn big-btn', onclick: act(async () => {
+      await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo, department: dep.value || null, area: area.value, response_min: rmin });
+      me = await api('GET', '/me'); toast('Profile saved.'); route();
+    }) }, 'Save my profile'));
+}
+
 async function profileView(app) {
   const u = me.user;
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
@@ -961,17 +1240,7 @@ async function profileView(app) {
   type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
   const an = h('input', { placeholder: 'Name on the account (must match your ID)' });
   const ar = h('input', { placeholder: 'Phone number or bank account number' });
-  // public profile
-  const pub = h('input', { value: u.display_name || '', placeholder: 'Optional. A company or trading name', maxlength: 40 });
-  const bio = h('textarea', { rows: 2, maxlength: 160, placeholder: 'Optional. One line about you. No phone numbers or links.' }, u.bio || '');
-  let photo;
-  const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden' });
   const prev = h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl'));
-  file.addEventListener('change', act(async () => {
-    if (!file.files[0]) return; photo = await shrinkPhoto(file.files[0]);
-    prev.replaceChildren(h('div', { class: 'avatar xl' }, h('img', { src: photo, alt: '' })));
-  }));
-  const save = act(async () => { await api('PUT', '/me/profile', { display_name: pub.value, bio: bio.value, avatar: photo }); me = await api('GET', '/me'); toast('Profile saved.'); route(); });
   const methods = me.payment_methods.filter((p) => !p.linked);
   const menu = [['welcome', '🌐', 'Home page'], ['ads', '📣', 'My ads'], ['linked', '🔗', 'Linked accounts'], ['safety', '🛡️', 'Safety'], ['legal/terms', '📄', 'Legal']];
   if (['AGENT', 'ADMIN'].includes(u.role)) menu.push(['staff', '🧑‍⚖️', 'Staff']);
@@ -984,11 +1253,7 @@ async function profileView(app) {
         h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + u.tier), u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null)),
       u.tier >= 1 ? h('p', { class: 'mute' }, '✓ ID check done.') : null),
     ...(u.tier < 1 ? [await idCheckCard()] : []),
-    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'What other people see'),
-      h('p', { class: 'mute' }, 'Add a photo and a public name so buyers and sellers trust you. Your real name stays private if you use a company name.'),
-      h('label', {}, 'Photo'), h('div', {}, h('label', { class: 'btn alt sm filebtn' }, file, 'Choose a photo'), h('span', { class: 'mute' }, ' Any picture. We make it small.')),
-      h('label', {}, 'Public name or company'), pub, h('label', {}, 'About you'), bio,
-      h('button', { class: 'btn', style: 'margin-top:12px', onclick: save }, 'Save profile')),
+    await businessCard(u),
     h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My payment accounts'),
       h('p', { class: 'mute' }, 'You can add MonCash, NatCash and bank accounts, and as many numbers as you want. The name on each one must match your ID.'),
       methods.length ? h('div', { class: 'accs' }, methods.map((p) => h('div', { class: 'acc' },
@@ -1079,8 +1344,31 @@ function usersCard() {
   return h('div', { class: 'card' }, h('h2', {}, 'Users'), h('div', { class: 'compose', style: 'padding:0 0 10px' }, search, h('button', { class: 'btn sm', onclick: load }, 'Search')), list);
 }
 
+// MonCash / NatCash / bank outage switch. While ON: a banner shows, disputes on those orders wait,
+// and the "seller silent" timer does not open disputes.
+function providersCard(rows) {
+  const st = Object.fromEntries(rows.map((x) => [x.provider, x]));
+  return h('div', { class: 'card' }, h('h2', {}, 'Payment services status'),
+    h('p', { class: 'mute' }, 'Turn ON when MonCash, NatCash or banks have problems (payments late or sent back). Everyone sees a warning, disputes wait, and nobody gets punished for the service\'s problem.'),
+    ...['MONCASH', 'NATCASH', 'BANK'].map((k) => {
+      const cur = st[k] || {}, note = h('input', { value: cur.note || '', placeholder: 'Short note users will see (optional)' });
+      return h('div', { class: 'prov' + (cur.down ? ' down' : '') },
+        h('div', { class: 'prov-name' }, h('b', {}, PAY_NAME[k]), h('span', { class: 'pill ' + (cur.down ? 'bad' : 'good') }, cur.down ? 'PROBLEM' : 'Working')), note,
+        h('button', { class: 'btn sm ' + (cur.down ? 'good' : 'danger'), onclick: act(async () => { await api('POST', '/admin/providers', { provider: k, down: !cur.down, note: note.value }); toast('Saved.'); cfg = {}; route(); }) },
+          cur.down ? 'Mark as working again' : 'Mark as having problems'));
+    }));
+}
+function reportsCard(rows) {
+  return h('div', { class: 'card scroll' }, h('h2', {}, 'Reports after trades'), rows.length ? h('table', {},
+    h('thead', {}, h('tr', {}, ['When', 'By', 'Kind', 'Order', 'Details', ''].map((x) => h('th', {}, x)))),
+    h('tbody', {}, rows.map((x) => h('tr', { class: x.status === 'OPEN' ? '' : 'mute' }, h('td', {}, new Date(x.created_at).toLocaleString()), h('td', {}, x.reporter + ' · ' + x.phone),
+      h('td', {}, x.kind === 'REVERSED' ? 'Payment reversed' : 'Other'), h('td', {}, h('a', { href: '#order/' + x.order_id }, `${usd(x.amount)} ${x.asset} · ${money(x.total_htg, 0)} HTG`)),
+      h('td', {}, x.note), h('td', {}, x.status === 'OPEN' ? h('button', { class: 'btn alt sm', onclick: act(async () => { await api('POST', `/admin/reports/${x.id}/close`); route(); }) }, 'Close') : 'closed'))))) : h('p', { class: 'mute' }, 'No reports.'));
+}
+
 async function adminView(app) {
-  const [limits, block] = await Promise.all([api('GET', '/admin/limits'), api('GET', '/admin/blocklist')]);
+  const [limits, block, provs, reps] = await Promise.all([api('GET', '/admin/limits'), api('GET', '/admin/blocklist'), api('GET', '/admin/providers'), api('GET', '/admin/reports')]);
+  app.append(providersCard(provs), reportsCard(reps));
   const rows = limits.map((l) => {
     const a = h('input', { value: l.max_order_htg }), b = h('input', { value: l.max_daily_htg }), c = h('input', { value: l.max_open_orders });
     return h('tr', {}, h('td', {}, 'Tier ' + l.tier), h('td', {}, a), h('td', {}, b), h('td', {}, c),

@@ -1,3 +1,4 @@
+import { STATS_SQL } from './users.js';
 import * as links from './links.js';
 import { tx, q } from '../db.js';
 import { config, isMock } from '../config.js';
@@ -82,23 +83,7 @@ export async function listAds({ side, asset, pay_type, min_htg } = {}) {
   const r = await q(
     `SELECT a.id, a.side, a.asset, a.price_htg, a.remaining, a.min_order_htg, a.max_order_htg, a.pay_type, a.pay_types, a.created_at,
             u.id AS owner_id, COALESCE(u.display_name, u.full_name) AS owner_name, (u.display_name IS NOT NULL) AS is_business, (u.avatar_mime IS NOT NULL) AS has_avatar, u.bio,
-            (SELECT COUNT(*)::int FROM orders o WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state='COMPLETED') AS trades,
-            (SELECT ROUND(AVG(stars),2)::text FROM ratings WHERE rated_id=u.id) AS rating,
-            u.created_at AS member_since,
-            EXISTS (SELECT 1 FROM kyc k WHERE k.user_id=u.id AND k.status='APPROVED') AS id_verified,
-            -- Completion rate counts only what this person did wrong: a dispute they lost,
-            -- or (as buyer) an order they cancelled or let expire. The other side's mistakes do not count against them.
-            (SELECT CASE WHEN good + bad = 0 THEN NULL ELSE ROUND(100.0 * good / (good + bad))::int END FROM (
-               SELECT COUNT(*) FILTER (WHERE o.state='COMPLETED' AND NOT (o.seller_id=u.id AND COALESCE(d.status::text,'')='RESOLVED_BUYER')) AS good,
-                      COUNT(*) FILTER (WHERE (o.seller_id=u.id AND d.status='RESOLVED_BUYER') OR (o.buyer_id=u.id AND d.status='RESOLVED_SELLER')
-                                          OR (o.buyer_id=u.id AND d.id IS NULL AND o.state IN ('REFUNDED','CANCELLED_TIMEOUT'))) AS bad
-                 FROM orders o LEFT JOIN disputes d ON d.order_id=o.id
-                WHERE (o.seller_id=u.id OR o.buyer_id=u.id) AND o.state IN ('COMPLETED','REFUNDED','CANCELLED_TIMEOUT')) x) AS completion_pct,
-            (SELECT ROUND(AVG(EXTRACT(EPOCH FROM (c.created_at - p.created_at)) / 60))::int
-               FROM orders o JOIN order_events p ON p.order_id=o.id AND p.to_state='PAID_CLAIMED'
-                             JOIN order_events c ON c.order_id=o.id AND c.to_state='COMPLETED'
-              WHERE o.seller_id=u.id) AS avg_release_min,
-            (SELECT COUNT(*)::int FROM disputes d JOIN orders o ON o.id=d.order_id WHERE o.seller_id=u.id OR o.buyer_id=u.id) AS disputes
+            u.created_at AS member_since, u.department, u.area, u.response_min, ${STATS_SQL('u')}
      FROM ads a JOIN users u ON u.id=a.user_id
      WHERE ${where.join(' AND ')} ORDER BY ${order}, a.created_at LIMIT 100`, args);
   return r.rows;

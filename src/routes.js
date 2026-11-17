@@ -23,12 +23,13 @@ import * as links from './services/links.js';
 import * as orders from './services/orders.js';
 import * as disputes from './services/disputes.js';
 import { addBlock } from './services/screening.js';
+import * as providers from './services/providers.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((v) => { if (v !== undefined) res.json(v); }).catch(next);
 
 export const api = express.Router();
 
-api.get('/config', (_req, res) => res.json({
+api.get('/config', wrap(async () => ({
   escrow_mode: config.escrowMode,
   pay_window_min: config.payWindowMin,
   pay_grace_min: config.payGraceMin,
@@ -44,7 +45,11 @@ api.get('/config', (_req, res) => res.json({
   lock_fee: config.lockFee,
   chain: isMock() ? null : { chain_id: config.evmChainId, contract: config.evmContract, app_wallet: evm.appWalletAddress(),
     tokens: { USDT: config.tokenUsdt, USDC: config.tokenUsdc || null } },
-}));
+  terms_version: config.termsVersion,
+  departments: users.DEPARTMENTS,
+  response_mins: users.RESPONSE_MINS,
+  provider_alerts: await providers.alerts(),
+})));
 
 // ---------- auth ----------
 api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
@@ -55,13 +60,14 @@ api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
 
 // Signup proves the phone is yours with an SMS code (in test mode the code is not checked).
 api.post('/auth/signup', wrap(async (req) => {
-  const { phone, full_name, code } = req.body || {};
+  const { phone, full_name, code, accept_terms } = req.body || {};
   checkPhone(phone);
+  if (accept_terms !== true) throw bad('You must read and accept the Terms and Conditions to create an account.', 'TERMS');
   const owner = config.adminPhones.includes(phone);
   let proof = null;
   if (!isMockSms() || code !== undefined || owner) proof = await otp.verifyCode(phone, code, owner);
   // Email codes: the email that got the code becomes the account's email.
-  const u = await users.signup({ phone, full_name, email: proof?.email || null });
+  const u = await users.signup({ phone, full_name, email: proof?.email || null, accept_terms: true });
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
@@ -85,6 +91,18 @@ api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.
     id_verified: a.id_verified, has_avatar: a.has_avatar, is_business: a.is_business, id: a.owner_id, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
     owner: a.is_business ? a.owner_name : rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
 })));
+
+// Public business pages: anyone can look at a trader before buying. Personal names are shortened (Jean B.).
+const shortName = (n) => { const [first, ...rest] = String(n).trim().split(/\s+/); return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first; };
+api.get('/public/profile/:id', wrap(async (req) => {
+  const p = await users.publicProfile(req.params.id);
+  return { ...p, name: p.is_business ? p.name : shortName(p.name) };
+}));
+api.get('/public/poster/:id', wrap(async (req, res) => {
+  const a = /^[0-9a-f-]{36}$/.test(req.params.id) ? await users.getPoster(req.params.id) : null;
+  if (!a) { res.status(404).end(); return; }
+  res.set('Content-Type', a.mime).set('Cache-Control', 'public, max-age=3600').send(a.data);
+}));
 
 // Profile pictures are public (they are shown on ads).
 api.get('/avatar/:id', wrap(async (req, res) => {
@@ -130,6 +148,9 @@ api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, 
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.post('/me/close', wrap(async (req) => users.closeAccount(req.user)));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
+api.post('/me/accept-terms', wrap(async (req) => users.acceptTerms(req.user)));
+api.post('/me/posters', wrap(async (req) => users.addPoster(req.user, req.body || {})));
+api.delete('/me/posters/:id', wrap(async (req) => users.removePoster(req.user, req.params.id)));
 api.post('/payment-methods', wrap(async (req) => users.addPaymentMethod(req.user, req.body || {})));
 api.get('/payment-methods', wrap(async (req) => users.myPaymentMethods(req.user.id)));
 
@@ -166,7 +187,10 @@ api.post('/orders/:id/confirm', wrap(async (req) => orders.sellerConfirm(req.use
 api.post('/orders/:id/dispute', wrap(async (req) => orders.openDispute(req.user, req.params.id, req.body?.reason)));
 api.get('/orders/:id/chat', wrap(async (req) => orders.getChat(req.user, req.params.id)));
 api.post('/orders/:id/chat', wrap(async (req) => orders.postChat(req.user, req.params.id, req.body?.body)));
-api.post('/orders/:id/rate', wrap(async (req) => orders.rate(req.user, req.params.id, req.body?.stars)));
+api.post('/orders/:id/rate', wrap(async (req) => orders.rate(req.user, req.params.id, req.body?.stars, req.body?.comment)));
+api.post('/orders/:id/eta', wrap(async (req) => orders.setEta(req.user, req.params.id, req.body?.minutes)));
+api.post('/orders/:id/delay', wrap(async (req) => orders.payDelay(req.user, req.params.id)));
+api.post('/orders/:id/report', wrap(async (req) => orders.report(req.user, req.params.id, req.body || {})));
 api.post('/orders/:id/evidence', wrap(async (req) => disputes.addEvidence(req.user, req.params.id, req.body || {})));
 api.post('/orders/:id/evidence/upload', wrap(async (req) => disputes.addUpload(req.user, req.params.id, req.body || {})));
 api.get('/evidence/:id/file', async (req, res, next) => {
@@ -279,4 +303,13 @@ admin.get('/ads', wrap(async () => (await q(
      FROM ads a JOIN users u ON u.id=a.user_id WHERE a.status <> 'CLOSED' ORDER BY a.side, a.price_htg LIMIT 300`)).rows));
 admin.post('/ads/:id/status', wrap(async (req) => ads.setAdStatus(req.user, req.params.id, req.body?.status)));
 admin.post('/run-timers', wrap(async () => orders.runTimers()));
+// MonCash / NatCash / bank outage switch, and reports about finished orders (for example a reversed payment).
+admin.get('/providers', wrap(async () => (await q('SELECT provider, down, note, updated_at FROM provider_status ORDER BY provider')).rows));
+admin.post('/providers', wrap(async (req) => providers.set(req.user, req.body || {})));
+admin.get('/reports', wrap(async () => (await q(
+  `SELECT r.id, r.order_id, r.kind, r.note, r.status, r.created_at, COALESCE(u.display_name, u.full_name) AS reporter, u.phone,
+          o.amount, o.asset, o.total_htg, o.buyer_id, o.seller_id
+     FROM order_reports r JOIN users u ON u.id=r.reporter_id JOIN orders o ON o.id=r.order_id
+    ORDER BY (r.status='OPEN') DESC, r.created_at DESC LIMIT 200`)).rows));
+admin.post('/reports/:id/close', wrap(async (req) => { await q(`UPDATE order_reports SET status='CLOSED' WHERE id=$1`, [req.params.id]); return { ok: true }; }));
 api.use('/admin', admin);

@@ -54,6 +54,10 @@ export const config = {
   tokenUsdt: str('TOKEN_USDT', ''),
   tokenUsdc: str('TOKEN_USDC', ''),
   escrowNetwork: str('ESCROW_NETWORK', 'ARBITRUM'),
+  termsVersion: '2026-11-17',                          // bump when the terms change: everybody must accept again
+  disputeWaitMin: num('DISPUTE_WAIT_MIN', 20),        // after "I paid", wait this long before a dispute can open (payments can be slow)
+  delayHoldMin: num('DELAY_HOLD_MIN', 120),           // "payment network delay": each press adds this much time
+  delayMaxHours: num('DELAY_MAX_HOURS', 24),          // ...up to this long after "I paid"
   lockFee: str('LOCK_FEE_USDT', '0.25'),               // flat fee the BUYER pays per order (covers the lock/unlock network cost), in USDT/USDC
   withdrawFee: str('WITHDRAW_FEE_USDT', '1'),           // flat fee for a gasless withdraw (the app pays the gas), in USDT/USDC   // the network the escrow runs on (shown to users)
   pgSsl: str('PGSSL', '') === 'true',                // true for hosted databases that need SSL

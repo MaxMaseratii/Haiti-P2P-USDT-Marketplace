@@ -49,7 +49,7 @@ async function deposit(who, amt) {
   await sync();
 }
 async function signup(key, phone, name, role) {
-  const r = await ok('POST', '/auth/signup', { phone, full_name: name });
+  const r = await ok('POST', '/auth/signup', { accept_terms: true, phone, full_name: name });
   U[key] = { token: r.token, id: r.user.id, name };
   if (role) await pool.query('UPDATE users SET role=$2, tier=3 WHERE id=$1', [id(key), role]);
 }
@@ -92,7 +92,7 @@ before(async () => {
 
   Object.assign(process.env, {
     DATABASE_URL: base.toString(), ESCROW_MODE: 'EVM', WORKER_INTERVAL_SEC: '3600', FEE_RATE: '0.005',
-    DUAL_AGENT_HTG: '100000000', LOCK_FEE_USDT: '0', EVM_RPC_URL: `http://127.0.0.1:${srv.address().port}`, EVM_CHAIN_ID: '1337',
+    DUAL_AGENT_HTG: '100000000', LOCK_FEE_USDT: '0', DISPUTE_WAIT_MIN: '0', EVM_RPC_URL: `http://127.0.0.1:${srv.address().port}`, EVM_CHAIN_ID: '1337',
     EVM_ESCROW_ADDRESS: await esc.getAddress(), EVM_CONFIRMATIONS: '0', OPERATOR_PRIVATE_KEY: KEYS.operator,
     TOKEN_USDT: await usdt.getAddress(), UPLOAD_DIR: fs.mkdtempSync('/tmp/p2p-evm-up-'),
   });

@@ -1,3 +1,4 @@
+import * as providers from './providers.js';
 import * as links from './links.js';
 import crypto from 'node:crypto';
 import { tx, q } from '../db.js';
@@ -184,7 +185,7 @@ export async function markPaid(user, orderId) {
     const limit = new Date(o.state_deadline).getTime() + config.payGraceMin * 60000;
     if (Date.now() > limit) throw conflict('Payment time is over.', 'LATE');
     await setState(c, orderId, 'AWAITING_PAYMENT', 'PAID_CLAIMED', {
-      actor: user.id, note: 'Buyer says paid', set: { state_deadline: mins(config.sellerReplyMin) } });
+      actor: user.id, note: 'Buyer says paid', set: { state_deadline: mins(config.sellerReplyMin), paid_at: new Date() } });
     return (await c.query('SELECT * FROM orders WHERE id=$1', [orderId])).rows[0];
   });
   // Tell the chain, so the app key cannot cancel this order any more. If this fails the app still never
@@ -284,6 +285,13 @@ export async function openDispute(user, orderId, reason) {
     const o = await lockOrder(c, orderId);
     if (o.buyer_id !== user.id && o.seller_id !== user.id) throw forbidden();
     if (o.state !== 'PAID_CLAIMED') throw conflict('You can only open a dispute after "I paid".', 'STATE');
+    // MonCash / NatCash / bank payments can be slow. Give the money time to arrive before anyone can open a dispute.
+    const paidAt = o.paid_at ? new Date(o.paid_at).getTime() : 0;
+    const waitLeft = Math.ceil((paidAt + config.disputeWaitMin * 60000 - Date.now()) / 60000);
+    if (waitLeft > 0) throw conflict(`Wait ${waitLeft} more minutes. MonCash, NatCash and bank payments can take a little time to arrive.`, 'TOO_SOON');
+    if (o.delay_until && new Date(o.delay_until) > new Date()) throw conflict('The seller asked for more time because of a possible payment network delay. You can open a dispute after ' + new Date(o.delay_until).toISOString().slice(11, 16) + ' UTC if the money still has not arrived.', 'DELAY_HOLD');
+    const pt = (await c.query('SELECT type FROM payment_methods WHERE id=$1', [o.payment_method_id])).rows[0]?.type;
+    if (pt && await providers.isDown(pt)) throw conflict('This payment service has a known problem right now. Disputes wait until it is fixed. The crypto stays locked and safe.', 'PROVIDER_DOWN');
     return createDispute(c, o, user.id, reason.trim());
   });
 }
@@ -332,6 +340,9 @@ export async function getOrderView(user, id) {
     events: events.rows, escrow: escrowTxs.rows, dispute: dispute.rows[0] || null,
     server_time: new Date().toISOString(),
     grace_min: config.payGraceMin,
+    dispute_wait_min: config.disputeWaitMin,
+    provider_down: pm.rows[0] ? await providers.isDown(pm.rows[0].type) : false,
+    my_report: (await q('SELECT kind, status, created_at FROM order_reports WHERE order_id=$1 AND reporter_id=$2 ORDER BY created_at DESC LIMIT 1', [id, user.id])).rows[0] || null,
   };
 }
 
@@ -368,15 +379,17 @@ export async function getChat(user, orderId) {
   return (await q('SELECT id, sender_id, body, created_at FROM chat_messages WHERE order_id=$1 ORDER BY id', [orderId])).rows;
 }
 
-export async function rate(user, orderId, stars) {
+export async function rate(user, orderId, stars, comment) {
   const s = Number(stars);
+  const note = String(comment || '').trim().slice(0, 200) || null;
+  if (note && BAD_CHAT.test(note)) throw bad('No links, phone numbers or other apps in reviews.', 'CHAT_RULE');
   if (!Number.isInteger(s) || s < 1 || s > 5) throw bad('Stars must be 1 to 5.');
   const o = await getOrderRaw(orderId);
   if (!o || (o.buyer_id !== user.id && o.seller_id !== user.id)) throw notFound('Order not found.');
   if (o.state !== 'COMPLETED') throw conflict('You can rate after the order is completed.');
   const rated = o.buyer_id === user.id ? o.seller_id : o.buyer_id;
   try {
-    await q('INSERT INTO ratings (order_id, rater_id, rated_id, stars) VALUES ($1,$2,$3,$4)', [orderId, user.id, rated, s]);
+    await q('INSERT INTO ratings (order_id, rater_id, rated_id, stars, comment) VALUES ($1,$2,$3,$4,$5)', [orderId, user.id, rated, s, note]);
   } catch (e) { if (e.code === '23505') throw conflict('You already rated this order.'); throw e; }
   return { ok: true };
 }
@@ -412,7 +425,11 @@ export async function runTimers() {
   }
 
   // 3. Seller silent after "I paid": open a dispute. Never auto-release.
-  for (const { id } of (await q(`SELECT id FROM orders WHERE state='PAID_CLAIMED' AND state_deadline < now()`)).rows) {
+  //    While MonCash / NatCash / banks have a known problem, wait instead (nobody is punished for the provider's problem).
+  const down = new Set((await providers.alerts()).map((a) => a.provider));
+  for (const { id, ptype } of (await q(`SELECT o.id, p.type AS ptype FROM orders o JOIN payment_methods p ON p.id=o.payment_method_id
+                                         WHERE o.state='PAID_CLAIMED' AND o.state_deadline < now()`)).rows) {
+    if (down.has(ptype)) { await q(`UPDATE orders SET state_deadline = now() + interval '30 minutes' WHERE id=$1 AND state='PAID_CLAIMED'`, [id]); continue; }
     await tx(async (c) => {
       const o = await lockOrder(c, id);
       if (o.state !== 'PAID_CLAIMED') return;
@@ -432,3 +449,54 @@ export async function runTimers() {
   return done;
 }
 
+
+// ---------- seller: "I will check within X minutes" ----------
+export const ETA_MINS = [5, 10, 15, 30, 60];
+export async function setEta(user, orderId, minutes) {
+  const m = Number(minutes);
+  if (!ETA_MINS.includes(m)) throw bad('Pick 5, 10, 15, 30 or 60 minutes.');
+  return tx(async (c) => {
+    const o = await lockOrder(c, orderId);
+    if (o.seller_id !== user.id) throw forbidden('Only the seller can do this.');
+    if (!['AWAITING_PAYMENT', 'PAID_CLAIMED'].includes(o.state)) throw conflict('This order is not open.', 'STATE');
+    await c.query('UPDATE orders SET seller_eta_min=$2, seller_eta_at=now() WHERE id=$1', [orderId, m]);
+    await c.query(`INSERT INTO chat_messages (order_id, sender_id, body) VALUES ($1,NULL,$2)`, [orderId,
+      `⏱ Vandè a ap tcheke epi dekadnase nan ${m} minit apre ou peye. / The seller will check and release within ${m} minutes after you pay.`]);
+    return { ok: true, seller_eta_min: m };
+  });
+}
+
+// ---------- seller: "the money is not in my account yet" (MonCash / NatCash / bank delay) ----------
+export async function payDelay(user, orderId) {
+  return tx(async (c) => {
+    const o = await lockOrder(c, orderId);
+    if (o.seller_id !== user.id) throw forbidden('Only the seller can do this.');
+    if (o.state !== 'PAID_CLAIMED') throw conflict('This is only for after the buyer pressed "I paid".', 'STATE');
+    const paidAt = new Date(o.paid_at || o.updated_at).getTime();
+    const cap = paidAt + config.delayMaxHours * 3600000;
+    const from = Math.max(Date.now(), new Date(o.state_deadline || Date.now()).getTime());
+    const until = Math.min(from + config.delayHoldMin * 60000, cap);
+    if (until <= Date.now() + 60000) throw conflict(`The waiting time is already at the maximum (${config.delayMaxHours} hours after the payment). If the money still has not arrived, open a dispute.`, 'DELAY_MAX');
+    const u = new Date(until);
+    await c.query('UPDATE orders SET delay_until=$2, state_deadline=$2, delay_count = delay_count + 1 WHERE id=$1', [orderId, u]);
+    await c.query(`INSERT INTO order_events (order_id, actor_id, note) VALUES ($1,$2,$3)`,
+      [orderId, user.id, 'Seller: money not in account yet, possible payment network delay']);
+    await c.query(`INSERT INTO chat_messages (order_id, sender_id, body) VALUES ($1,NULL,$2)`, [orderId,
+      `⏳ Vandè a poko wè lajan an nan kont li. Pafwa MonCash, NatCash oswa bank montre "voye" anvan lajan an rive. Nou bay plis tan jiska ${u.toISOString().slice(11, 16)} UTC. Achtè: kenbe resi a (SMS ak nimewo tranzaksyon an). Kripto a rete kadnase. / The seller does not see the money yet. Sometimes MonCash, NatCash or banks show "sent" before the money arrives. We added time until ${u.toISOString().slice(11, 16)} UTC. Buyer: keep your receipt (SMS and transaction number). The crypto stays locked.`]);
+    return { ok: true, delay_until: u };
+  });
+}
+
+// ---------- after the trade: the payment was reversed, or another problem ----------
+export async function report(user, orderId, { kind, note }) {
+  const k = ['REVERSED', 'OTHER'].includes(kind) ? kind : null;
+  if (!k) throw bad('Pick what happened.');
+  const text = String(note || '').trim();
+  if (text.length < 5) throw bad('Say what happened (a few words).');
+  const o = await getOrderRaw(orderId);
+  if (!o || (o.buyer_id !== user.id && o.seller_id !== user.id)) throw notFound('Order not found.');
+  if (o.state !== 'COMPLETED') throw conflict('Use a dispute while the order is open. This report is for finished orders.', 'STATE');
+  if (Date.now() - new Date(o.updated_at).getTime() > 60 * 86400000) throw conflict('This order is too old to report here.', 'OLD');
+  await q('INSERT INTO order_reports (order_id, reporter_id, kind, note) VALUES ($1,$2,$3,$4)', [orderId, user.id, k, text.slice(0, 1000)]);
+  return { ok: true };
+}

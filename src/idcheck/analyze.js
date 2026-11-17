@@ -62,7 +62,7 @@ async function readFaces(files) {
 export async function analyze({ files }) {
   const text = await readText([files.FRONT, files.BACK]);
   const faces = await readFaces({ FRONT: files.FRONT, FACE1: files.FACE1, FACE2: files.FACE2, FACE3: files.FACE3 });
-  return { text, faces };
+  return { text, faces, rss_mb: Math.round(process.memoryUsage().rss / 1e6) };
 }
 
 // When started as a child process: one job, answer, exit.

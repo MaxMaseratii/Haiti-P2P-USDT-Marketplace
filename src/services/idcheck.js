@@ -196,3 +196,21 @@ export async function recentAuto(limit = 20) {
                    FROM kyc k JOIN users u ON u.id=k.user_id WHERE k.auto_status='AUTO_APPROVED' AND k.status='APPROVED'
                    ORDER BY k.reviewed_at DESC LIMIT $1`, [limit])).rows;
 }
+
+// Once after each start: run the robot on a made-up card (no person, no user data) and write the result
+// in the server log, so we know the face and text tools work on this server.
+export async function selfTest() {
+  const sharp = (await import('sharp')).default;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'idc-'));
+  try {
+    const f = path.join(dir, 'card.jpg');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560"><rect width="900" height="560" fill="#e8eef5"/>' +
+      '<text x="40" y="120" font-family="DejaVu Sans" font-size="44" font-weight="bold">REPUBLIQUE D HAITI</text><text x="40" y="220" font-family="DejaVu Sans" font-size="40">AYITI P2P TEST 4071</text></svg>';
+    await sharp(Buffer.from(svg)).jpeg().toFile(f);
+    const t = Date.now(), r = await analyzer({ files: { FRONT: f, FACE1: f } });
+    const ok = /AYITI/.test(r.text) && r.faces.FRONT && r.faces.FRONT.found === 0;
+    console.log(`idcheck self-test ${ok ? 'OK' : 'PROBLEM'}: read "${r.text.replace(/\s+/g, ' ').trim().slice(0, 60)}", faces tool ${r.faces.FRONT?.error ? 'error ' + r.faces.FRONT.error : 'ready'}, ${Date.now() - t} ms, robot memory ${r.rss_mb} MB`);
+    return { ok, ms: Date.now() - t, rss_mb: r.rss_mb };
+  } catch (e) { console.error('idcheck self-test PROBLEM:', e.message); return { ok: false, error: e.message }; }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}

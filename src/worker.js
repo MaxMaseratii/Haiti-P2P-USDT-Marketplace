@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { runTimers } from './services/orders.js';
-import { runQueue } from './services/idcheck.js';
+import { runQueue, selfTest } from './services/idcheck.js';
 
 let busy = false;
 export function startWorker() {
@@ -24,6 +24,7 @@ export function startWorker() {
     catch (e) { console.error('idcheck error', e.message); }
     finally { idBusy = false; }
   };
+  if (process.env.IDCHECK !== 'off') setTimeout(() => { idBusy = true; selfTest().finally(() => { idBusy = false; }); }, 20 * 1000).unref();
   const h2 = setInterval(idTick, 30 * 1000);
   h2.unref();
   return () => { clearInterval(h); clearInterval(h2); };

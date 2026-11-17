@@ -51,6 +51,44 @@ function appShots(sec) {
       shot('id', { en: 'ID check: photo and video', fr: 'Vérification : photo et vidéo', ht: 'Verifikasyon: foto ak videyo' })));
 }
 
+// ---------- hero: one idea per slide, swipe left / right ----------
+function heroSlides() {
+  const L = HL();
+  const S = [
+    ['market', '1', { en: 'Pick a verified seller', fr: 'Choisissez un vendeur vérifié', ht: 'Chwazi yon vandè verifye' },
+      { en: 'Best price first. Every seller showed their ID and a live video.', fr: 'Meilleur prix d\'abord. Chaque vendeur a montré sa pièce et une vidéo.', ht: 'Pi bon pri an premye. Chak vandè montre pyès idantite yo ak yon videyo an dirèk.' }, '✓ ID', { en: 'seller verified', fr: 'vendeur vérifié', ht: 'vandè verifye' }],
+    ['order', '2', { en: 'The crypto is locked before you pay', fr: 'La crypto est verrouillée avant de payer', ht: 'Kripto a kadnase anvan ou peye' },
+      { en: 'Then you pay the seller by MonCash, NatCash or bank. The seller cannot take the crypto back.', fr: 'Puis vous payez par MonCash, NatCash ou banque. Le vendeur ne peut pas reprendre la crypto.', ht: 'Apre sa ou peye vandè a pa MonCash, NatCash oswa labank. Vandè a pa ka repran kripto a.' }, '🔒 20 USDT', { en: 'locked for you', fr: 'verrouillés pour vous', ht: 'kadnase pou ou' }],
+    ['home', '3', { en: 'The money arrives, the crypto is yours', fr: 'L\'argent arrive, la crypto est à vous', ht: 'Lajan an rive, kripto a pou ou' },
+      { en: 'The seller confirms and the USDT lands in your account. Like a bank app, in your pocket.', fr: 'Le vendeur confirme et les USDT arrivent sur votre compte. Comme une appli bancaire.', ht: 'Vandè a konfime, epi USDT a tonbe nan kont ou. Tankou yon aplikasyon labank, nan pòch ou.' }, '⚡ 5 min', { en: 'released after payment', fr: 'libéré après paiement', ht: 'dekadnase apre peman' }],
+    ['profile', '4', { en: 'Check the seller before you buy', fr: 'Vérifiez le vendeur avant d\'acheter', ht: 'Gade vandè a anvan ou achte' },
+      { en: 'Real reviews, finished trades, response time and business posters.', fr: 'Vrais avis, échanges terminés, délai de réponse et affiches.', ht: 'Vrè revi, echanj ki fini, tan pou reponn ak afich biznis.' }, '★ 5.0', { en: 'from real trades', fr: 'de vrais échanges', ht: 'soti nan vrè echanj' }],
+    ['id', '5', { en: 'Your ID, checked inside the app', fr: 'Votre pièce, vérifiée dans l\'appli', ht: 'Pyès ou, verifye nan aplikasyon an' },
+      { en: 'Photos and a live video with the app camera. Only our team sees them.', fr: 'Photos et vidéo en direct avec la caméra de l\'appli. Seule notre équipe les voit.', ht: 'Foto ak videyo an dirèk ak kamera aplikasyon an. Se ekip nou an sèlman ki wè yo.' }, '🪪 ID', { en: '+ live video', fr: '+ vidéo en direct', ht: '+ videyo an dirèk' }],
+  ];
+  const track = h('div', { class: 'xs-track', tabindex: '0', 'aria-label': tx3({ en: 'How it works, slide by slide', fr: 'Comment ça marche', ht: 'Kijan li mache, youn apre lòt' }) },
+    S.map(([img, n, title, text, chipB, chipS], i) => h('div', { class: 'xs-slide', 'data-i': i },
+      h('div', { class: 'xs-phone' }, h('div', { class: 'xphone' }, h('img', { src: `img/app/${img}-${L}.jpg`, alt: tx3(title), loading: i ? 'lazy' : 'eager', ...(i ? {} : { fetchpriority: 'high' }) })),
+        h('div', { class: 'xchip' }, h('b', {}, chipB), h('small', {}, tx3(chipS)))),
+      h('div', { class: 'xs-cap' }, h('span', { class: 'xs-n' }, n), h('div', {}, h('b', {}, tx3(title)), h('p', {}, tx3(text)))))));
+  const dots = h('div', { class: 'xs-dots' }, S.map((_, i) => h('button', { type: 'button', 'aria-label': String(i + 1), onclick: () => goTo(i, true) })));
+  let cur = 0, timer = null, user = false;
+  const goTo = (i, byUser) => { cur = (i + S.length) % S.length; track.scrollTo({ left: cur * track.clientWidth, behavior: 'smooth' }); if (byUser) { user = true; stop(); } };
+  const paint = () => [...dots.children].forEach((d, i) => d.classList.toggle('on', i === cur));
+  track.addEventListener('scroll', () => { const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); if (i !== cur) { cur = i; paint(); } }, { passive: true });
+  ['pointerdown', 'touchstart', 'wheel'].forEach((ev) => track.addEventListener(ev, () => { user = true; stop(); }, { passive: true }));
+  track.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') goTo(cur + 1, true); if (e.key === 'ArrowLeft') goTo(cur - 1, true); });
+  const stop = () => { clearInterval(timer); timer = null; };
+  const start = () => { if (user || timer || matchMedia('(prefers-reduced-motion: reduce)').matches) return; timer = setInterval(() => { if (!track.isConnected) return stop(); goTo(cur + 1); }, 5500); };
+  paint(); setTimeout(start, 1200);
+  return h('div', { class: 'xh-slides' },
+    h('div', { class: 'xh-glow' }), track,
+    h('div', { class: 'xs-nav' },
+      h('button', { type: 'button', class: 'xs-arrow', 'aria-label': '‹', onclick: () => goTo(cur - 1, true) }, '‹'), dots,
+      h('button', { type: 'button', class: 'xs-arrow', 'aria-label': '›', onclick: () => goTo(cur + 1, true) }, '›')),
+    h('div', { class: 'xs-hint' }, tx3({ en: '← swipe →', fr: '← glissez →', ht: '← glise →' })));
+}
+
 // ---------- page ----------
 function homeView(app, loginCard, quickTest, adsBox) {
   const go2 = (id) => () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -79,13 +117,7 @@ function homeView(app, loginCard, quickTest, adsBox) {
           h('div', { class: 'xh-pay' }, h('small', {}, tx3({ en: 'Pay with', fr: 'Payez avec', ht: 'Peye ak' })),
             ...['MONCASH', 'NATCASH'].map((k) => (cfg.pay_logos || {})[k] ? h('img', { src: cfg.pay_logos[k], alt: k }) : h('b', {}, k)),
             ...['sogebank', 'unibank', 'bnc'].map((k) => h('img', { src: `img/bank/${k}-sq.png`, alt: k, class: 'bk' })))),
-        h('div', { class: 'xh-art', 'aria-hidden': 'true' },
-          h('div', { class: 'xh-glow' }),
-          h('div', { class: 'xphone p1' }, h('img', { src: `img/app/market-${HL()}.jpg`, alt: '', fetchpriority: 'high' })),
-          h('div', { class: 'xphone p2' }, h('img', { src: `img/app/order-${HL()}.jpg`, alt: '' })),
-          h('div', { class: 'xchip c1' }, h('b', {}, '🔒 50 USDT'), h('small', {}, tx3({ en: 'locked for you', fr: 'verrouillés pour vous', ht: 'kadnase pou ou' }))),
-          h('div', { class: 'xchip c2' }, h('b', {}, '✓ ID'), h('small', {}, tx3({ en: 'seller verified', fr: 'vendeur vérifié', ht: 'vandè verifye' }))),
-          h('div', { class: 'xchip c3' }, h('b', {}, '⚡ 5 min'), h('small', {}, tx3({ en: 'released after payment', fr: 'libéré après paiement', ht: 'dekadnase apre peman' })))))),
+        heroSlides())),
     // ---------- sign up, right away ----------
     h('section', { class: 'xjoin', id: 'join' },
       h('div', { class: 'xj-why' },

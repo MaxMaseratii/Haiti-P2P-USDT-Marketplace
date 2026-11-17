@@ -24,6 +24,7 @@ import * as orders from './services/orders.js';
 import * as disputes from './services/disputes.js';
 import { addBlock } from './services/screening.js';
 import * as providers from './services/providers.js';
+import * as idcheck from './services/idcheck.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((v) => { if (v !== undefined) res.json(v); }).catch(next);
 
@@ -209,6 +210,7 @@ staff.get('/kyc/:id/file/:kind', wrap(async (req, res) => {
   const f = await users.kycFile(req.params.id, String(req.params.kind).toUpperCase());
   res.set('Content-Type', f.mime).set('Cache-Control', 'private, no-store').send(f.data);
 }));
+staff.post('/kyc/:id/recheck', wrap(async (req) => idcheck.recheck(req.params.id)));
 staff.post('/kyc/:id/decision', wrap(async (req) => users.decideKyc(req.user, req.params.id, !!req.body?.approve)));
 staff.post('/payment-methods/:id/verify', wrap(async (req) => users.setPaymentVerified(req.params.id, req.body?.verified !== false)));
 staff.get('/disputes', wrap(async (req) => disputes.queue(req.query.status || 'OPEN')));
@@ -220,6 +222,11 @@ api.use('/staff', staff);
 
 const admin = express.Router();
 admin.use(needRole('ADMIN'));
+// automatic ID check: on/off switch, what the robot approved, undo
+admin.get('/idcheck', wrap(async () => ({ ...(await idcheck.settings()), recent: await idcheck.recentAuto(20) })));
+admin.post('/idcheck', wrap(async (req) => idcheck.setSettings({ auto_approve: !!req.body?.auto_approve })));
+admin.post('/idcheck/run', wrap(async () => ({ done: await idcheck.runQueue(1) })));
+admin.post('/kyc/:id/undo', wrap(async (req) => idcheck.undoAuto(req.user, req.params.id)));
 admin.get('/limits', wrap(async () => (await q('SELECT * FROM tier_limits ORDER BY tier')).rows));
 admin.put('/limits/:tier', wrap(async (req) => {
   const { max_order_htg, max_daily_htg, max_open_orders } = req.body || {};

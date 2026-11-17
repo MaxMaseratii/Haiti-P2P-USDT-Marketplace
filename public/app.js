@@ -956,7 +956,9 @@ function cameraShot(label) {
 async function idCheckCard() {
   const st = await api('GET', '/kyc/me');
   if (st.last && st.last.status === 'PENDING') return h('div', { class: 'card kyc' }, h('div', { class: 'kdone' }, h('div', { class: 'kicon' }, '⏳'),
-    h('div', {}, h('h2', {}, 'We are checking your ID'), h('p', { class: 'mute' }, `Sent ${new Date(st.last.created_at).toLocaleString()}. A staff member looks at your photos and video, usually within a few hours. You can trade as soon as it is approved.`))));
+    h('div', {}, h('h2', {}, 'We are checking your ID'), h('p', { class: 'mute' }, ['QUEUED', 'RUNNING'].includes(st.last.auto_status)
+      ? t('Our system is checking your photos and video now. It usually takes a few minutes. Open this page again soon.')
+      : `Sent ${new Date(st.last.created_at).toLocaleString()}. A staff member looks at your photos and video, usually within a few hours. You can trade as soon as it is approved.`))));
   const have = new Set(st.drafts.map((d) => d.kind));
   let idType = null;
   const card = h('div', { class: 'card kyc' });
@@ -1008,17 +1010,35 @@ async function idCheckCard() {
     const live = h('video', { autoplay: true, muted: true, playsinline: true }); live.srcObject = stream;
     const clock = h('span', { class: 'rec' }, '● 0s');
     const stop = h('button', { class: 'btn danger', type: 'button' }, 'Stop');
-    vBox.classList.remove('hidden'); vBox.replaceChildren(live, h('div', { class: 'vbar' }, clock, stop));
+    // The app tells the person what to do, and takes 3 face pictures by itself for the automatic check.
+    const say = h('div', { class: 'vsay' }), sayTxt = h('b', {}, t('Look straight at the camera')), sayScript = h('div', { class: 'vscript hidden' }, '"' + st.script + '"');
+    say.append(sayTxt, sayScript);
+    vBox.classList.remove('hidden'); vBox.replaceChildren(h('div', { class: 'vlive' }, live, say), h('div', { class: 'vbar' }, clock, stop));
+    const faces = {};
+    const grab = (kind) => {
+      if (!live.videoWidth) return;
+      const k = Math.min(1, 720 / Math.max(live.videoWidth, live.videoHeight)), c = document.createElement('canvas');
+      c.width = Math.round(live.videoWidth * k); c.height = Math.round(live.videoHeight * k);
+      c.getContext('2d').drawImage(live, 0, 0, c.width, c.height); c.toBlob((b) => { if (b) faces[kind] = b; }, 'image/jpeg', 0.88);
+    };
+    const STEPS = { 3: 'Turn your head slowly to the LEFT ⬅️', 6: 'Now turn your head to the RIGHT ➡️', 9: 'Hold your ID next to your face and read out loud:' };
+    const SHOTS = { 2: 'FACE1', 5: 'FACE2', 8: 'FACE3' };
     const mime = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 700000 } : undefined);
     const parts = []; rec.ondataavailable = (e) => e.data.size && parts.push(e.data);
-    let secs = 0; const tick = setInterval(() => { clock.textContent = '● ' + (++secs) + 's'; if (secs >= 25) rec.stop(); }, 1000);
+    let secs = 0; const tick = setInterval(() => {
+      clock.textContent = '● ' + (++secs) + 's';
+      if (SHOTS[secs]) grab(SHOTS[secs]);
+      if (STEPS[secs]) { sayTxt.textContent = t(STEPS[secs]); if (secs === 9) sayScript.classList.remove('hidden'); }
+      if (secs >= 30) rec.stop();
+    }, 1000);
     rec.onstop = act(async () => {
       clearInterval(tick); stream.getTracks().forEach((tr) => tr.stop());
       const blob = new Blob(parts, { type: rec.mimeType || 'video/webm' });
       vBox.replaceChildren(h('video', { src: URL.createObjectURL(blob), controls: true, playsinline: true }));
-      if (secs < 3) throw new Error('Too short. Say the whole sentence.');
+      if (secs < 12) throw new Error('Too short. Follow the steps on the screen and say the whole sentence.');
       await uploadVideo(blob);
+      for (const kind of ['FACE1', 'FACE2', 'FACE3']) if (faces[kind]) await sendFile(kind, faces[kind]).catch(() => {});
     });
     stop.onclick = () => rec.state !== 'inactive' && rec.stop();
     rec.start(1000);
@@ -1041,7 +1061,7 @@ async function idCheckCard() {
   }
   const s2 = step(2, 'Choose your ID', 'Use a real, valid ID with your photo.', types); s2.dataset.k = 'type';
   const s3 = step(3, 'Take photos of your ID', 'With the camera in the app. Put the ID on a table: all 4 corners visible, no light reflection, text easy to read. Passport: one photo of the page with your picture.', h('div', { class: 'ptiles' }, front, back)); s3.dataset.k = 'photos';
-  const s5 = step(5, 'Record a short video', 'Look at the camera. Hold your ID next to your face. Read this sentence out loud:',
+  const s5 = step(5, 'Record a short video', canRecord ? t('Follow what the screen says: look straight, turn your head left, then right. Then hold your ID next to your face and read this sentence out loud:') : 'Look at the camera. Hold your ID next to your face. Read this sentence out loud:',
     h('div', {}, h('div', { class: 'script' }, '"' + st.script + '"'),
       h('div', { class: 'gactions' }, canRecord ? h('button', { class: 'btn', type: 'button', onclick: record }, '🎥 Record now') : h('label', { class: 'btn filebtn' }, vFile, '🎥 Record a video')),
       vBox, vStatus)); s5.dataset.k = 'video';
@@ -1267,6 +1287,14 @@ async function profileView(app) {
 
 // ---------- staff ----------
 const ID_NAME = { NATIONAL_ID: 'National ID card', PASSPORT: 'Passport', DRIVER_LICENSE: "Driver's license" };
+// What the automatic ID check saw (green = passed, red = needs a human look).
+function robotBox(k) {
+  const r = k.auto_result || {}, st = k.auto_status;
+  if (!st || st === 'QUEUED' || st === 'RUNNING') return h('div', { class: 'robot' }, h('b', {}, '🤖 Automatic check: ' + (st === 'RUNNING' ? 'running now…' : 'waiting in line (about 1 minute)')));
+  return h('div', { class: 'robot' }, h('b', {}, '🤖 Automatic check: ' + (r.pass ? 'everything passed' : 'needs you')), r.note ? h('div', { class: 'mute' }, r.note) : null,
+    h('ul', {}, (r.checks || []).map((c) => h('li', { class: c.ok ? 'ok' : c.blocking ? 'no' : 'soft' }, (c.ok ? '✓ ' : c.blocking ? '✗ ' : '• ') + c.label + (c.detail ? ' — ' + c.detail : '')))),
+    h('button', { class: 'btn alt small', type: 'button', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/recheck`); toast('Checking again…'); route(); }) }, 'Check again'));
+}
 // One ID check for staff: details, photos, the video, and what the person had to say.
 function kycReview(k) {
   const media = h('div', { class: 'kmedia' });
@@ -1282,7 +1310,7 @@ function kycReview(k) {
   return h('div', { class: 'kitem' },
     kv([['Account name', k.full_name], ['Name on ID', k.name_on_id + (same ? ' ✓' : ' ⚠ different')], ['ID', (ID_NAME[k.id_type] || k.id_type || 'old form') + (k.id_number ? ' · ' + k.id_number : '')],
       ['Phone', k.phone], k.challenge ? ['Must say', `"My name is ${k.full_name}. My phone number is ${k.phone}. My code is ${k.challenge}."`] : null, ['Sent', new Date(k.created_at).toLocaleString()]]),
-    media,
+    media, robotBox(k),
     h('p', { class: 'mute' }, 'Check: the face in the video is the face on the ID · they say the right name, phone and code · the ID looks real and not expired.'),
     h('div', { class: 'gactions' }, h('button', { class: 'btn good', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: true }); route(); }) }, 'Approve'),
       h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/decision`, { approve: false }); route(); }) }, 'Reject')));

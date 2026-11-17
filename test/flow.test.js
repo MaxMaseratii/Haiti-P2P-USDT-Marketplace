@@ -699,3 +699,64 @@ test('payment delays: wait before a dispute, seller "not arrived yet" hold, prov
   assert.equal(reps[0].kind, 'REVERSED');
   await ok('POST', `/admin/reports/${reps[0].id}/close`, null, tk('admin'));
 });
+
+test('automatic ID check: approves clear cases, flags a face used twice, owner can undo and switch it off', async () => {
+  const idc = await import('../src/services/idcheck.js');
+  const vec = (f, n = 0) => Array.from({ length: 1024 }, (_, i) => f(i) * 0.5 + (n ? Math.sin(i * 13 + n) * 0.005 : 0));
+  const anne = (i) => Math.sin(i), other = (i) => Math.cos(i * 7), luc = (i) => Math.sin(i * 3 + 1);
+  let SEEN = null;
+  await pool.query("UPDATE kyc SET auto_status='NEEDS_YOU' WHERE status='PENDING'"); // IDs sent by the tests above
+  idc.setAnalyzer(async (job) => { assert.ok(job.files.FRONT && job.files.FACE1, 'the robot gets the ID photo and the video pictures'); return SEEN; });
+  const send = async (key, name, num) => {
+    await signup(key, '+5093700' + String(Math.floor(1000 + Math.random() * 8999)), name);
+    for (const [kind, buf] of [['FRONT', PNG], ['BACK', PNG], ['VIDEO', WEBM], ['FACE1', PNG], ['FACE2', PNG], ['FACE3', PNG]]) assert.equal((await upload(kind, buf, tk(key))).status, 200);
+    const k = await ok('POST', '/kyc', { id_type: 'NATIONAL_ID', name_on_id: name, id_number: num }, tk(key));
+    assert.equal(k.auto_status, 'QUEUED');
+    return k;
+  };
+  const face = (f, n, yaw) => ({ found: 1, score: 1, real: 0.8, live: 0.9, yaw, emb: vec(f, n) });
+
+  // 1) clear case: approved by itself
+  const k1 = await send('ida', 'Anne Pierre', '77-1234-55');
+  SEEN = { text: "REPUBLIQUE D'HAITI\nNom PIERRE\nPrenom ANNE\nNIF 77-1234-55", faces: { FRONT: face(anne, 1, 0), FACE1: face(anne, 2, 0), FACE2: face(anne, 3, -0.4), FACE3: face(anne, 4, 0.35) } };
+  let d = await idc.runQueue(1);
+  assert.equal(d[0].status, 'AUTO_APPROVED', JSON.stringify(d[0]));
+  assert.equal((await pool.query('SELECT tier FROM users WHERE id=$1', [U.ida.id])).rows[0].tier, 1);
+  assert.equal((await ok('GET', '/kyc/me', null, tk('ida'))).last.auto_status, 'AUTO_APPROVED');
+
+  // 2) the same face on a second account: never approved by itself
+  const k2 = await send('idb', 'Paul Jean', '88-9999-11');
+  SEEN = { text: 'Nom JEAN Prenom PAUL', faces: { FRONT: face(anne, 5, 0), FACE1: face(anne, 6, 0), FACE2: face(anne, 7, -0.4), FACE3: face(anne, 8, 0.4) } };
+  d = await idc.runQueue(1);
+  assert.equal(d[0].status, 'NEEDS_YOU');
+  assert.equal(d[0].checks.find((c) => c.key === 'dupface').ok, false);
+  const list = await ok('GET', '/staff/kyc', null, tk('admin'));
+  const row = list.find((x) => x.id === k2.id);
+  assert.equal(row.auto_status, 'NEEDS_YOU'); assert.equal(row.face_vec, undefined, 'face prints never leave the server');
+
+  // 3) different face and no head turn (a photo held up to the camera): needs a human
+  const k3 = await send('idc3', 'Rose Michel', '55-4444-22');
+  SEEN = { text: 'ROSE MICHEL 55-4444-22', faces: { FRONT: face(anne, 9, 0), FACE1: face(other, 1, 0.01), FACE2: face(other, 2, 0.02), FACE3: face(other, 3, 0.0) } };
+  d = await idc.runQueue(1);
+  assert.equal(d[0].status, 'NEEDS_YOU');
+  const bad3 = d[0].checks.filter((c) => !c.ok).map((c) => c.key);
+  assert.ok(bad3.includes('match') && bad3.includes('turn'), bad3.join());
+
+  // 4) owner switches auto-approve OFF: a clear case waits for the owner
+  assert.equal((await ok('POST', '/admin/idcheck', { auto_approve: false }, tk('admin'))).auto_approve, false);
+  await send('idd', 'Luc Joseph', '66-1212-33');
+  SEEN = { text: 'LUC JOSEPH', faces: { FRONT: face(luc, 9, 0), FACE1: face(luc, 10, 0), FACE2: face(luc, 11, -0.3), FACE3: face(luc, 12, 0.3) } };
+  d = await idc.runQueue(1);
+  assert.equal(d[0].status, 'NEEDS_YOU'); assert.equal(d[0].pass, true); assert.match(d[0].note, /OFF/);
+  await ok('POST', '/admin/idcheck', { auto_approve: true }, tk('admin'));
+
+  // 5) undo, recheck, staff only
+  const s = await ok('GET', '/admin/idcheck', null, tk('admin'));
+  assert.equal(s.auto_approve, true); assert.ok(s.recent.some((r) => r.id === k1.id));
+  await ok('POST', `/admin/kyc/${k1.id}/undo`, {}, tk('admin'));
+  assert.equal((await pool.query('SELECT tier FROM users WHERE id=$1', [U.ida.id])).rows[0].tier, 0);
+  assert.equal((await pool.query('SELECT status FROM kyc WHERE id=$1', [k1.id])).rows[0].status, 'PENDING');
+  assert.equal((await ok('POST', `/staff/kyc/${k3.id}/recheck`, {}, tk('admin'))).auto_status, 'QUEUED');
+  assert.equal((await call('POST', '/admin/idcheck', { auto_approve: false }, tk('ida'))).status, 403);
+  assert.equal((await call('POST', `/admin/kyc/${k2.id}/undo`, {}, tk('a1'))).status, 403);
+});

@@ -163,7 +163,8 @@ export async function setWallet(user, addr, signature) {
 // ---- KYC (manual review in the MVP) ----
 // ---- ID check: ID photos + a short video where the person says their name, phone and a code ----
 export const ID_TYPES = { NATIONAL_ID: 'National ID card (CIN)', PASSPORT: 'Passport', DRIVER_LICENSE: "Driver's license" };
-const KYC_MAX = { FRONT: 8 * 1024 * 1024, BACK: 8 * 1024 * 1024, VIDEO: 25 * 1024 * 1024 };
+// FACE1-3: three pictures the app takes by itself during the live video (straight, head left, head right).
+const KYC_MAX = { FRONT: 8 * 1024 * 1024, BACK: 8 * 1024 * 1024, VIDEO: 25 * 1024 * 1024, FACE1: 2 * 1024 * 1024, FACE2: 2 * 1024 * 1024, FACE3: 2 * 1024 * 1024 };
 
 // What kind of file is this, from its first bytes (never trust the name).
 function sniff(buf) {
@@ -181,14 +182,14 @@ const newChallenge = () => Array.from(crypto.randomBytes(4), (x) => x % 10).join
 export async function kycState(user) {
   let ch = (await q('SELECT kyc_challenge FROM users WHERE id=$1', [user.id])).rows[0].kyc_challenge;
   if (!ch) { ch = newChallenge(); await q('UPDATE users SET kyc_challenge=$2 WHERE id=$1', [user.id, ch]); }
-  const last = (await q('SELECT id, status, id_type, name_on_id, created_at, reviewed_at FROM kyc WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1', [user.id])).rows[0] || null;
+  const last = (await q('SELECT id, status, auto_status, id_type, name_on_id, created_at, reviewed_at FROM kyc WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1', [user.id])).rows[0] || null;
   const drafts = (await q('SELECT kind, mime, size FROM kyc_files WHERE user_id=$1 AND kyc_id IS NULL', [user.id])).rows;
   return { challenge: ch, phone: user.phone, full_name: user.full_name, last, drafts, id_types: ID_TYPES,
     script: `My name is ${user.full_name}. My phone number is ${user.phone}. My code is ${ch}.` };
 }
 
 export async function addKycFile(user, kind, buf) {
-  if (!KYC_MAX[kind]) throw bad('Kind must be FRONT, BACK or VIDEO.');
+  if (!KYC_MAX[kind]) throw bad('Kind must be FRONT, BACK, VIDEO or FACE1-3.');
   if (!Buffer.isBuffer(buf) || buf.length < 100) throw bad('The file is empty.');
   if (buf.length > KYC_MAX[kind]) throw bad(kind === 'VIDEO' ? 'Video is too big (max 25 MB). Keep it short, about 10 seconds.' : 'Photo is too big (max 8 MB).');
   const mime = sniff(buf);
@@ -212,7 +213,7 @@ export async function submitKyc(user, { id_type, name_on_id, id_number }) {
     if (miss.length) throw bad('Still missing: ' + miss.map((k) => ({ FRONT: 'photo of the front', BACK: 'photo of the back', VIDEO: 'your video' }[k])).join(', ') + '.');
     await screenUser(c, user.id, name_on_id);
     const ch = (await c.query('SELECT kyc_challenge FROM users WHERE id=$1', [user.id])).rows[0].kyc_challenge;
-    const k = (await c.query(`INSERT INTO kyc (user_id, name_on_id, id_doc_ref, id_type, id_number, challenge) VALUES ($1,$2,'files',$3,$4,$5) RETURNING *`,
+    const k = (await c.query(`INSERT INTO kyc (user_id, name_on_id, id_doc_ref, id_type, id_number, challenge, auto_status) VALUES ($1,$2,'files',$3,$4,$5,'QUEUED') RETURNING *`,
       [user.id, name_on_id, id_type, id_number, ch])).rows[0];
     await c.query('UPDATE kyc_files SET kyc_id=$2 WHERE user_id=$1 AND kyc_id IS NULL', [user.id, k.id]);
     await c.query('UPDATE users SET kyc_challenge=NULL WHERE id=$1', [user.id]); // a new code next time
@@ -228,7 +229,8 @@ export async function kycFile(kycId, kind) {
 
 export async function listKyc(status = 'PENDING') {
   const r = await q(
-    `SELECT k.*, u.phone, u.full_name, (SELECT array_agg(f.kind) FROM kyc_files f WHERE f.kyc_id=k.id) AS files
+    `SELECT k.id, k.user_id, k.status, k.name_on_id, k.id_type, k.id_number, k.challenge, k.created_at, k.auto_status, k.auto_result, k.auto_at,
+            u.phone, u.full_name, (SELECT array_agg(DISTINCT f.kind) FROM kyc_files f WHERE f.kyc_id=k.id) AS files
      FROM kyc k JOIN users u ON u.id=k.user_id WHERE k.status=$1 ORDER BY k.created_at`, [status]);
   return r.rows;
 }

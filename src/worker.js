@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { runTimers } from './services/orders.js';
+import { runQueue } from './services/idcheck.js';
 
 let busy = false;
 export function startWorker() {
@@ -14,5 +15,16 @@ export function startWorker() {
   };
   const h = setInterval(tick, config.workerIntervalSec * 1000);
   h.unref();
-  return () => clearInterval(h);
+  // Automatic ID check: looks for new IDs every 30 seconds, one at a time.
+  let idBusy = false;
+  const idTick = async () => {
+    if (idBusy || process.env.IDCHECK === 'off') return;
+    idBusy = true;
+    try { const d = await runQueue(3); if (d.length) console.log('idcheck', d.map((x) => x.id + ' ' + x.status).join(', ')); }
+    catch (e) { console.error('idcheck error', e.message); }
+    finally { idBusy = false; }
+  };
+  const h2 = setInterval(idTick, 30 * 1000);
+  h2.unref();
+  return () => { clearInterval(h); clearInterval(h2); };
 }

@@ -23,6 +23,12 @@ for (const sql of [
      kind text NOT NULL CHECK (kind IN ('FRONT','BACK','VIDEO')), mime text NOT NULL, size int NOT NULL, data bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
   'CREATE UNIQUE INDEX IF NOT EXISTS kyc_files_draft ON kyc_files (user_id, kind) WHERE kyc_id IS NULL',
   'CREATE INDEX IF NOT EXISTS kyc_files_kyc ON kyc_files (kyc_id)',
+  // automatic ID check: 3 face pictures taken during the video, and the robot's answer on each ID
+  'ALTER TABLE kyc_files DROP CONSTRAINT IF EXISTS kyc_files_kind_check',
+  "ALTER TABLE kyc_files ADD CONSTRAINT kyc_files_kind_check CHECK (kind IN ('FRONT','BACK','VIDEO','FACE1','FACE2','FACE3'))",
+  'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_status text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_result jsonb',
+  'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_at timestamptz', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS face_vec real[]',
+  'CREATE TABLE IF NOT EXISTS app_settings (key text PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_receiver boolean NOT NULL DEFAULT false',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS receiver_phone text',
   'ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS paid_until timestamptz',

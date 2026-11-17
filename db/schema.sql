@@ -46,6 +46,10 @@ CREATE TABLE kyc (
   challenge     text,                   -- the words the person had to say in their video
   reviewed_by   uuid REFERENCES users(id),
   reviewed_at   timestamptz,
+  auto_status   text,                   -- automatic check: QUEUED, RUNNING, AUTO_APPROVED, NEEDS_YOU
+  auto_result   jsonb,
+  auto_at       timestamptz,
+  face_vec      real[],                 -- face print from the video, to catch one face on two accounts
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -68,7 +72,7 @@ CREATE TABLE kyc_files (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    uuid NOT NULL REFERENCES users(id),
   kyc_id     uuid REFERENCES kyc(id),
-  kind       text NOT NULL CHECK (kind IN ('FRONT', 'BACK', 'VIDEO')),
+  kind       text NOT NULL CONSTRAINT kyc_files_kind_check CHECK (kind IN ('FRONT', 'BACK', 'VIDEO', 'FACE1', 'FACE2', 'FACE3')),
   mime       text NOT NULL,
   size       int NOT NULL,
   data       bytea NOT NULL,
@@ -371,3 +375,5 @@ CREATE TABLE user_photos (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id
 CREATE INDEX user_photos_user ON user_photos (user_id, created_at);
 CREATE TABLE provider_status (provider text PRIMARY KEY, down boolean NOT NULL DEFAULT false, note text, updated_by uuid REFERENCES users(id), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE order_reports (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid NOT NULL REFERENCES orders(id), reporter_id uuid NOT NULL REFERENCES users(id), kind text NOT NULL, note text, status text NOT NULL DEFAULT 'OPEN', created_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE app_settings (key text PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());

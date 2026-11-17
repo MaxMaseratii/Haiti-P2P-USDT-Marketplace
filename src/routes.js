@@ -26,6 +26,8 @@ import { addBlock } from './services/screening.js';
 import * as providers from './services/providers.js';
 import * as idcheck from './services/idcheck.js';
 import * as help from './services/help.js';
+import * as pw from './services/password.js';
+import * as biz from './services/business.js';
 import { readToken } from './auth.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((v) => { if (v !== undefined) res.json(v); }).catch(next);
@@ -78,7 +80,8 @@ async function whoIs({ phone, login }) {
 
 // Signup proves the phone is yours with an SMS code (in test mode the code is not checked).
 api.post('/auth/signup', wrap(async (req) => {
-  const { full_name, code, accept_terms } = req.body || {};
+  const { full_name, code, accept_terms, password } = req.body || {};
+  if (password !== undefined) pw.check(password);
   if (String(req.body?.phone || '').includes('@')) throw bad('Write your phone number here, with the country code.', 'PHONE');
   const phone = await whoIs({ phone: req.body?.phone });
   if (accept_terms !== true) throw bad('You must read and accept the Terms and Conditions to create an account.', 'TERMS');
@@ -87,14 +90,18 @@ api.post('/auth/signup', wrap(async (req) => {
   if (!isMockSms() || code !== undefined || owner) proof = await otp.verifyCode(phone, code, owner);
   // Email codes: the email that got the code becomes the account's email.
   const u = await users.signup({ phone, full_name, email: proof?.email || null, accept_terms: true });
-  return { token: makeToken(u.id), user: users.publicUser(u) };
+  if (password) await pw.set(u.id, password);
+  return { token: makeToken(u.id), user: users.publicUser({ ...u, pw_hash: password ? 'x' : null }) };
 }));
 
 api.post('/auth/login', wrap(async (req) => {
-  const { code } = req.body || {};
+  const { code, password } = req.body || {};
   const phone = await whoIs(req.body || {});
   const known = await users.findByPhone(phone);
-  await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
+  if (password !== undefined && password !== '') {
+    if (!known) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
+    await pw.login(known, password); // phone or email + password
+  } else await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
   const u = known;
   if (!u) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
   if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
@@ -102,20 +109,34 @@ api.post('/auth/login', wrap(async (req) => {
   return { token: makeToken(u.id), user: users.publicUser(u) };
 }));
 
+// Forgot the password: the email code proves it is you, then the new password is saved and you are logged in.
+api.post('/auth/reset-password', otp.ipLimit, wrap(async (req) => {
+  const { code, password } = req.body || {};
+  pw.check(password);
+  const phone = await whoIs(req.body || {});
+  const u = await users.findByPhone(phone);
+  if (!u) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
+  await otp.verifyCode(phone, code, false);
+  if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
+  if (u.banned) throw forbidden('Account is frozen or banned.');
+  await pw.set(u.id, password);
+  return { token: makeToken(u.id), user: users.publicUser({ ...u, pw_hash: 'x' }) };
+}));
+
 // The market is public to look at (so the home page can show live ads). Names are shortened.
-api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.side === 'BUY' ? 'BUY' : 'SELL' })).map((a) => {
+api.get('/public/ads', wrap(async (req) => (await ads.listAds({ side: req.query.side === 'BUY' ? 'BUY' : 'SELL', business: req.query.business === '1' })).map((a) => {
   const [first, ...rest] = String(a.owner_name).trim().split(/\s+/);
   return { side: a.side, asset: a.asset, price_htg: a.price_htg, remaining: a.remaining, min_order_htg: a.min_order_htg,
     max_order_htg: a.max_order_htg, pay_type: a.pay_type, pay_types: a.pay_types || [a.pay_type], trades: a.trades, rating: a.rating,
-    id_verified: a.id_verified, has_avatar: a.has_avatar, is_business: a.is_business, id: a.owner_id, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
-    owner: a.is_business ? a.owner_name : rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
+    id_verified: a.id_verified, has_avatar: a.has_avatar, is_business: a.is_business, business_type: a.business_type, id: a.owner_id, completion_pct: a.completion_pct, avg_release_min: a.avg_release_min,
+    owner: a.public_name ? a.owner_name : rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first };
 })));
 
 // Public business pages: anyone can look at a trader before buying. Personal names are shortened (Jean B.).
 const shortName = (n) => { const [first, ...rest] = String(n).trim().split(/\s+/); return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first; };
 api.get('/public/profile/:id', wrap(async (req) => {
   const p = await users.publicProfile(req.params.id);
-  return { ...p, name: p.is_business ? p.name : shortName(p.name) };
+  return { ...p, name: p.public_name ? p.name : shortName(p.name) };
 }));
 api.get('/public/poster/:id', wrap(async (req, res) => {
   const a = /^[0-9a-f-]{36}$/.test(req.params.id) ? await users.getPoster(req.params.id) : null;
@@ -180,6 +201,10 @@ api.post('/links/to-check/:orderId', wrap(async (req) => links.answer(req.user, 
 api.put('/me/payout', wrap(async (req) => users.setPayout(req.user, req.body || {})));
 api.post('/me/close', wrap(async (req) => users.closeAccount(req.user)));
 api.get('/help/mine', wrap(async (req) => help.mine(req.user)));
+api.post('/me/password', wrap(async (req) => pw.change(req.user, req.body || {})));
+// Commercial Sellers (businesses): apply, see the status, go back to a personal account.
+api.post('/me/business', wrap(async (req) => biz.apply(req.user, req.body || {})));
+api.delete('/me/business', wrap(async (req) => biz.leave(req.user)));
 api.put('/me/profile', wrap(async (req) => users.setProfile(req.user, req.body || {})));
 api.post('/me/accept-terms', wrap(async (req) => users.acceptTerms(req.user)));
 api.post('/me/posters', wrap(async (req) => users.addPoster(req.user, req.body || {})));
@@ -254,6 +279,9 @@ api.use('/staff', staff);
 
 const admin = express.Router();
 admin.use(needRole('ADMIN'));
+// Commercial Seller requests
+admin.get('/business', wrap(async (req) => biz.list(String(req.query.status || 'PENDING').toUpperCase())));
+admin.post('/business/:id', wrap(async (req) => biz.decide(req.user, req.params.id, req.body || {})));
 // help messages from users
 admin.get('/help', wrap(async (req) => help.list(String(req.query.status || 'OPEN').toUpperCase())));
 admin.post('/help/:id/reply', wrap(async (req) => help.reply(req.user, req.params.id, req.body?.reply)));

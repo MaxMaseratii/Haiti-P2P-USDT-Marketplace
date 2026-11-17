@@ -38,7 +38,8 @@ export const publicUser = (u) => ({
   id: u.id, phone: u.phone, full_name: u.full_name, role: u.role, tier: u.tier,
   strikes: u.strikes, wallet_addr: u.wallet_addr,
   binance_uid: u.binance_uid || null, payout_network: u.payout_network || null, payout_addr: u.payout_addr || null,
-  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, has_cover: !!u.cover_mime, email: u.email || null,
+  display_name: u.display_name || null, bio: u.bio || null, has_avatar: !!u.avatar_mime, has_cover: !!u.cover_mime, email: u.email || null, has_password: !!u.pw_hash,
+  business_status: u.business_status || null, business_name: u.business_name || null, business_type: u.business_type || null, business_reg: u.business_reg || null,
   department: u.department || null, area: u.area || null, response_min: u.response_min || null,
   terms_ok: u.terms_version === config.termsVersion,
 });
@@ -101,7 +102,7 @@ export const STATS_SQL = (u) => `
 export async function publicProfile(id) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw notFound('Profile not found.');
   const u = (await q(
-    `SELECT u.id, COALESCE(u.display_name, u.full_name) AS name, (u.display_name IS NOT NULL) AS is_business, u.bio, u.department, u.area, u.response_min,
+    `SELECT u.id, COALESCE(u.display_name, u.full_name) AS name, (u.display_name IS NOT NULL) AS public_name, (u.business_status='APPROVED') AS is_business, u.business_type, u.bio, u.department, u.area, u.response_min,
             (u.avatar_mime IS NOT NULL) AS has_avatar, (u.cover_mime IS NOT NULL) AS has_cover, u.created_at AS member_since, ${STATS_SQL('u')}
        FROM users u WHERE u.id=$1 AND u.banned=false AND u.closed_at IS NULL`, [id])).rows[0];
   if (!u) throw notFound('Profile not found.');
@@ -115,6 +116,7 @@ export async function publicProfile(id) {
 }
 
 const NO_CONTACT = /(https?:|www\.|@|\+?\d[\d\s().-]{6,}\d)/i;
+export const hasContact = (s) => NO_CONTACT.test(String(s || ''));
 export async function setProfile(user, { display_name, bio, avatar, cover, department, area, response_min }) {
   const dn = String(display_name ?? '').trim(), b = String(bio ?? '').trim(), ar = String(area ?? '').trim();
   if (dn && (dn.length < 2 || dn.length > 40)) throw bad('Public name must be 2 to 40 letters.');

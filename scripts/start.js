@@ -26,6 +26,12 @@ for (const sql of [
   // automatic ID check: 3 face pictures taken during the video, and the robot's answer on each ID
   'ALTER TABLE kyc_files DROP CONSTRAINT IF EXISTS kyc_files_kind_check',
   "ALTER TABLE kyc_files ADD CONSTRAINT kyc_files_kind_check CHECK (kind IN ('FRONT','BACK','VIDEO','FACE1','FACE2','FACE3'))",
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_hash text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_fails int NOT NULL DEFAULT 0',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_locked_until timestamptz',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_status text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name text',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_type text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_reg text',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_note text', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_at timestamptz',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS business_reviewed_at timestamptz',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS cover bytea', 'ALTER TABLE users ADD COLUMN IF NOT EXISTS cover_mime text',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_status text', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_result jsonb',
   'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS auto_at timestamptz', 'ALTER TABLE kyc ADD COLUMN IF NOT EXISTS face_vec real[]',

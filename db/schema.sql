@@ -28,6 +28,12 @@ CREATE TABLE users (
   avatar        bytea,
   avatar_mime   text,
   cover         bytea,                  -- business cover (background) photo
+  pw_hash       text,                   -- scrypt hash; NULL = log in with email codes only
+  pw_fails      int NOT NULL DEFAULT 0,
+  pw_locked_until timestamptz,
+  business_status text,                 -- Commercial Seller: NULL (personal), PENDING, APPROVED, REJECTED
+  business_name text, business_type text, business_reg text, business_note text,
+  business_at   timestamptz, business_reviewed_at timestamptz,
   cover_mime    text,
   kyc_challenge text,
   closed_at     timestamptz,            -- the person closed their account                   -- code the person must say in their ID video

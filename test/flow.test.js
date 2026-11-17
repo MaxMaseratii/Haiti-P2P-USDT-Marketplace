@@ -802,3 +802,47 @@ test('help: anyone can write to the team, the owner answers in the app and by em
   await ok('PUT', '/me/profile', { display_name: 'Deal509', cover: null }, tk('uk'));
   assert.equal((await fetch(`${url}/api/cover/${U.uk.id}`)).status, 404);
 });
+
+test('passwords: set at signup, log in with phone or email + password, lock after 5 wrong, reset with a code', async () => {
+  const s = await ok('POST', '/auth/signup', { phone: '+50937770011', full_name: 'Paula Joseph', code: '000000', accept_terms: true, password: 'Kreyol2026' });
+  assert.equal(s.user.has_password, true);
+  await pool.query('UPDATE users SET email=$2 WHERE id=$1', [s.user.id, 'paula@example.com']);
+  assert.ok((await ok('POST', '/auth/login', { login: '+509 3777 0011', password: 'Kreyol2026' })).token);
+  assert.ok((await ok('POST', '/auth/login', { login: 'Paula@example.com', password: 'Kreyol2026' })).token);
+  assert.equal((await call('POST', '/auth/signup', { phone: '+50937770012', full_name: 'Weak Pw', code: '000000', accept_terms: true, password: 'short' })).status, 400);
+  for (let i = 0; i < 5; i++) assert.equal((await call('POST', '/auth/login', { login: '+50937770011', password: 'wrong-pass1' })).status, 401);
+  const locked = await call('POST', '/auth/login', { login: '+50937770011', password: 'Kreyol2026' });
+  assert.equal(locked.status, 429); assert.equal(locked.body.code, 'PW_LOCKED');
+  // forgot password: email code + new password
+  const r = await ok('POST', '/auth/reset-password', { login: 'paula@example.com', code: '000000', password: 'NouvoModpas9' });
+  assert.ok(r.token);
+  assert.ok((await ok('POST', '/auth/login', { login: '+50937770011', password: 'NouvoModpas9' })).token);
+  // no password yet: told to use a code
+  const np = await call('POST', '/auth/login', { login: '+447700900123', password: 'Whatever123' });
+  assert.equal(np.body.code, 'NO_PASSWORD');
+  // change it from the profile: needs the current one
+  await ok('POST', '/me/password', { password: 'Grace2026ok' }, tk('uk'));
+  assert.equal((await call('POST', '/me/password', { password: 'Another2026', current: 'bad' }, tk('uk'))).status, 401);
+  await ok('POST', '/me/password', { password: 'Another2026', current: 'Grace2026ok' }, tk('uk'));
+});
+
+test('Commercial Sellers: apply after the ID check, owner approves, badge and filter on the market', async () => {
+  const sms = await import('../src/sms.js'); sms.setMailer(async () => {});
+  assert.equal((await call('POST', '/me/business', { business_name: 'Kanbis Pa Nou', business_type: 'EXCHANGE' }, tk('uk'))).body.code, 'TIER');
+  assert.equal((await call('POST', '/me/business', { business_name: 'Call 3700 1234 5678', business_type: 'EXCHANGE' }, tk('ms'))).body.code, 'NO_CONTACT');
+  const a = await ok('POST', '/me/business', { business_name: 'Kanbis Pa Nou', business_type: 'EXCHANGE', business_reg: 'Patant 12345' }, tk('ms'));
+  assert.equal(a.business_status, 'PENDING');
+  assert.equal((await call('GET', '/admin/business', null, tk('ms'))).status, 403);
+  const list = await ok('GET', '/admin/business', null, tk('admin'));
+  assert.ok(list.some((x) => x.id === U.ms.id && x.business_name === 'Kanbis Pa Nou'));
+  await ok('POST', `/admin/business/${U.ms.id}`, { approve: true }, tk('admin'));
+  const me1 = await ok('GET', '/me', null, tk('ms'));
+  assert.equal(me1.user.business_status, 'APPROVED'); assert.equal(me1.user.display_name, 'Kanbis Pa Nou');
+  const only = await ok('GET', '/ads?side=SELL&business=1', null, tk('buyer2'));
+  assert.ok(only.every((x) => x.is_business));
+  const pub = await ok('GET', '/public/ads?side=SELL&business=1');
+  assert.ok(pub.every((x) => x.is_business && x.owner === 'Kanbis Pa Nou'));
+  await ok('DELETE', '/me/business', null, tk('ms'));
+  assert.equal((await ok('GET', '/me', null, tk('ms'))).user.business_status, null);
+  sms.setMailer(null);
+});

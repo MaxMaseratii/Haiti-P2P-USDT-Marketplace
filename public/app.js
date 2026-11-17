@@ -68,6 +68,7 @@ async function route() {
     try { return await publicProfileView(app, location.hash.split('/')[1]); } catch (e) { return app.append(h('div', { class: 'card' }, h('p', {}, e.message))); }
   }
   if (!token && location.hash === '#safety') { renderNav(); return safetyView(app); }
+  if (location.hash === '#login') { if (token) return go('home'); renderNav(); return loginView(app); }
   if (!token) { renderNav(); return authView(app); }
   try { const m = await api('GET', '/me'); me = m; } catch { return; }
   renderNav();
@@ -80,17 +81,49 @@ async function route() {
 function renderNav() {
   const nav = $('#nav'); nav.replaceChildren();
   document.body.classList.toggle('in', !!token);
-  if (!token) { $('#tabs').replaceChildren(); return; }
+  // The logo is the home page: your account when logged in, the public page when not.
+  const brand = document.querySelector('header .brand'); if (brand) brand.setAttribute('href', token ? '#home' : '#welcome');
+  const acct = $('#acct'); acct.replaceChildren();
+  if (!token) {
+    $('#tabs').replaceChildren();
+    acct.append(
+      h('a', { class: 'btn sm joinbtn', href: '#welcome', onclick: (e) => { e.preventDefault(); const j = () => document.getElementById('join')?.scrollIntoView({ behavior: 'smooth' }); if (location.hash === '#welcome') j(); else { location.hash = 'welcome'; setTimeout(j, 500); } } }, t('Create account')),
+      h('button', { type: 'button', class: 'mebtn', title: t('Log in'), 'aria-label': t('Log in'), onclick: () => go('login') }, icon('user')));
+    return;
+  }
   const cur = (location.hash.slice(1) || 'home').split('/')[0];
-  const items = [['home', 'Home'], ['market', 'MarketPlace'], ['ads', 'My ads'], ['orders', 'My orders'], ['linked', 'Linked accounts'], ['wallet', 'Wallet'], ['profile', 'Profile'], ['safety', 'Safety']];
+  const items = [['market', 'MarketPlace'], ['orders', 'My orders'], ['ads', 'My ads'], ['wallet', 'Wallet']];
   if (me && ['AGENT', 'ADMIN'].includes(me.user.role)) items.push(['staff', 'Staff']);
   if (me && me.user.role === 'ADMIN') items.push(['admin', 'Admin']);
-  for (const [k, label] of items) nav.append(h('button', { class: cur === k ? 'on' : '', onclick: () => go(k) }, t(label)));
-  nav.append(h('button', { onclick: logout }, t('Log out')));
-  // Phone: a bank-app style bar at the bottom with the 5 main places.
+  for (const [k, label] of items) nav.append(h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, t(label)));
+  // The person button: your account menu.
+  const u = me?.user || {};
+  const nm = u.display_name || u.full_name || '';
+  const face = u.has_avatar ? h('img', { src: '/api/avatar/' + u.id + '?v=1', alt: '' }) : h('span', {}, (nm.trim()[0] || '?').toUpperCase());
+  const menu = h('div', { class: 'amenu', hidden: true });
+  const row = (ic, label, fn) => h('button', { type: 'button', class: 'amrow', onclick: () => { menu.hidden = true; fn(); } }, icon(ic), h('span', {}, t(label)));
+  menu.append(
+    h('div', { class: 'amhead' }, h('b', {}, nm), h('small', {}, u.phone || ''),
+      h('div', { class: 'ambadges' }, h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, u.tier >= 1 ? t('ID verified') : t('ID not checked yet')),
+        u.business_status === 'APPROVED' ? h('span', { class: 'pill biz' }, t('Commercial Seller')) : null)),
+    row('user', 'My account', () => go('profile')),
+    row('building', 'Business profile', () => go('profile/business')),
+    row('bank', 'Payment accounts', () => go('profile/pay')),
+    row('lock', 'Password', () => go('profile/password')),
+    row('link', 'Linked accounts', () => go('linked')),
+    row('shield', 'Safety', () => go('safety')),
+    row('doc', 'Legal', () => go('legal/terms')),
+    ...(['AGENT', 'ADMIN'].includes(u.role) ? [row('scale', 'Staff', () => go('staff'))] : []),
+    ...(u.role === 'ADMIN' ? [row('gear', 'Admin', () => go('admin'))] : []),
+    h('div', { class: 'amsep' }),
+    row('logout', 'Log out', logout));
+  const btn = h('button', { type: 'button', class: 'mebtn on', 'aria-label': t('My account'), onclick: (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; } }, face);
+  acct.append(btn, menu);
+  if (!window.__amClose) { window.__amClose = true; document.addEventListener('click', (e) => { const m = document.querySelector('.amenu'); if (m && !m.hidden && !e.target.closest('.amenu')) m.hidden = true; }); }
+  // Phone: a bank-app style bar at the bottom with the main places (the logo is the home page).
   const tabs = $('#tabs');
-  tabs.replaceChildren(...[['home', '🏠', 'Home'], ['market', '📈', 'MarketPlace'], ['orders', '🧾', 'Orders'], ['wallet', '👛', 'Wallet'], ['profile', '👤', 'Profile']]
-    .map(([k, ic, label]) => h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, ic), h('span', {}, t(label)))));
+  tabs.replaceChildren(...[['market', 'chart', 'MarketPlace'], ['orders', 'receipt', 'Orders'], ['ads', 'megaphone', 'Ads'], ['wallet', 'wallet', 'Wallet'], ['profile', 'user', 'Profile']]
+    .map(([k, ic, label]) => h('button', { class: cur === k || (k === 'orders' && cur === 'order') ? 'on' : '', onclick: () => go(k) }, h('span', { class: 'ti' }, icon(ic)), h('span', {}, t(label)))));
 }
 
 // ---------- auth ----------
@@ -125,22 +158,25 @@ function phoneField() {
   };
 }
 
-function authView(app) {
+// The sign-in card: create an account, or log in with a password (or an email code). Used on the home page and on #login.
+function authCard(startMode = 'signup') {
   const phoneF = phoneField();
   const loginIn = h('input', { placeholder: '+509 3700 1234  /  you@gmail.com', autocomplete: 'username' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
   const byEmail = cfg.code_channel === 'email';
   const email = h('input', { type: 'email', placeholder: 'you@gmail.com', autocomplete: 'email' });
   const code = h('input', { placeholder: byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric', autocomplete: 'one-time-code' });
-  const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
-  let mode = 'signup';
+  const pwNew = pwInput('new-password'), pwIn = pwInput('current-password'), pwReset = pwInput('new-password');
+  const done = (r) => { token = r.token; localStorage.setItem('token', token); me = null; go('home'); };
+  let mode = startMode, how = 'pw'; // log in: 'pw' password, 'code' email code, 'reset' forgot password
   const agree = h('input', { type: 'checkbox', class: 'chk' });
   const agreeBox = h('label', { class: 'agree' }, agree, h('span', {}, 'I am 18 or older. I read and accept the ', h('a', { href: '#legal/terms', target: '_blank' }, 'Terms and Conditions'), ' and the ', h('a', { href: '#legal/privacy', target: '_blank' }, 'Privacy Policy'),
     '. I understand Ayiti P2P is only a facilitator: I pay and receive gourdes directly with the other person, and I only pay inside an order after the crypto is locked.'));
-  // Wrong tab? Move the person to the right one instead of a dead end.
+  // Wrong tab or no password yet? Move the person to the right place instead of a dead end.
   const steer = (e) => {
     if (e.code === 'NO_ACCOUNT') { mode = 'signup'; paint(); toast(t('No account yet. Create your free account here.')); return true; }
-    if (e.code === 'EXISTS' || e.code === 'EMAIL_USED') { const p = phoneF.value(); mode = 'login'; paint(); if (e.code === 'EXISTS') loginIn.value = p; toast(t('You already have an account. Log in here.')); return true; }
+    if (e.code === 'EXISTS' || e.code === 'EMAIL_USED') { const p = phoneF.value(); mode = 'login'; how = 'pw'; paint(); if (e.code === 'EXISTS') loginIn.value = p; toast(t('You already have an account. Log in here.')); return true; }
+    if (e.code === 'NO_PASSWORD' || e.code === 'PW_LOCKED') { how = 'code'; paint(); toast(t(e.message)); return true; }
     return false;
   };
   const sendCode = h('button', { class: 'btn alt', type: 'button', onclick: act(async () => {
@@ -148,7 +184,7 @@ function authView(app) {
     if (mode === 'signup' && byEmail && !email.value.trim()) throw new Error(t('Write your email: your code goes there.'));
     if (mode === 'login' && !loginIn.value.trim()) throw new Error(t('Write your phone or your email.'));
     try {
-      const r = await api('POST', '/auth/request-code', mode === 'signup' ? { mode, phone: phoneF.value(), email: byEmail ? email.value.trim() : undefined } : { mode, login: loginIn.value.trim() });
+      const r = await api('POST', '/auth/request-code', mode === 'signup' ? { mode, phone: phoneF.value(), email: byEmail ? email.value.trim() : undefined } : { mode: 'login', login: loginIn.value.trim() });
       toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
       code.focus();
     } catch (e) { if (!steer(e)) throw e; }
@@ -157,40 +193,71 @@ function authView(app) {
     try {
       if (mode === 'signup') {
         if (!agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
-        done(await api('POST', '/auth/signup', { phone: phoneF.value(), full_name: name.value, code: code.value.trim() || undefined, accept_terms: true }));
-      } else done(await api('POST', '/auth/login', { login: loginIn.value.trim(), code: code.value.trim() }));
+        if (pwNew.value().length < 8) throw new Error(t('Choose a password: at least 8 characters, with letters and numbers.'));
+        done(await api('POST', '/auth/signup', { phone: phoneF.value(), full_name: name.value, email: byEmail ? email.value.trim() : undefined, code: code.value.trim() || undefined, accept_terms: true, password: pwNew.value() }));
+      } else if (how === 'pw') done(await api('POST', '/auth/login', { login: loginIn.value.trim(), password: pwIn.value() }));
+      else if (how === 'code') done(await api('POST', '/auth/login', { login: loginIn.value.trim(), code: code.value.trim() }));
+      else done(await api('POST', '/auth/reset-password', { login: loginIn.value.trim(), code: code.value.trim(), password: pwReset.value() }));
     } catch (e) { if (!steer(e)) throw e; }
   }) });
   const fPhone = h('div', {}, h('label', {}, 'Phone (with country code)'), phoneF.el);
   const fLogin = h('div', {}, h('label', {}, t('Phone or email')), loginIn);
   const fName = h('div', {}, h('label', {}, 'Full name (as on your ID)'), name);
   const fEmail = byEmail ? h('div', {}, h('label', {}, 'Email. Your code goes there.'), email) : null;
+  const fPwNew = h('div', {}, h('label', {}, t('Choose a password')), pwNew.el, h('div', { class: 'mute small' }, t('At least 8 characters, with letters and numbers.')));
+  const fPwIn = h('div', {}, h('label', {}, t('Password')), pwIn.el);
+  const fPwReset = h('div', {}, h('label', {}, t('New password')), pwReset.el);
+  const fCode = h('div', {}, h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, sendCode));
+  const linkCode = h('button', { type: 'button', class: 'linkbtn', onclick: () => { how = how === 'code' ? 'pw' : 'code'; paint(); } });
+  const linkReset = h('button', { type: 'button', class: 'linkbtn', onclick: () => { how = how === 'reset' ? 'pw' : 'reset'; paint(); } });
+  const links = h('div', { class: 'authlinks' }, linkCode, linkReset);
   const note = h('p', { class: 'mute small' });
   const tabS = h('button', { type: 'button' }, 'Create account'), tabL = h('button', { type: 'button' }, 'Log in');
+  const show = (el, on) => el && el.classList.toggle('hidden', !on);
   const paint = () => {
     const su = mode === 'signup';
     tabS.classList.toggle('on', su); tabL.classList.toggle('on', !su);
-    fName.classList.toggle('hidden', !su); fEmail && fEmail.classList.toggle('hidden', !su); agreeBox.classList.toggle('hidden', !su);
-    fPhone.classList.toggle('hidden', !su); fLogin.classList.toggle('hidden', su);
-    goBtn.textContent = t(su ? 'Create my free account' : 'Log in');
+    show(fName, su); show(fEmail, su); show(agreeBox, su); show(fPhone, su); show(fPwNew, su); show(fLogin, !su); show(links, !su);
+    show(fPwIn, !su && how === 'pw'); show(fPwReset, !su && how === 'reset'); show(fCode, su || how !== 'pw');
+    linkCode.textContent = t(how === 'code' ? 'Log in with my password' : 'Log in with a code instead');
+    linkReset.textContent = t(how === 'reset' ? 'Back to my password' : 'I forgot my password');
+    goBtn.textContent = t(su ? 'Create my free account' : how === 'reset' ? 'Save my new password' : 'Log in');
     note.textContent = su ? (byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video, right in the app.' : 'We send a code by SMS. Then you verify your ID with photos and a short video, right in the app.')
+      : how === 'pw' ? t('Log in with your phone or email and your password.')
+      : how === 'reset' ? t('We send a code to the email on your account. Then choose a new password.')
       : (byEmail ? t('Enter your phone or your email. The code goes to the email on your account.') : 'Enter your phone. We send you a code by SMS.');
   };
-  tabS.onclick = () => { mode = 'signup'; paint(); }; tabL.onclick = () => { mode = 'login'; paint(); };
-  const loginCard = h('div', { class: 'card logincard' },
+  tabS.onclick = () => { mode = 'signup'; paint(); }; tabL.onclick = () => { mode = 'login'; how = 'pw'; paint(); };
+  [pwIn.input, pwReset.input, code].forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter' && mode === 'login') goBtn.click(); }));
+  const card = h('div', { class: 'card logincard' },
     h('div', { class: 'authtabs' }, tabS, tabL),
-    fPhone, fLogin,
-    fName, fEmail, agreeBox,
-    h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, sendCode),
-    goBtn, note);
+    fPhone, fLogin, fName, fEmail, fPwNew, fPwIn, agreeBox, fCode, fPwReset,
+    goBtn, links, note);
   paint();
+  return card;
+}
+// Password box with show / hide.
+function pwInput(auto) {
+  const input = h('input', { type: 'password', autocomplete: auto, minlength: 8, maxlength: 128 });
+  const eye = h('button', { type: 'button', class: 'pweye', 'aria-label': 'Show password', onclick: () => { const on = input.type === 'password'; input.type = on ? 'text' : 'password'; eye.replaceChildren(icon(on ? 'eyeoff' : 'eye')); } }, icon('eye'));
+  return { el: h('div', { class: 'pwbox' }, input, eye), input, value: () => input.value };
+}
+
+function authView(app) {
   const adsBox = h('div');
   // Logged in and looking at the public home page: show a way back to the account instead of the login form.
-  const card = token && me ? h('div', { class: 'card logincard' }, h('h2', {}, (me.user.display_name || me.user.full_name).split(' ')[0] + ' 👋'),
+  const card = token && me ? h('div', { class: 'card logincard' }, h('h2', {}, (me.user.display_name || me.user.full_name).split(' ')[0]),
     h('p', { class: 'mute' }, lang === 'ht' ? 'Ou konekte deja.' : lang === 'fr' ? 'Vous êtes déjà connecté.' : 'You are already logged in.'),
-    h('button', { class: 'btn big-btn', onclick: () => go('home') }, lang === 'ht' ? 'Ale nan kont mwen' : lang === 'fr' ? 'Aller à mon compte' : 'Go to my account')) : loginCard;
+    h('button', { class: 'btn big-btn', onclick: () => go('home') }, lang === 'ht' ? 'Ale nan kont mwen' : lang === 'fr' ? 'Aller à mon compte' : 'Go to my account')) : authCard('signup');
   homeView(app, card, null, adsBox);
   publicAds(adsBox);
+}
+// #login: just the card, in "log in" mode (the person icon at the top goes here).
+function loginView(app) {
+  app.append(h('div', { class: 'loginpage' },
+    h('h1', {}, t('Log in to Ayiti P2P')),
+    authCard('login'),
+    h('p', { class: 'mute small center' }, t('No account yet?'), ' ', h('a', { href: '#welcome', onclick: (e) => { e.preventDefault(); location.hash = 'welcome'; setTimeout(() => document.getElementById('join')?.scrollIntoView({ behavior: 'smooth' }), 400); } }, t('Create your free account')))));
 }
 
 // Home page for visitors: live ads from sellers, with different prices. Read only.
@@ -217,11 +284,13 @@ let marketSide = 'SELL'; // SELL ads = you buy USDT
 async function marketView(app) {
   const asset = h('select', {}, h('option', { value: '' }, 'USDT + USDC'), h('option', {}, 'USDT'), h('option', {}, 'USDC'));
   const pay = h('select', {}, h('option', { value: '' }, 'All payment types'), h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
+  const who = h('select', { 'aria-label': t('Sellers') }, h('option', { value: '' }, t('All traders')), h('option', { value: '1' }, t('Commercial Sellers only')));
   const box = h('div', { class: 'scroll' });
   const load = act(async () => {
     const qs = new URLSearchParams({ side: marketSide });
     if (asset.value) qs.set('asset', asset.value);
     if (pay.value) qs.set('pay_type', pay.value);
+    if (who.value) qs.set('business', '1');
     const ads = await api('GET', '/ads?' + qs);
     box.replaceChildren(ads.length ? h('div', { class: 'ads' }, ads.map((a) => h('div', { class: 'ad' },
       h('div', { class: 'who link', title: 'See profile', onclick: () => go('u/' + a.owner_id) }, avatarEl(a.owner_id, a.owner_name, a.has_avatar),
@@ -233,13 +302,13 @@ async function marketView(app) {
         payChips(a)),
       a.owner_id === me.user.id ? h('span', { class: 'mute' }, 'your ad') : h('button', { class: 'btn sm ' + (marketSide === 'SELL' ? 'good' : 'danger'), onclick: () => takeAd(a) }, (marketSide === 'SELL' ? t('Buy USDT') : t('Sell USDT')))))) : h('p', { class: 'mute' }, 'No ads yet.'));
   });
-  [asset, pay].forEach((s) => s.addEventListener('change', load));
+  [asset, pay, who].forEach((s) => s.addEventListener('change', load));
   app.append(h('div', { class: 'card' },
     h('h2', { class: 'nt' }, 'Ayiti P2P - Live MarketPlace'),
     h('div', { class: 'seg' },
       h('button', { class: 'buy' + (marketSide === 'SELL' ? ' on' : ''), onclick: () => { marketSide = 'SELL'; route(); } }, t('Buy USDT')),
       h('button', { class: 'sell' + (marketSide === 'BUY' ? ' on' : ''), onclick: () => { marketSide = 'BUY'; route(); } }, t('Sell USDT'))),
-    h('div', { class: 'row' }, asset, pay), scamRule(true), box));
+    h('div', { class: 'row r3' }, asset, pay, who), scamRule(true), box));
   load();
 }
 
@@ -247,15 +316,16 @@ async function marketView(app) {
 function repBadges(a, noLoc) {
   const out = [];
   const trades = a.trades || 0, pct = a.completion_pct;
-  if (trades >= 50 && pct >= 97) out.push(h('span', { class: 'badge top' }, '🏆 Top seller'));
-  else if (trades >= 10 && pct >= 95) out.push(h('span', { class: 'badge top' }, '⭐ Trusted trader'));
-  if (a.id_verified) out.push(h('span', { class: 'badge ok' }, '✓ ID verified'));
-  if (a.is_business) out.push(h('span', { class: 'badge' }, '🏢 Business'));
-  if ((a.response_min && a.response_min <= 10) || (a.avg_release_min != null && a.avg_release_min <= 10)) out.push(h('span', { class: 'badge fast' }, '⚡ Fast'));
-  if (trades > 0 && pct != null) out.push(h('span', { class: 'badge' }, pct + '% completed'));
-  if (a.avg_release_min != null) out.push(h('span', { class: 'badge' }, '⏱ releases in ~' + (a.avg_release_min < 1 ? '1' : a.avg_release_min) + ' min'));
-  else if (a.response_min) out.push(h('span', { class: 'badge' }, '⏱ replies in ~' + a.response_min + ' min'));
-  if (a.department && !noLoc) out.push(h('span', { class: 'badge loc' }, '📍 ' + (a.area ? a.area + ', ' : '') + a.department));
+  const b = (cls, ic, text) => h('span', { class: 'badge ' + cls }, ic ? icon(ic) : null, h('span', {}, text));
+  if (a.is_business) out.push(b('biz', 'building', t('Commercial Seller')));
+  if (trades >= 50 && pct >= 97) out.push(b('top', 'award', t('Top seller')));
+  else if (trades >= 10 && pct >= 95) out.push(b('top', 'star', t('Trusted trader')));
+  if (a.id_verified) out.push(b('ok', 'shield', t('ID verified')));
+  if ((a.response_min && a.response_min <= 10) || (a.avg_release_min != null && a.avg_release_min <= 10)) out.push(b('fast', 'bolt', t('Fast')));
+  if (trades > 0 && pct != null) out.push(b('', null, pct + '% completed'));
+  if (a.avg_release_min != null) out.push(b('', 'clock', 'releases in ~' + (a.avg_release_min < 1 ? '1' : a.avg_release_min) + ' min'));
+  else if (a.response_min) out.push(b('', 'clock', 'replies in ~' + a.response_min + ' min'));
+  if (a.department && !noLoc) out.push(b('loc', 'pin', (a.area ? a.area + ', ' : '') + a.department));
   if (!trades) out.push(h('span', { class: 'badge new' }, 'New trader'));
   return h('div', { class: 'badges' }, out);
 }
@@ -1347,28 +1417,101 @@ async function businessCard(u) {
     }) }, 'Save my profile'));
 }
 
-async function profileView(app) {
+// ---------- my account: one clear page with 4 parts ----------
+const BIZ_TYPES = [['EXCHANGE', 'Exchange business (kanbis)'], ['SHOP', 'Shop or store'], ['SERVICES', 'Services'], ['OTHER', 'Other business']];
+async function profileView(app, part) {
   const u = me.user;
+  part = ['account', 'business', 'pay', 'password'].includes(part) ? part : 'account';
+  const tabs = [['account', 'user', 'My account'], ['business', 'building', 'Business profile'], ['pay', 'bank', 'Payment accounts'], ['password', 'lock', 'Password']];
+  const head = h('div', { class: 'card pfcard' },
+    h('div', { class: 'pfhead' }, h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl')),
+      h('div', {}, h('h2', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, u.display_name ? t('ID name') + ': ' + u.full_name : u.phone),
+        h('div', { class: 'pfpills' }, h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, u.tier >= 1 ? t('ID verified') : t('ID not checked yet')),
+          h('span', { class: 'pill' }, h('span', {}, t('Level')), ' ' + u.tier),
+          u.business_status === 'APPROVED' ? h('span', { class: 'pill biz' }, icon('building'), ' ' + t('Commercial Seller')) : null,
+          u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null))),
+    h('div', { class: 'pftabs' }, tabs.map(([k, ic, label]) => h('button', { type: 'button', class: k === part ? 'on' : '', onclick: () => go('profile/' + k) }, icon(ic), h('span', {}, t(label))))));
+  app.append(head);
+  if (part === 'account') {
+    app.append(
+      ...(u.tier < 1 ? [await idCheckCard()] : []),
+      h('div', { class: 'card' }, h('h3', { class: 'ct' }, t('My account')),
+        kv([[t('Name on my ID'), u.full_name], [t('Phone'), u.phone], [t('Email'), u.email || '—'], [t('Level'), String(u.tier)],
+          [t('ID check'), u.tier >= 1 ? t('Done') : t('Not done yet')], [t('Account type'), u.business_status === 'APPROVED' ? t('Commercial Seller') : t('Personal (buy and sell)')]]),
+        h('div', { class: 'pflinks' },
+          h('button', { class: 'mrow', onclick: () => go('linked') }, icon('link'), h('b', {}, t('Linked accounts')), h('span', { class: 'mute' }, '›')),
+          h('button', { class: 'mrow', onclick: () => go('safety') }, icon('shield'), h('b', {}, t('Safety')), h('span', { class: 'mute' }, '›')),
+          h('button', { class: 'mrow', onclick: () => go('legal/terms') }, icon('doc'), h('b', {}, t('Legal')), h('span', { class: 'mute' }, '›')),
+          h('button', { class: 'mrow', onclick: logout }, icon('logout'), h('b', {}, t('Log out')), h('span', {}, '')))));
+  }
+  if (part === 'business') app.append(commercialCard(u), await businessCard(u));
+  if (part === 'pay') app.append(payCard(u));
+  if (part === 'password') app.append(passwordCard(u));
+}
+
+// Commercial Seller (Vandè Komèsyal): a business account, checked by the owner, with its own badge on the market.
+function commercialCard(u) {
+  const st = u.business_status;
+  const card = h('div', { class: 'card bizapply' }, h('h3', { class: 'ct' }, icon('building'), ' ', t('Commercial Seller')));
+  const info = h('ul', { class: 'ticks' },
+    h('li', {}, t('Your business name on the MarketPlace, with the Commercial Seller badge.')),
+    h('li', {}, t('Buyers can choose to see only Commercial Sellers.')),
+    h('li', {}, t('Our team checks every business before it gets the badge.')));
+  if (st === 'APPROVED') {
+    card.append(h('p', {}, h('span', { class: 'pill biz' }, t('Approved')), ' ', h('b', {}, u.business_name)),
+      kv([[t('Kind of business'), t((BIZ_TYPES.find((x) => x[0] === u.business_type) || [0, u.business_type])[1])], [t('Registration'), u.business_reg || '—']]),
+      h('div', { class: 'gactions' }, h('button', { class: 'btn alt sm', onclick: () => { card.replaceWith(bizForm(u)); } }, t('Change details')),
+        h('button', { class: 'btn alt sm', onclick: act(async () => { if (!confirm(t('Go back to a personal account? You lose the badge.'))) return; await api('DELETE', '/me/business'); me = await api('GET', '/me'); route(); }) }, t('Back to a personal account'))));
+    return card;
+  }
+  if (st === 'PENDING') {
+    card.append(h('p', {}, h('span', { class: 'pill warn' }, t('Waiting for our check')), ' ', h('b', {}, u.business_name)),
+      h('p', { class: 'mute' }, t('We check your request, usually within 24 hours. You get an email with the answer.')),
+      h('button', { class: 'btn alt sm', onclick: act(async () => { await api('DELETE', '/me/business'); me = await api('GET', '/me'); route(); }) }, t('Cancel my request')));
+    return card;
+  }
+  card.append(h('p', { class: 'mute' }, t('Do you run a business that buys and sells USDT? Become a Commercial Seller.')), info);
+  if (st === 'REJECTED') card.append(h('p', { class: 'warnline' }, t('Your last request was not approved. Check your email for the reason, fix it and ask again.')));
+  if (u.tier < 1) { card.append(h('p', { class: 'mute' }, t('First finish your ID check (in My account). Then you can ask.'))); return card; }
+  card.append(h('button', { class: 'btn', onclick: () => card.replaceWith(bizForm(u)) }, t('Ask to become a Commercial Seller')));
+  return card;
+}
+function bizForm(u) {
+  const name = h('input', { value: u.business_name || u.display_name || '', maxlength: 60, placeholder: 'Deal509' });
+  const type = h('select', {}, BIZ_TYPES.map(([k, l]) => h('option', { value: k, selected: k === u.business_type }, t(l))));
+  const reg = h('input', { value: u.business_reg || '', maxlength: 40, placeholder: t('Patent, NIF or other number (optional)') });
+  const note = h('textarea', { rows: 3, maxlength: 300, placeholder: t('What does your business do? Since when? (optional)') });
+  return h('div', { class: 'card bizapply' }, h('h3', { class: 'ct' }, icon('building'), ' ', t('Commercial Seller')),
+    h('label', {}, t('Business name')), name, h('label', {}, t('Kind of business')), type, h('label', {}, t('Registration number')), reg, h('label', {}, t('About the business')), note,
+    h('p', { class: 'mute small' }, t('No phone numbers, emails or links. Trades happen inside the app.')),
+    h('div', { class: 'gactions' }, h('button', { class: 'btn', onclick: act(async () => {
+      await api('POST', '/me/business', { business_name: name.value, business_type: type.value, business_reg: reg.value, note: note.value });
+      me = await api('GET', '/me'); toast(t('Request sent. We check it and answer by email.')); route();
+    }) }, t('Send my request')), h('button', { class: 'btn alt', onclick: () => route() }, t('Cancel'))));
+}
+
+function passwordCard(u) {
+  const cur = pwInput('current-password'), n1 = pwInput('new-password'), n2 = pwInput('new-password');
+  return h('div', { class: 'card' }, h('h3', { class: 'ct' }, icon('lock'), ' ', t(u.has_password ? 'Change my password' : 'Add a password')),
+    h('p', { class: 'mute' }, t(u.has_password ? 'You log in with your phone or email and this password. You can always log in with an email code too.' : 'Add a password to log in faster: phone or email + password. The email code still works.')),
+    u.has_password ? h('div', {}, h('label', {}, t('Current password')), cur.el) : null,
+    h('label', {}, t('New password')), n1.el, h('label', {}, t('Type it again')), n2.el,
+    h('p', { class: 'mute small' }, t('At least 8 characters, with letters and numbers.')),
+    h('button', { class: 'btn', onclick: act(async () => {
+      if (n1.value() !== n2.value()) throw new Error(t('The two passwords are not the same.'));
+      await api('POST', '/me/password', { password: n1.value(), current: u.has_password ? cur.value() : undefined });
+      me = await api('GET', '/me'); toast(t('Password saved.')); route();
+    }) }, t('Save password')));
+}
+
+function payCard(u) {
   const type = h('select', {}, h('option', {}, 'MONCASH'), h('option', {}, 'NATCASH'), h('option', {}, 'BANK'));
   const bank = bankPicker(), bankRow = h('div', { class: 'hidden' }, h('label', {}, 'Which bank?'), bank.el);
   type.addEventListener('change', () => bankRow.classList.toggle('hidden', type.value !== 'BANK'));
   const an = h('input', { placeholder: 'Name on the account (must match your ID)' });
   const ar = h('input', { placeholder: 'Phone number or bank account number' });
-  const prev = h('div', { class: 'avwrap' }, avatarEl(u.id, u.display_name || u.full_name, u.has_avatar, 'xl'));
   const methods = me.payment_methods.filter((p) => !p.linked);
-  const menu = [['welcome', '🌐', 'Home page'], ['ads', '📣', 'My ads'], ['linked', '🔗', 'Linked accounts'], ['safety', '🛡️', 'Safety'], ['legal/terms', '📄', 'Legal']];
-  if (['AGENT', 'ADMIN'].includes(u.role)) menu.push(['staff', '🧑‍⚖️', 'Staff']);
-  if (u.role === 'ADMIN') menu.push(['admin', '⚙️', 'Admin']);
-  app.append(
-    h('div', { class: 'card menu-m' }, menu.map(([k, ic, label]) => h('button', { class: 'mrow', onclick: () => go(k) }, h('span', {}, ic), h('b', {}, t(label)), h('span', { class: 'mute' }, '›'))),
-      h('button', { class: 'mrow', onclick: logout }, h('span', {}, '🚪'), h('b', {}, t('Log out')), h('span', {}, ''))),
-    h('div', { class: 'card' }, h('h2', {}, t('Profile')),
-      h('div', { class: 'pfhead' }, prev, h('div', {}, h('b', {}, u.display_name || u.full_name), h('div', { class: 'mute' }, u.display_name ? 'ID name: ' + u.full_name + ' (private)' : u.phone),
-        h('span', { class: 'pill ' + (u.tier >= 1 ? 'good' : 'warn') }, 'Tier ' + u.tier), u.strikes ? h('span', { class: 'pill bad' }, u.strikes + ' strike(s)') : null)),
-      u.tier >= 1 ? h('p', { class: 'mute' }, '✓ ID check done.') : null),
-    ...(u.tier < 1 ? [await idCheckCard()] : []),
-    await businessCard(u),
-    h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My payment accounts'),
+  return h('div', { class: 'card' }, h('h3', { class: 'ct' }, 'My payment accounts'),
       h('p', { class: 'mute' }, 'You can add MonCash, NatCash and bank accounts, and as many numbers as you want. The name on each one must match your ID.'),
       methods.length ? h('div', { class: 'accs' }, methods.map((p) => h('div', { class: 'acc' },
         h('div', { class: 'accrow' }, accLogo(p), h('div', {}, h('b', {}, p.bank_name ? p.bank_name : PAY_NAME[p.type] || p.type), h('div', { class: 'mute' }, `${p.type === 'BANK' ? 'Account' : PAY_NAME[p.type] || p.type} ${p.account_ref} · ${p.account_name}`))),
@@ -1376,7 +1519,7 @@ async function profileView(app) {
         : h('p', { class: 'mute' }, 'None yet. Add one after your ID check is approved.'),
       h('h3', { class: 'ct', style: 'margin-top:16px' }, 'Add an account'),
       h('label', {}, 'Type'), type, bankRow, h('label', {}, 'Name on the account'), an, h('label', {}, 'Number'), ar,
-      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => { await api('POST', '/payment-methods', { type: type.value, account_name: an.value, account_ref: ar.value, bank_name: type.value === 'BANK' ? bank.value() : undefined }); me = await api('GET', '/me'); route(); }) }, 'Add account')));
+      h('button', { class: 'btn', style: 'margin-top:12px', onclick: act(async () => { await api('POST', '/payment-methods', { type: type.value, account_name: an.value, account_ref: ar.value, bank_name: type.value === 'BANK' ? bank.value() : undefined }); me = await api('GET', '/me'); route(); }) }, 'Add account'));
 }
 
 // ---------- staff ----------
@@ -1384,8 +1527,8 @@ const ID_NAME = { NATIONAL_ID: 'National ID card', PASSPORT: 'Passport', DRIVER_
 // What the automatic ID check saw (green = passed, red = needs a human look).
 function robotBox(k) {
   const r = k.auto_result || {}, st = k.auto_status;
-  if (!st || st === 'QUEUED' || st === 'RUNNING') return h('div', { class: 'robot' }, h('b', {}, '🤖 Automatic check: ' + (st === 'RUNNING' ? 'running now…' : 'waiting in line (about 1 minute)')));
-  return h('div', { class: 'robot' }, h('b', {}, '🤖 Automatic check: ' + (r.pass ? 'everything passed' : 'needs you')), r.note ? h('div', { class: 'mute' }, r.note) : null,
+  if (!st || st === 'QUEUED' || st === 'RUNNING') return h('div', { class: 'robot' }, h('b', {}, icon('bot'), ' Automatic check: ' + (st === 'RUNNING' ? 'running now…' : 'waiting in line (about 1 minute)')));
+  return h('div', { class: 'robot' }, h('b', {}, icon('bot'), ' Automatic check: ' + (r.pass ? 'everything passed' : 'needs you')), r.note ? h('div', { class: 'mute' }, r.note) : null,
     h('ul', {}, (r.checks || []).map((c) => h('li', { class: c.ok ? 'ok' : c.blocking ? 'no' : 'soft' }, (c.ok ? '✓ ' : c.blocking ? '✗ ' : '• ') + c.label + (c.detail ? ' — ' + c.detail : '')))),
     h('button', { class: 'btn alt small', type: 'button', onclick: act(async () => { await api('POST', `/staff/kyc/${k.id}/recheck`); toast('Checking again…'); route(); }) }, 'Check again'));
 }

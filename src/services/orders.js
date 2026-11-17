@@ -320,8 +320,8 @@ export async function getOrderView(user, id) {
   if (!party && !staff) throw notFound('Order not found.');
 
   const [buyer, seller, pm, events, escrowTxs, dispute] = await Promise.all([
-    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.buyer_id]),
-    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (display_name IS NOT NULL) AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.seller_id]),
+    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (business_status = \'APPROVED\') AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.buyer_id]),
+    q('SELECT id, COALESCE(display_name, full_name) AS full_name, tier, (business_status = \'APPROVED\') AS is_business, (avatar_mime IS NOT NULL) AS has_avatar, bio FROM users WHERE id=$1', [o.seller_id]),
     q(`SELECT type, account_name, account_ref, bank_name, (user_id <> $2) AS is_receiver FROM payment_methods WHERE id=$1`, [o.payment_method_id, o.seller_id]),
     q('SELECT created_at, from_state, to_state, note, actor_id FROM order_events WHERE order_id=$1 ORDER BY id', [id]),
     q('SELECT kind, status, tx_hash, attempts, created_at, confirmed_at FROM escrow_txs WHERE order_id=$1 ORDER BY created_at', [id]),
@@ -461,7 +461,7 @@ export async function setEta(user, orderId, minutes) {
     if (!['AWAITING_PAYMENT', 'PAID_CLAIMED'].includes(o.state)) throw conflict('This order is not open.', 'STATE');
     await c.query('UPDATE orders SET seller_eta_min=$2, seller_eta_at=now() WHERE id=$1', [orderId, m]);
     await c.query(`INSERT INTO chat_messages (order_id, sender_id, body) VALUES ($1,NULL,$2)`, [orderId,
-      `⏱ Vandè a ap tcheke epi dekadnase nan ${m} minit apre ou peye. / The seller will check and release within ${m} minutes after you pay.`]);
+      `Vandè a ap tcheke epi dekadnase nan ${m} minit apre ou peye. / The seller will check and release within ${m} minutes after you pay.`]);
     return { ok: true, seller_eta_min: m };
   });
 }
@@ -482,7 +482,7 @@ export async function payDelay(user, orderId) {
     await c.query(`INSERT INTO order_events (order_id, actor_id, note) VALUES ($1,$2,$3)`,
       [orderId, user.id, 'Seller: money not in account yet, possible payment network delay']);
     await c.query(`INSERT INTO chat_messages (order_id, sender_id, body) VALUES ($1,NULL,$2)`, [orderId,
-      `⏳ Vandè a poko wè lajan an nan kont li. Pafwa MonCash, NatCash oswa bank montre "voye" anvan lajan an rive. Nou bay plis tan jiska ${u.toISOString().slice(11, 16)} UTC. Achtè: kenbe resi a (SMS ak nimewo tranzaksyon an). Kripto a rete kadnase. / The seller does not see the money yet. Sometimes MonCash, NatCash or banks show "sent" before the money arrives. We added time until ${u.toISOString().slice(11, 16)} UTC. Buyer: keep your receipt (SMS and transaction number). The crypto stays locked.`]);
+      `Vandè a poko wè lajan an nan kont li. Pafwa MonCash, NatCash oswa bank montre "voye" anvan lajan an rive. Nou bay plis tan jiska ${u.toISOString().slice(11, 16)} UTC. Achtè: kenbe resi a (SMS ak nimewo tranzaksyon an). Kripto a rete kadnase. / The seller does not see the money yet. Sometimes MonCash, NatCash or banks show "sent" before the money arrives. We added time until ${u.toISOString().slice(11, 16)} UTC. Buyer: keep your receipt (SMS and transaction number). The crypto stays locked.`]);
     return { ok: true, delay_until: u };
   });
 }

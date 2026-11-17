@@ -34,7 +34,7 @@ async function api(method, path, body) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     if (r.status === 401 && token) { logout(); }
-    throw new Error(j.error || 'Error ' + r.status);
+    throw Object.assign(new Error(j.error || 'Error ' + r.status), { code: j.code });
   }
   return j;
 }
@@ -94,30 +94,75 @@ function renderNav() {
 }
 
 // ---------- auth ----------
+// Phone with a country list, so nobody has to know the "+" format. Anyone anywhere can open an account
+// (blocked countries are refused by the server). A leading 0 is dropped: 07415 991172 in the UK = +44 7415 991172.
+const COUNTRIES = [['HT', 'Haiti', '509'], ['US', 'USA / Canada', '1'], ['DO', 'Dominican Republic', '1'], ['FR', 'France', '33'], ['GB', 'United Kingdom', '44'],
+  ['CL', 'Chile', '56'], ['BR', 'Brazil', '55'], ['MX', 'Mexico', '52'], ['BS', 'Bahamas', '1'], ['TC', 'Turks and Caicos', '1'], ['JM', 'Jamaica', '1'],
+  ['GP', 'Guadeloupe', '590'], ['MQ', 'Martinique', '596'], ['GF', 'French Guiana', '594'], ['BE', 'Belgium', '32'], ['CH', 'Switzerland', '41'],
+  ['ES', 'Spain', '34'], ['DE', 'Germany', '49'], ['IT', 'Italy', '39'], ['NL', 'Netherlands', '31'], ['PT', 'Portugal', '351'], ['IE', 'Ireland', '353'],
+  ['PA', 'Panama', '507'], ['CO', 'Colombia', '57'], ['AR', 'Argentina', '54'], ['EC', 'Ecuador', '593'], ['PE', 'Peru', '51'], ['VE', 'Venezuela', '58'],
+  ['SN', 'Senegal', '221'], ['CI', "Côte d'Ivoire", '225'], ['NG', 'Nigeria', '234'], ['GH', 'Ghana', '233'], ['ZA', 'South Africa', '27'],
+  ['AE', 'United Arab Emirates', '971'], ['IL', 'Israel', '972'], ['IN', 'India', '91'], ['PH', 'Philippines', '63'], ['CN', 'China', '86'],
+  ['JP', 'Japan', '81'], ['AU', 'Australia', '61'], ['SE', 'Sweden', '46'], ['NO', 'Norway', '47'], ['DK', 'Denmark', '45']];
+function phoneField() {
+  const region = (() => { try { return (navigator.language || '').split('-')[1]?.toUpperCase(); } catch { return null; } })();
+  const pick = COUNTRIES.find((c) => c[0] === region && c[0] !== 'US') || COUNTRIES[0];
+  const sel = h('select', { class: 'cc', 'aria-label': 'Country' }, COUNTRIES.map(([k, n, c]) => h('option', { value: k, selected: k === pick[0] }, `${n} +${c}`)),
+    h('option', { value: 'OTHER' }, t('Other country (type the full number with +)')));
+  const num = h('input', { inputmode: 'tel', autocomplete: 'tel-national', placeholder: '3700 1234' });
+  const hint = () => { num.placeholder = sel.value === 'OTHER' ? '+...' : sel.value === 'HT' ? '3700 1234' : sel.value === 'GB' ? '7415 991172' : t('Phone number'); };
+  sel.onchange = hint; hint();
+  return {
+    el: h('div', { class: 'phonebox' }, sel, num),
+    value() {
+      let v = num.value.replace(/[\s()\-.]/g, '').replace(/^00/, '+');
+      if (v.startsWith('+') || sel.value === 'OTHER') return v.startsWith('+') ? v : '+' + v;
+      const c = COUNTRIES.find((x) => x[0] === sel.value)[2];
+      if (v.startsWith(c) && v.length > c.length + 7) v = v.slice(c.length); // they typed the country code without +
+      if (c !== '39') v = v.replace(/^0+/, '');
+      return '+' + c + v;
+    },
+  };
+}
+
 function authView(app) {
-  const phone = h('input', { placeholder: '+509 3700 1234  or  +1 305 555 1234', inputmode: 'tel' });
+  const phoneF = phoneField();
+  const loginIn = h('input', { placeholder: '+509 3700 1234  /  you@gmail.com', autocomplete: 'username' });
   const name = h('input', { placeholder: t('Full name (as on your ID)') });
   const byEmail = cfg.code_channel === 'email';
   const email = h('input', { type: 'email', placeholder: 'you@gmail.com', autocomplete: 'email' });
-  const code = h('input', { placeholder: byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric' });
+  const code = h('input', { placeholder: byEmail ? 'Email code' : 'SMS code', inputmode: 'numeric', autocomplete: 'one-time-code' });
   const done = (r) => { token = r.token; localStorage.setItem('token', token); go('home'); };
-  const clean = () => phone.value.replace(/[\s()\-.]/g, '');
   let mode = 'signup';
   const agree = h('input', { type: 'checkbox', class: 'chk' });
   const agreeBox = h('label', { class: 'agree' }, agree, h('span', {}, 'I am 18 or older. I read and accept the ', h('a', { href: '#legal/terms', target: '_blank' }, 'Terms and Conditions'), ' and the ', h('a', { href: '#legal/privacy', target: '_blank' }, 'Privacy Policy'),
     '. I understand Ayiti P2P is only a facilitator: I pay and receive gourdes directly with the other person, and I only pay inside an order after the crypto is locked.'));
+  // Wrong tab? Move the person to the right one instead of a dead end.
+  const steer = (e) => {
+    if (e.code === 'NO_ACCOUNT') { mode = 'signup'; paint(); toast(t('No account yet. Create your free account here.')); return true; }
+    if (e.code === 'EXISTS' || e.code === 'EMAIL_USED') { const p = phoneF.value(); mode = 'login'; paint(); if (e.code === 'EXISTS') loginIn.value = p; toast(t('You already have an account. Log in here.')); return true; }
+    return false;
+  };
   const sendCode = h('button', { class: 'btn alt', type: 'button', onclick: act(async () => {
     if (mode === 'signup' && !agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
-    const r = await api('POST', '/auth/request-code', { phone: clean(), email: byEmail && mode === 'signup' ? email.value.trim() || undefined : undefined });
-    toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
-    code.focus();
+    if (mode === 'signup' && byEmail && !email.value.trim()) throw new Error(t('Write your email: your code goes there.'));
+    if (mode === 'login' && !loginIn.value.trim()) throw new Error(t('Write your phone or your email.'));
+    try {
+      const r = await api('POST', '/auth/request-code', mode === 'signup' ? { mode, phone: phoneF.value(), email: byEmail ? email.value.trim() : undefined } : { mode, login: loginIn.value.trim() });
+      toast(r.to ? `Code sent to ${r.to}. Check your email (and spam).` : 'Code sent. It works for ' + r.expires_in_min + ' minutes.');
+      code.focus();
+    } catch (e) { if (!steer(e)) throw e; }
   }) }, 'Send code');
   const goBtn = h('button', { class: 'btn big-btn', type: 'button', onclick: act(async () => {
-    if (mode === 'signup') {
-      if (!agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
-      done(await api('POST', '/auth/signup', { phone: clean(), full_name: name.value, code: code.value.trim() || undefined, accept_terms: true }));
-    } else done(await api('POST', '/auth/login', { phone: clean(), code: code.value.trim() }));
+    try {
+      if (mode === 'signup') {
+        if (!agree.checked) throw new Error('Tick the box to accept the Terms and Conditions first.');
+        done(await api('POST', '/auth/signup', { phone: phoneF.value(), full_name: name.value, code: code.value.trim() || undefined, accept_terms: true }));
+      } else done(await api('POST', '/auth/login', { login: loginIn.value.trim(), code: code.value.trim() }));
+    } catch (e) { if (!steer(e)) throw e; }
   }) });
+  const fPhone = h('div', {}, h('label', {}, 'Phone (with country code)'), phoneF.el);
+  const fLogin = h('div', {}, h('label', {}, t('Phone or email')), loginIn);
   const fName = h('div', {}, h('label', {}, 'Full name (as on your ID)'), name);
   const fEmail = byEmail ? h('div', {}, h('label', {}, 'Email. Your code goes there.'), email) : null;
   const note = h('p', { class: 'mute small' });
@@ -126,14 +171,15 @@ function authView(app) {
     const su = mode === 'signup';
     tabS.classList.toggle('on', su); tabL.classList.toggle('on', !su);
     fName.classList.toggle('hidden', !su); fEmail && fEmail.classList.toggle('hidden', !su); agreeBox.classList.toggle('hidden', !su);
+    fPhone.classList.toggle('hidden', !su); fLogin.classList.toggle('hidden', su);
     goBtn.textContent = t(su ? 'Create my free account' : 'Log in');
     note.textContent = su ? (byEmail ? 'We send a code to your email. Then you verify your ID with photos and a short video, right in the app.' : 'We send a code by SMS. Then you verify your ID with photos and a short video, right in the app.')
-      : (byEmail ? 'Enter your phone. The code goes to the email on your account.' : 'Enter your phone. We send you a code by SMS.');
+      : (byEmail ? t('Enter your phone or your email. The code goes to the email on your account.') : 'Enter your phone. We send you a code by SMS.');
   };
   tabS.onclick = () => { mode = 'signup'; paint(); }; tabL.onclick = () => { mode = 'login'; paint(); };
   const loginCard = h('div', { class: 'card logincard' },
     h('div', { class: 'authtabs' }, tabS, tabL),
-    h('label', {}, 'Phone (with country code)'), phone,
+    fPhone, fLogin,
     fName, fEmail, agreeBox,
     h('label', {}, 'Code'), h('div', { class: 'codebox' }, code, sendCode),
     goBtn, note);

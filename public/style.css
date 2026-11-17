@@ -664,3 +664,5 @@ button.ptile { font:inherit; color:inherit; background:var(--card); cursor:point
 .vscript{margin-top:6px;font-size:14px;color:#c9ffe6}
 .robot{border:1px solid var(--line,#e3e0d8);border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px}
 .robot ul{list-style:none;padding:0;margin:6px 0}.robot li{padding:2px 0}.robot li.ok{color:#0d6b4f}.robot li.no{color:#b3261e;font-weight:600}.robot li.soft{color:#8a6d1d}
+.phonebox{display:grid;grid-template-columns:minmax(0,46%) minmax(0,1fr);gap:8px}
+.phonebox select,.phonebox input{width:100%;min-width:0}

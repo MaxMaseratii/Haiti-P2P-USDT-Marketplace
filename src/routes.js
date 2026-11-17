@@ -15,7 +15,7 @@ import { config, isMock, isMockSms } from './config.js';
 import * as evm from './escrow-evm.js';
 import { auth, needRole, makeToken, checkPhone } from './auth.js';
 import * as otp from './services/otp.js';
-import { bad, forbidden, notFound } from './errors.js';
+import { bad, forbidden, notFound, HttpError } from './errors.js';
 import * as users from './services/users.js';
 import * as wallet from './services/wallet.js';
 import * as ads from './services/ads.js';
@@ -53,16 +53,32 @@ api.get('/config', wrap(async () => ({
 })));
 
 // ---------- auth ----------
+// Ask for a code. Sign up: phone + email. Log in: phone OR email (whichever the person remembers).
 api.post('/auth/request-code', otp.ipLimit, wrap(async (req) => {
-  const { phone, email } = req.body || {};
-  checkPhone(phone);
-  return otp.requestCode(phone, email);
+  const { email, mode } = req.body || {};
+  const phone = await whoIs(req.body || {});
+  if (mode === 'login' && !(await users.findByPhone(phone))) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
+  if (mode === 'signup' && (await users.findByPhone(phone))) throw new HttpError(409, 'This phone already has an account. Log in instead.', 'EXISTS');
+  return otp.requestCode(phone, mode === 'login' ? undefined : email);
 }));
+// Log in with an email: find the phone of that account.
+async function whoIs({ phone, login }) {
+  const v = String(login ?? phone ?? '').trim();
+  if (v.includes('@')) {
+    const u = (await q('SELECT phone FROM users WHERE lower(email)=lower($1)', [v])).rows[0];
+    if (!u) throw new HttpError(404, 'No account with this email yet. Create a free account first.', 'NO_ACCOUNT');
+    return u.phone;
+  }
+  const p = v.replace(/[\s()\-.]/g, '').replace(/^00/, '+');
+  checkPhone(p);
+  return p;
+}
 
 // Signup proves the phone is yours with an SMS code (in test mode the code is not checked).
 api.post('/auth/signup', wrap(async (req) => {
-  const { phone, full_name, code, accept_terms } = req.body || {};
-  checkPhone(phone);
+  const { full_name, code, accept_terms } = req.body || {};
+  if (String(req.body?.phone || '').includes('@')) throw bad('Write your phone number here, with the country code.', 'PHONE');
+  const phone = await whoIs({ phone: req.body?.phone });
   if (accept_terms !== true) throw bad('You must read and accept the Terms and Conditions to create an account.', 'TERMS');
   const owner = config.adminPhones.includes(phone);
   let proof = null;
@@ -73,12 +89,12 @@ api.post('/auth/signup', wrap(async (req) => {
 }));
 
 api.post('/auth/login', wrap(async (req) => {
-  const { phone, code } = req.body || {};
-  checkPhone(phone);
+  const { code } = req.body || {};
+  const phone = await whoIs(req.body || {});
   const known = await users.findByPhone(phone);
   await otp.verifyCode(phone, code, config.adminPhones.includes(phone) || (known && known.role !== 'USER'));
   const u = known;
-  if (!u) throw notFound('No account for this phone.');
+  if (!u) throw new HttpError(404, 'No account with this phone yet. Create a free account first.', 'NO_ACCOUNT');
   if (u.closed_at) throw forbidden('This account is closed.', 'CLOSED');
   if (u.banned) throw forbidden('Account is frozen or banned.');
   return { token: makeToken(u.id), user: users.publicUser(u) };

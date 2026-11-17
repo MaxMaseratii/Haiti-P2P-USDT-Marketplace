@@ -760,3 +760,19 @@ test('automatic ID check: approves clear cases, flags a face used twice, owner c
   assert.equal((await call('POST', '/admin/idcheck', { auto_approve: false }, tk('ida'))).status, 403);
   assert.equal((await call('POST', `/admin/kyc/${k2.id}/undo`, {}, tk('a1'))).status, 403);
 });
+
+test('log in with phone OR email, any country; wrong tab gets a clear answer', async () => {
+  await signup('uk', '+447700900123', 'Grace Pierre');
+  await pool.query('UPDATE users SET email=$2 WHERE id=$1', [U.uk.id, 'grace@example.com']);
+  const nf = await call('POST', '/auth/request-code', { mode: 'login', login: '+447700900999' });
+  assert.equal(nf.status, 404); assert.equal(nf.body.code, 'NO_ACCOUNT');
+  const nfe = await call('POST', '/auth/request-code', { mode: 'login', login: 'nobody@example.com' });
+  assert.equal(nfe.body.code, 'NO_ACCOUNT');
+  const ex = await call('POST', '/auth/request-code', { mode: 'signup', phone: '+447700900123', email: 'x@example.com' });
+  assert.equal(ex.status, 409); assert.equal(ex.body.code, 'EXISTS');
+  // email login, and a phone typed with 00 and spaces
+  assert.equal((await ok('POST', '/auth/login', { login: 'GRACE@example.com', code: '000000' })).user.id, U.uk.id);
+  assert.equal((await ok('POST', '/auth/login', { login: '0044 7700 900123', code: '000000' })).user.id, U.uk.id);
+  // blocked countries stay blocked
+  assert.equal((await call('POST', '/auth/request-code', { mode: 'signup', phone: '+989121234567' })).status, 403);
+});

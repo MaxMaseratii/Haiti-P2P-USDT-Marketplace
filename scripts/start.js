@@ -71,6 +71,25 @@ if (!config.tokenSecret || config.tokenSecret === 'dev-only-secret' || config.to
   config.tokenSecret = (await client.query("SELECT value FROM app_secrets WHERE name='token_secret'")).rows[0].value;
   console.log('TOKEN_SECRET was missing or weak. Using a strong secret stored in the database.');
 }
+// The owner account is made by the server itself (ADMIN_PHONES + ADMIN_EMAIL), so the owner can log in on day one:
+// phone or email, then the code arrives by email. No sign-up form needed.
+{
+  const emails = String(process.env.ADMIN_EMAIL || '').split(',').map((x) => x.trim().toLowerCase());
+  for (const [i, phone] of config.adminPhones.entries()) {
+    const email = emails[i] || null, name = process.env.OWNER_NAME || 'Ayiti P2P Owner';
+    const u = (await client.query('SELECT id, email, role FROM users WHERE phone=$1', [phone])).rows[0];
+    if (!u) {
+      if (email && (await client.query('SELECT 1 FROM users WHERE lower(email)=$1', [email])).rowCount) { console.log('Owner email already used by another account:', phone); continue; }
+      const id = (await client.query(`INSERT INTO users (phone, full_name, role, tier, email, terms_version, terms_at) VALUES ($1,$2,'ADMIN',3,$3,$4,now()) RETURNING id`,
+        [phone, name, email, config.termsVersion])).rows[0].id;
+      await client.query(`INSERT INTO kyc (user_id, status, id_doc_ref, name_on_id, reviewed_at) VALUES ($1,'APPROVED','owner',$2,now())`, [id, name]);
+      console.log('Owner account created for', phone.slice(0, 5) + '…');
+    } else {
+      if (u.role !== 'ADMIN') await client.query(`UPDATE users SET role='ADMIN', tier=3 WHERE id=$1`, [u.id]);
+      if (!u.email && email) await client.query('UPDATE users SET email=$2 WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email)=$2)', [u.id, email]);
+    }
+  }
+}
 await client.end();
 
 await import('../src/server.js');

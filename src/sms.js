@@ -22,7 +22,7 @@ export async function sendEmail(to, subject, text) {
       htmlContent: `<div style="font-family:Arial,sans-serif;font-size:16px;line-height:1.5;color:#14211c">${esc(text).replace(/\n/g, '<br>')}</div>`,
     }),
   });
-  if (!r.ok) throw new Error('Email provider refused the message (' + r.status + ')');
+  if (!r.ok) throw new Error('Email provider refused the message (' + r.status + '): ' + (await r.text().catch(() => '')).slice(0, 300));
 }
 export const setSender = (fn) => { override = fn; }; // for tests
 

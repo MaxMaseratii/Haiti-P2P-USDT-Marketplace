@@ -104,7 +104,8 @@ api.post('/auth/login', wrap(async (req) => {
     // Staff and owner accounts: a password alone is not enough. The email code is needed too.
     if (known.role !== 'USER') {
       if (!code) {
-        try { await otp.requestCode(phone); } catch (e) { if (e.code !== 'OTP_WAIT') throw e; }
+        // Send a code only if none is waiting already, so the person never gets a pile of different codes.
+        if (!(await otp.hasOpenCode(phone))) { try { await otp.requestCode(phone); } catch (e) { if (e.code !== 'OTP_WAIT') throw e; } }
         throw new HttpError(400, 'Staff accounts need the email code too. We sent it to your email. Type it, then press Log in again.', 'NEED_CODE');
       }
       await otp.verifyCode(phone, code, true);

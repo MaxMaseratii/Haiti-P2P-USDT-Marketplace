@@ -18,6 +18,11 @@ export const isEmailCodes = () => config.smsProvider === 'email';
 export const maskEmail = (e) => { const [u, d] = String(e).split('@'); return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***') + '@' + d; };
 
 // In email mode a code goes to the account's email. A new person gives their email when they sign up.
+// Is a code already on its way (sent less than 10 minutes ago and not used)?
+export async function hasOpenCode(phone) {
+  return (await q(`SELECT 1 FROM otp_codes WHERE phone=$1 AND NOT used AND expires_at > now() AND attempts < $2 LIMIT 1`, [phone, config.otpMaxTries])).rowCount > 0;
+}
+
 export async function requestCode(phone, email) {
   let target = null;
   if (isEmailCodes()) {
@@ -77,12 +82,15 @@ export async function verifyCode(phone, code, privileged = false) {
     if (code !== '000000') { fail(); throw bad('Wrong code.', 'OTP'); }
     return;
   }
-  const row = (await q(
+  // Any code still valid works (not only the newest): people often get 2 emails and type the first one.
+  const rows = (await q(
     `SELECT * FROM otp_codes WHERE phone=$1 AND NOT used AND expires_at > now() AND attempts < $2
-     ORDER BY created_at DESC LIMIT 1`, [phone, config.otpMaxTries])).rows[0];
-  if (!row) throw bad('Code is wrong or expired. Ask for a new one.', 'OTP');
-  if (!safeEq(row.code_hash, hash(phone, code))) {
-    await q('UPDATE otp_codes SET attempts = attempts + 1 WHERE id=$1', [row.id]);
+     ORDER BY created_at DESC LIMIT 5`, [phone, config.otpMaxTries])).rows;
+  if (!rows.length) throw bad('Code is wrong or expired. Ask for a new one.', 'OTP');
+  const row = rows.find((r) => safeEq(r.code_hash, hash(phone, code)));
+  if (!row) {
+    // A wrong guess counts against every open code, so guessing stays just as hard.
+    await q('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ANY($1)', [rows.map((r) => r.id)]);
     throw bad('Wrong code.', 'OTP');
   }
   // Burn it. If two requests race with the same code, only one wins.

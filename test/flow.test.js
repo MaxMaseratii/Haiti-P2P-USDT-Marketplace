@@ -82,6 +82,26 @@ const ad = async (id) => (await pool.query('SELECT * FROM ads WHERE id=$1', [id]
 
 let adId, pmS;
 
+test('ID check: name on the ID differs from the account name', async () => {
+  await signup('admin0', '+50930000099', 'Owner Two', 'ADMIN');
+  await signup('mid', '+50937000066', 'Paul Joseph');
+  for (const [kind, buf] of [['FRONT', PNG], ['BACK', PNG], ['VIDEO', WEBM]]) assert.equal((await upload(kind, buf, tk('mid'))).status, 200);
+  const k = await ok('POST', '/kyc', { id_type: 'NATIONAL_ID', name_on_id: 'Paul Renel Joseph', id_number: '009-888-777-6' }, tk('mid'));
+  const plain = await call('POST', `/staff/kyc/${k.id}/decision`, { approve: true }, tk('admin0'));
+  assert.equal(plain.status, 400);
+  assert.equal(plain.body.code, 'NAME_MISMATCH');
+  assert.match(plain.body.error, /Paul Renel Joseph/, 'the message says both names');
+  assert.equal((await pool.query('SELECT status FROM kyc WHERE id=$1', [k.id])).rows[0].status, 'PENDING');
+  const r = await ok('POST', `/staff/kyc/${k.id}/decision`, { approve: true, use_id_name: true }, tk('admin0'));
+  assert.equal(r.status, 'APPROVED');
+  const u = (await pool.query('SELECT full_name, tier FROM users WHERE id=$1', [U.mid.id])).rows[0];
+  assert.equal(u.full_name, 'Paul Renel Joseph', 'account name is now the ID name');
+  assert.equal(u.tier, 1);
+  const again = await call('POST', `/staff/kyc/${k.id}/decision`, { approve: true }, tk('admin0'));
+  assert.equal(again.status, 409);
+  assert.match(again.body.error, /Already decided: this ID is approved/);
+});
+
 test('setup: users, ID checks, payment accounts, balances, a sell ad', async () => {
   await signup('admin', '+50930000001', 'Admin Person', 'ADMIN');
   await signup('a1', '+50930000002', 'Agent One', 'AGENT');

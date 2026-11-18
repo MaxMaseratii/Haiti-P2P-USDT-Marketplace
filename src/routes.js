@@ -281,7 +281,7 @@ staff.get('/kyc/:id/file/:kind', wrap(async (req, res) => {
   res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; sandbox" }).send(f.data);
 }));
 staff.post('/kyc/:id/recheck', wrap(async (req) => idcheck.recheck(req.params.id)));
-staff.post('/kyc/:id/decision', wrap(async (req) => users.decideKyc(req.user, req.params.id, !!req.body?.approve)));
+staff.post('/kyc/:id/decision', wrap(async (req) => users.decideKyc(req.user, req.params.id, !!req.body?.approve, { useIdName: req.body?.use_id_name === true })));
 staff.post('/payment-methods/:id/verify', wrap(async (req) => users.setPaymentVerified(req.params.id, req.body?.verified !== false)));
 staff.get('/disputes', wrap(async (req) => disputes.queue(req.query.status || 'OPEN')));
 staff.get('/disputes/:id', wrap(async (req) => disputes.detail(req.params.id)));

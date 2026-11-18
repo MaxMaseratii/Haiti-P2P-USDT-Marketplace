@@ -257,15 +257,23 @@ export async function listKyc(status = 'PENDING') {
   return r.rows;
 }
 
-export async function decideKyc(staff, id, approve) {
+// useIdName: the staff member checked the ID and the names differ (a middle name, a typo).
+// Approve anyway and change the account name to the name on the ID, so later checks (payment accounts) use the real name.
+export async function decideKyc(staff, id, approve, { useIdName = false } = {}) {
   return tx(async (c) => {
     const k = (await c.query('SELECT * FROM kyc WHERE id=$1 FOR UPDATE', [id])).rows[0];
     if (!k) throw notFound();
-    if (k.status !== 'PENDING') throw conflict('Already decided.');
+    if (k.status !== 'PENDING') throw conflict(`Already decided: this ID is ${k.status === 'APPROVED' ? 'approved' : 'rejected'}${k.reviewed_by === config.platformUserId ? ' (by the automatic ID check)' : ''}.`, 'ALREADY_DECIDED');
     if (k.user_id === staff.id) throw forbidden('You cannot decide your own ID check.');
     const u = (await c.query('SELECT * FROM users WHERE id=$1', [k.user_id])).rows[0];
-    if (approve && !namesMatch(k.name_on_id, u.full_name))
-      throw bad('Name on ID does not match the account name.', 'NAME_MISMATCH');
+    if (approve && !namesMatch(k.name_on_id, u.full_name)) {
+      if (!useIdName)
+        throw bad(`Not approved: the name on the ID ("${k.name_on_id}") is not the account name ("${u.full_name}"). If the ID is good, press "Approve + use ID name".`, 'NAME_MISMATCH');
+      const idName = String(k.name_on_id || '').trim();
+      if (idName.length < 3) throw bad('The name on the ID is too short to use.');
+      await c.query('UPDATE users SET full_name=$2 WHERE id=$1', [u.id, idName]);
+      u.full_name = idName;
+    }
     await c.query(`UPDATE kyc SET status=$2, reviewed_by=$3, reviewed_at=now() WHERE id=$1`,
       [id, approve ? 'APPROVED' : 'REJECTED', staff.id]);
     if (approve && u.tier < 1) await c.query('UPDATE users SET tier=1 WHERE id=$1', [u.id]);
